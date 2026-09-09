@@ -1739,6 +1739,7 @@ if ("serviceWorker" in navigator) {
       var input2 = document.getElementById('gqtyInput-' + gid);
       var qty = parseInt(input2 && input2.value, 10) || 0;
       if(qty <= 0){ showStatus('Ingresa una cantidad válida.', true); return; }
+      if(mode === 'venta' && qty > (g.qty||0)){ showStatus('Solo hay ' + fmtInt(g.qty||0) + ' u. en stock de Grace.', true); return; }
       var clientInput = document.getElementById('gclientInput-' + gid);
       var client = clientInput ? clientInput.value.trim() : '';
       var noteInput = document.getElementById('gnoteInput-' + gid);
@@ -1810,20 +1811,28 @@ if ("serviceWorker" in navigator) {
     }
   }
 
+  var _addingPago = false;
   function addPago(){
+    if(_addingPago) return;
     var nameInput = document.getElementById('pagoNameInput');
     var amtInput = document.getElementById('pagoAmountInput');
     var name = nameInput.value.trim();
     var amount = parseFloat(amtInput.value);
     if(!name || isNaN(amount) || amount <= 0){ showStatus('Ingresa un nombre y un monto válido.', true); return; }
     if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
+    _addingPago = true;
+    var addBtnEl = document.getElementById('pagoAddBtn');
+    if(addBtnEl) addBtnEl.disabled = true;
     ensureUser(function(){
       state.db.collection('pendingPayments').add({
         name: name, amount: amount, createdAt: new Date().toISOString(), addedBy: state.userName
       }).then(function(){
         notePagoNameUsed(name);
         showStatus('Pago pendiente agregado.');
-      }).catch(function(){ showStatus('No se pudo agregar.', true); });
+      }).catch(function(){ showStatus('No se pudo agregar.', true); }).then(function(){
+        _addingPago = false;
+        if(addBtnEl) addBtnEl.disabled = false;
+      });
     });
   }
 
@@ -2010,28 +2019,35 @@ if ("serviceWorker" in navigator) {
     });
   }
 
+  // Igual que applyMovement: se envuelve en una transacción para que dos
+  // ventas casi simultáneas del mismo ítem de Grace (o del producto vinculado)
+  // no se pisen entre sí.
   function applyGraceMovement(item, type, qty, client, note){
     if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
     var nowIso = new Date().toISOString();
     var linked = item.linkedProductId ? findProduct(item.linkedProductId) : null;
     var graceDelta = type === 'venta' ? -qty : qty;
-    var newGraceQty = Math.max(0, (item.qty||0) + graceDelta);
-    var actualGraceDelta = newGraceQty - (item.qty||0);
+    var graceRef = state.db.doc('graceStock/' + item.id);
+    var productRef = (type === 'venta' && linked) ? state.db.doc('products/' + linked.id) : null;
+    var actualGraceDelta = 0, productDelta = 0;
 
-    var productUpdate = Promise.resolve();
-    var productDelta = 0;
-    if(type === 'venta' && linked){
-      var newProdStock = Math.max(0, (linked.stock||0) + (-qty));
-      productDelta = newProdStock - (linked.stock||0);
-      productUpdate = state.db.doc('products/' + linked.id).update({
-        stock: newProdStock, lastMovementAt: nowIso, lastMovementBy: state.userName
+    state.db.runTransaction(function(tx){
+      var reads = [tx.get(graceRef)];
+      if(productRef) reads.push(tx.get(productRef));
+      return Promise.all(reads).then(function(docs){
+        var graceDoc = docs[0];
+        var currentGraceQty = (graceDoc.exists && graceDoc.data().qty) || 0;
+        var newGraceQty = Math.max(0, currentGraceQty + graceDelta);
+        actualGraceDelta = newGraceQty - currentGraceQty;
+        tx.update(graceRef, { qty: newGraceQty, lastMovementAt: nowIso, lastMovementBy: state.userName });
+        if(productRef){
+          var productDoc = docs[1];
+          var currentStock = (productDoc.exists && productDoc.data().stock) || 0;
+          var newProdStock = Math.max(0, currentStock - qty);
+          productDelta = newProdStock - currentStock;
+          tx.update(productRef, { stock: newProdStock, lastMovementAt: nowIso, lastMovementBy: state.userName });
+        }
       });
-    }
-
-    state.db.doc('graceStock/' + item.id).update({
-      qty: newGraceQty, lastMovementAt: nowIso, lastMovementBy: state.userName
-    }).then(function(){
-      return productUpdate;
     }).then(function(){
       var label = item.label + ' · ' + item.group + ' (Grace)';
       return state.db.collection('movements').add({
@@ -2049,7 +2065,9 @@ if ("serviceWorker" in navigator) {
         note: note || ''
       });
     }).then(function(){
-      showStatus((type==='venta' ? 'Venta de Grace registrada: ' : 'Ingreso a Grace registrado: ') + qty + ' u. de ' + item.label + '.');
+      var moved = Math.abs(actualGraceDelta);
+      var extraNote = (type === 'venta' && moved < qty) ? (' (se ajustó a ' + moved + ' u. porque no había más stock)') : '';
+      showStatus((type==='venta' ? 'Venta de Grace registrada: ' : 'Ingreso a Grace registrado: ') + moved + ' u. de ' + item.label + '.' + extraNote);
     }).catch(function(){
       showStatus('No se pudo registrar el movimiento de Grace.', true);
     });
@@ -2145,6 +2163,7 @@ if ("serviceWorker" in navigator) {
       var boxToggle = document.getElementById('boxToggle-' + id);
       if(boxToggle && boxToggle.checked && p.unitsPerBox){ qty = qty * p.unitsPerBox; }
       if(qty <= 0){ showStatus('Ingresa una cantidad válida.', true); return; }
+      if(mode === 'venta' && qty > (p.stock||0)){ showStatus('Solo hay ' + fmtInt(p.stock||0) + ' u. en stock.', true); return; }
       var clientInput = document.getElementById('clientInput-' + id);
       var client = clientInput ? clientInput.value.trim() : '';
       var noteInput = document.getElementById('noteInput-' + id);
@@ -2208,7 +2227,7 @@ if ("serviceWorker" in navigator) {
     scrim.classList.add('open');
     function save(){
       var newStock = parseInt(document.getElementById('adjustInput').value,10);
-      if(isNaN(newStock) || newStock < 0){ return; }
+      if(isNaN(newStock) || newStock < 0){ showStatus('Ingresa una cantidad válida (0 o más).', true); return; }
       var note = document.getElementById('adjustNote').value.trim();
       ensureUser(function(){
         if(isSupermaxi){ applySupermaxiAdjust(p, newStock, note); } else { applyAdjust(p, newStock, note); }
@@ -2386,6 +2405,19 @@ if ("serviceWorker" in navigator) {
     if(editModalState.mode === 'create'){
       fields.category = document.getElementById('editCategory').value;
       fields.stock = parseInt(document.getElementById('editStock').value,10) || 0;
+      // Evita crear un producto repetido (mismo sabor + presentación en la
+      // misma categoría) si alguien toca "Guardar" dos veces, o si ya existe
+      // ese producto y no se nota entre tantos.
+      var sameKey = function(p){
+        return p.category === fields.category &&
+          (p.flavor||'').trim().toLowerCase() === flavor.toLowerCase() &&
+          (p.presentation||'').trim().toLowerCase() === presentation.toLowerCase();
+      };
+      var dupList = isSupermaxi ? state.supermaxiProducts : state.products;
+      if(dupList.some(sameKey)){
+        showStatus('Ya existe un producto con ese sabor y presentación en esta categoría.', true);
+        return;
+      }
       ensureUser(function(){
         if(isSupermaxi){ createSupermaxiProduct(fields); } else { createProduct(fields); }
         document.getElementById('editModalScrim').classList.remove('open');
@@ -2438,16 +2470,30 @@ if ("serviceWorker" in navigator) {
   });
 
   // ---------------- DB actions ----------------
+  // Usa una transacción de Firestore (lee y escribe el stock como una sola
+  // operación atómica en el servidor) en vez de leer el stock ya guardado en
+  // este dispositivo y luego escribir el resultado. Antes, si dos personas
+  // vendían el mismo producto casi al mismo tiempo, ambas partían del mismo
+  // número de stock "viejo" y la segunda escritura pisaba a la primera,
+  // perdiendo una de las dos ventas del conteo. Con la transacción, Firestore
+  // reintenta automáticamente si detecta que el valor cambió mientras tanto.
   function applyMovement(product, type, qty, client, note, extra, silent){
     if(!state.db){ showStatus('Sin conexión a datos en vivo. Intenta de nuevo en unos segundos.', true); return Promise.reject(new Error('no-db')); }
     var delta = type === 'venta' ? -qty : qty;
-    var newStock = Math.max(0, (product.stock||0) + delta);
-    var actualDelta = newStock - (product.stock||0);
     var nowIso = new Date().toISOString();
-    return state.db.doc('products/' + product.id).update({
-      stock: newStock,
-      lastMovementAt: nowIso,
-      lastMovementBy: state.userName
+    var productRef = state.db.doc('products/' + product.id);
+    var actualDelta = 0;
+    return state.db.runTransaction(function(tx){
+      return tx.get(productRef).then(function(doc){
+        var currentStock = (doc.exists && doc.data().stock) || 0;
+        var newStock = Math.max(0, currentStock + delta);
+        actualDelta = newStock - currentStock;
+        tx.update(productRef, {
+          stock: newStock,
+          lastMovementAt: nowIso,
+          lastMovementBy: state.userName
+        });
+      });
     }).then(function(){
       return state.db.collection('movements').add(Object.assign({
         productId: product.id,
@@ -2461,7 +2507,12 @@ if ("serviceWorker" in navigator) {
         note: note || ''
       }, extra || {}));
     }).then(function(){
-      if(!silent) showStatus((type==='venta' ? 'Venta registrada: ' : 'Ingreso registrado: ') + qty + ' u. de ' + product.flavor + '.');
+      var moved = Math.abs(actualDelta);
+      if(!silent){
+        var extraNote = (type === 'venta' && moved < qty) ? (' (se ajustó a ' + moved + ' u. porque no había más stock)') : '';
+        showStatus((type==='venta' ? 'Venta registrada: ' : 'Ingreso registrado: ') + moved + ' u. de ' + product.flavor + '.' + extraNote);
+      }
+      return moved;
     }).catch(function(err){
       if(!silent) showStatus('No se pudo registrar el movimiento. Intenta de nuevo.', true);
       throw err;
@@ -2578,12 +2629,21 @@ if ("serviceWorker" in navigator) {
 
   function numEC(n){ return (n||0).toLocaleString('es-EC', {minimumFractionDigits:2, maximumFractionDigits:2}); }
 
+  // Cantidad real que afectó el stock, no la que la persona escribió. Si se
+  // vendieron menos unidades de las pedidas porque no había más stock,
+  // deltaStock ya trae el número correcto (viene de applyMovement/applyGrace
+  // Movement/applySupermaxiMovement/registerFairUnitSale). Los movimientos
+  // muy antiguos que no tengan ese campo caen de vuelta a qty.
+  function movementUnits(m){
+    return Math.abs(m.deltaStock != null ? m.deltaStock : (m.qty || 0));
+  }
+
   function buildSummaryText(period){
     var moves = movementsInPeriod(period).filter(function(m){ return m.type === 'venta'; });
     var totalUnits = 0, totalRevenue = 0;
     var byProduct = {};
     moves.forEach(function(m){
-      var qty = m.qty || 0;
+      var qty = movementUnits(m);
       totalUnits += qty;
       var product = m.productId ? findProduct(m.productId) : null;
       var pvp = product ? (product.pvpPerUnit||0) : 0;
@@ -2642,7 +2702,7 @@ if ("serviceWorker" in navigator) {
         fmtDateDMY(m.at),
         typeLabels[m.type] || m.type || '',
         m.productLabel || '',
-        String(m.qty||0),
+        String(m.type === 'venta' ? movementUnits(m) : (m.qty||0)),
         m.client || '',
         m.note || '',
         m.user || ''
@@ -2742,7 +2802,7 @@ if ("serviceWorker" in navigator) {
     var byCategory = {ENDURANCE:0, HCF:0, RECOVERY:0};
     var totalUnits = 0;
     moves.forEach(function(m){
-      var qty = m.qty || 0;
+      var qty = movementUnits(m);
       totalUnits += qty;
       var product = m.productId ? findProduct(m.productId) : null;
       var cat = product ? product.category : null;
@@ -2944,6 +3004,7 @@ if ("serviceWorker" in navigator) {
     var btn = document.getElementById('newFairBtn');
     if(btn) btn.addEventListener('click', function(){
       state.newFairOpen = true;
+      state.newFairSaving = false;
       state.newFairPicks = {};
       state.newFairCustom = [];
       render();
@@ -2971,7 +3032,7 @@ if ("serviceWorker" in navigator) {
     html += '<div class="field"><input id="newFairSearch" type="search" placeholder="Buscar por sabor o presentación…"></div>';
     html += '<div class="new-fair-picker" id="newFairPicker">' + newFairPickerRowsHtml('') + '</div>';
     html += '<div class="fair-sub-head">Ítems propios (ej. Flasks)</div>';
-    html += '<p class="hint" style="margin-top:-4px;">Estos no están vinculados a tu inventario general ni al de Grace: solo se cuentan dentro de esta feria.</p>';
+    html += '<p class="hint" style="margin-top:-4px;">Estos no están vinculados a tu inventario general ni al de Grace: solo se cuentan dentro de esta feria. Si nombras uno "Flask" (la palabra tiene que aparecer en el nombre), vas a poder regalarlo desde las ventas de esta feria.</p>';
     html += '<div id="newFairCustomRows">' + newFairCustomRowsHtml() + '</div>';
     html += '<button class="add-custom-item-btn" id="addFairCustomBtn" type="button">+ Agregar ítem propio</button>';
     html += '<div class="modal-actions" style="margin-top:20px;"><button class="cancel-btn" id="cancelNewFairBtn2" type="button">Cancelar</button><button class="confirm-btn" id="saveNewFairBtn" type="button">Crear feria</button></div>';
@@ -3096,6 +3157,7 @@ if ("serviceWorker" in navigator) {
   }
 
   function saveNewFair(){
+    if(state.newFairSaving) return;
     var name = document.getElementById('newFairName').value.trim();
     var dateLabel = document.getElementById('newFairDate').value.trim();
     if(!name){ showStatus('Ingresa un nombre para la feria.', true); return; }
@@ -3114,6 +3176,9 @@ if ("serviceWorker" in navigator) {
       showStatus('No puedes llevar a la feria más de lo que hay en bodega: ' + overStock.join('; ') + '.', true);
       return;
     }
+    state.newFairSaving = true;
+    var saveBtnEl = document.getElementById('saveNewFairBtn');
+    if(saveBtnEl) saveBtnEl.disabled = true;
     ensureUser(function(){
       var nowIso = new Date().toISOString();
       state.db.collection('fairs').add({
@@ -3139,6 +3204,7 @@ if ("serviceWorker" in navigator) {
         });
         return Promise.all(writes).then(function(){ return fairId; });
       }).then(function(fairId){
+        state.newFairSaving = false;
         state.newFairOpen = false;
         state.currentFairId = fairId;
         state.fairView = 'detail';
@@ -3147,6 +3213,8 @@ if ("serviceWorker" in navigator) {
         showStatus('Feria creada: ' + name + '.');
         render();
       }).catch(function(){
+        state.newFairSaving = false;
+        if(saveBtnEl) saveBtnEl.disabled = false;
         showStatus('No se pudo crear la feria. Intenta de nuevo.', true);
       });
     });
@@ -3371,7 +3439,7 @@ if ("serviceWorker" in navigator) {
 
   function confirmFairRestockModal(){
     var m = state.fairRestockModal;
-    if(!m) return;
+    if(!m || m.submitting) return;
     var product = findProduct(m.productId);
     if(!product){ showStatus('Selecciona un producto.', true); return; }
     var qty = m.qty || 0;
@@ -3380,6 +3448,9 @@ if ("serviceWorker" in navigator) {
     if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
     var fairId = m.fairId;
     var existing = fairStockFor(fairId).filter(function(s){ return s.productId === product.id; })[0];
+    m.submitting = true;
+    var confirmBtnEl = document.getElementById('fairRstConfirmBtn');
+    if(confirmBtnEl) confirmBtnEl.disabled = true;
     ensureUser(function(){
       var promise;
       if(existing){
@@ -3395,6 +3466,8 @@ if ("serviceWorker" in navigator) {
         closeFairRestockModal();
         render();
       }).catch(function(){
+        m.submitting = false;
+        if(confirmBtnEl) confirmBtnEl.disabled = false;
         showStatus('No se pudo reabastecer la feria. Intenta de nuevo.', true);
       });
     });
@@ -3421,7 +3494,7 @@ if ("serviceWorker" in navigator) {
     var m = state.fairCustomAddModal;
     if(!m) return;
     var html = '<h3 style="margin-top:0;">📦 Agregar ítem propio</h3>';
-    html += '<p class="hint" style="margin-top:-6px;">Estos no están vinculados a tu inventario general ni al de Grace: solo se cuentan dentro de esta feria.</p>';
+    html += '<p class="hint" style="margin-top:-6px;">Estos no están vinculados a tu inventario general ni al de Grace: solo se cuentan dentro de esta feria. Si nombras uno "Flask" (la palabra tiene que aparecer en el nombre), vas a poder regalarlo desde las ventas de esta feria.</p>';
     html += '<div class="field"><label>Nombre</label><input type="text" id="fcaNameInput" placeholder="Ej. Flask" maxlength="60" value="' + esc(m.name) + '"></div>';
     html += '<div id="fcaExistingWrap"></div>';
     html += '<div id="fcaPriceWrap"></div>';
@@ -3469,7 +3542,7 @@ if ("serviceWorker" in navigator) {
 
   function confirmFairCustomAddModal(){
     var m = state.fairCustomAddModal;
-    if(!m) return;
+    if(!m || m.submitting) return;
     var name = (m.name||'').trim();
     if(!name){ showStatus('Ingresa un nombre para el ítem.', true); return; }
     var qty = m.qty || 0;
@@ -3480,6 +3553,9 @@ if ("serviceWorker" in navigator) {
     var existing = fairCustomFor(fairId).filter(function(c){ return (c.name||'').trim().toLowerCase() === name.toLowerCase(); })[0];
     var key = customItemDefaultKey(name);
     var def = key ? state.customItemDefaults[key] : null;
+    m.submitting = true;
+    var confirmBtnEl = document.getElementById('fcaConfirmBtn');
+    if(confirmBtnEl) confirmBtnEl.disabled = true;
     ensureUser(function(){
       var promise;
       if(existing){
@@ -3495,6 +3571,8 @@ if ("serviceWorker" in navigator) {
         closeFairCustomAddModal();
         render();
       }).catch(function(){
+        m.submitting = false;
+        if(confirmBtnEl) confirmBtnEl.disabled = false;
         showStatus('No se pudo agregar el ítem. Intenta de nuevo.', true);
       });
     });
@@ -3643,37 +3721,53 @@ if ("serviceWorker" in navigator) {
     var fairId = s.fairId;
     var total = price * qty;
     var nowIso = new Date().toISOString();
-    var newStock = Math.max(0, (product.stock||0) - qty);
-    var actualDelta = newStock - (product.stock||0);
-    // Todas estas escrituras son independientes entre sí, así que se disparan
-    // en paralelo (Promise.all) en lugar de encadenarlas una tras otra —
-    // eso es lo que hacía que registrar una venta en la feria se sintiera lento.
-    var writes = [
-      state.db.doc('products/' + product.id).update({ stock: newStock, lastMovementAt: nowIso, lastMovementBy: state.userName }),
-      state.db.collection('movements').add({
-        productId: product.id, productLabel: product.presentation + ' · ' + product.flavor, type: 'venta',
-        qty: qty, deltaStock: actualDelta, at: nowIso, user: state.userName, client: client || '', note: note || '',
-        fairId: fairId, unitPrice: price, total: total
-      }),
-      state.db.doc('fairStock/' + s.id).update({ soldQty: (s.soldQty||0) + Math.abs(actualDelta) }),
-      state.db.collection('fairSales').add({
-        fairId: fairId, kind: 'unitario', productId: s.productId, flavor: s.flavor, presentation: s.presentation,
-        category: s.category, qty: qty, unitPrice: price, total: total, client: client||'', notes: note||'',
-        createdAt: nowIso
-      })
-    ];
-    if(giftFlask){
-      var flaskItem = findFlaskCustomItem(fairId);
-      if(flaskItem){
-        writes.push(state.db.doc('fairCustomItems/' + flaskItem.id).update({ freeQty: (flaskItem.freeQty||0) + 1 }));
-        writes.push(state.db.collection('fairSales').add({
-          fairId: fairId, kind: 'flask_free', name: flaskItem.name, qty: 1, unitPrice: 0, total: 0,
-          createdAt: nowIso, notes: 'Regalo con venta de ' + (s.flavor||'')
-        }));
+    var productRef = state.db.doc('products/' + product.id);
+    var fairStockRef = state.db.doc('fairStock/' + s.id);
+    var actualDelta = 0;
+    // Los dos contadores de stock (bodega general y stock de la feria) se
+    // actualizan juntos en una transacción para que dos ventas casi
+    // simultáneas del mismo sabor en la feria no se pisen entre sí. El resto
+    // de escrituras (historial, registro de venta de la feria, regalo) son
+    // solo registros informativos y se disparan en paralelo (Promise.all)
+    // como antes, para que registrar una venta siga sintiéndose rápido.
+    return state.db.runTransaction(function(tx){
+      return Promise.all([tx.get(productRef), tx.get(fairStockRef)]).then(function(docs){
+        var productDoc = docs[0], fairStockDoc = docs[1];
+        var currentStock = (productDoc.exists && productDoc.data().stock) || 0;
+        var newStock = Math.max(0, currentStock - qty);
+        actualDelta = newStock - currentStock;
+        var currentSold = (fairStockDoc.exists && fairStockDoc.data().soldQty) || 0;
+        tx.update(productRef, { stock: newStock, lastMovementAt: nowIso, lastMovementBy: state.userName });
+        tx.update(fairStockRef, { soldQty: currentSold + Math.abs(actualDelta) });
+      });
+    }).then(function(){
+      var writes = [
+        state.db.collection('movements').add({
+          productId: product.id, productLabel: product.presentation + ' · ' + product.flavor, type: 'venta',
+          qty: qty, deltaStock: actualDelta, at: nowIso, user: state.userName, client: client || '', note: note || '',
+          fairId: fairId, unitPrice: price, total: total
+        }),
+        state.db.collection('fairSales').add({
+          fairId: fairId, kind: 'unitario', productId: s.productId, flavor: s.flavor, presentation: s.presentation,
+          category: s.category, qty: qty, unitPrice: price, total: total, client: client||'', notes: note||'',
+          createdAt: nowIso
+        })
+      ];
+      if(giftFlask){
+        var flaskItem = findFlaskCustomItem(fairId);
+        if(flaskItem){
+          writes.push(state.db.doc('fairCustomItems/' + flaskItem.id).update({ freeQty: (flaskItem.freeQty||0) + 1 }));
+          writes.push(state.db.collection('fairSales').add({
+            fairId: fairId, kind: 'flask_free', name: flaskItem.name, qty: 1, unitPrice: 0, total: 0,
+            createdAt: nowIso, notes: 'Regalo con venta de ' + (s.flavor||'')
+          }));
+        }
       }
-    }
-    return Promise.all(writes).then(function(){
-      showStatus('Venta registrada: ' + qty + ' u. de ' + s.flavor + (giftFlask ? ' (+1 flask de regalo)' : '') + '.');
+      return Promise.all(writes);
+    }).then(function(){
+      var moved = Math.abs(actualDelta);
+      var extraNote = (moved < qty) ? (' (se ajustó a ' + moved + ' u. porque no había más stock)') : '';
+      showStatus('Venta registrada: ' + moved + ' u. de ' + s.flavor + (giftFlask ? ' (+1 flask de regalo)' : '') + '.' + extraNote);
     }).catch(function(){
       showStatus('No se pudo registrar la venta de la feria. Intenta de nuevo.', true);
     });
@@ -4122,10 +4216,16 @@ if ("serviceWorker" in navigator) {
 
   function confirmKitSale(){
     var kp = state.kitPopup;
-    if(!kp) return;
+    if(!kp || kp.submitting) return;
     var kd = KIT_DEFS[kp.kitKey];
     if(kp.picks.length !== kd.max){ kp.err = 'Selecciona exactamente ' + kd.max + ' unidades.'; renderKitPopup(); return; }
     if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
+    // Bloqueo contra doble clic: antes el botón seguía habilitado durante todo
+    // el viaje de ida y vuelta a la red, así que un doble toque en una conexión
+    // lenta podía registrar el mismo kit dos veces.
+    kp.submitting = true;
+    var confirmBtnEl = document.getElementById('kitConfirmBtn');
+    if(confirmBtnEl) confirmBtnEl.disabled = true;
     var clientInputEl = document.getElementById('kitClientInput');
     var noteInputEl = document.getElementById('kitNoteInput');
     var client = clientInputEl ? clientInputEl.value.trim() : '';
@@ -4147,8 +4247,8 @@ if ("serviceWorker" in navigator) {
       var product = findProduct(s.productId);
       composition.push({ productId: s.productId, flavor: s.flavor, category: s.category, qty: qty });
       if(!product) return;
-      writes.push(applyMovement(product, 'venta', qty, client, 'Kit: ' + kd.label, {fairId: fairId, kitKey: kd.key}, true).then(function(){
-        return state.db.doc('fairStock/' + s.id).update({ soldQty: (s.soldQty||0) + qty });
+      writes.push(applyMovement(product, 'venta', qty, client, 'Kit: ' + kd.label, {fairId: fairId, kitKey: kd.key}, true).then(function(movedQty){
+        return state.db.doc('fairStock/' + s.id).update({ soldQty: (s.soldQty||0) + movedQty });
       }));
     });
     writes.push(state.db.collection('fairSales').add({
@@ -4162,6 +4262,8 @@ if ("serviceWorker" in navigator) {
       closeKitPopup();
       render();
     }).catch(function(){
+      kp.submitting = false;
+      if(confirmBtnEl) confirmBtnEl.disabled = false;
       showStatus('No se pudo registrar la venta del kit. Intenta de nuevo.', true);
     });
   }
@@ -4533,6 +4635,7 @@ if ("serviceWorker" in navigator) {
       var boxToggle = document.getElementById('sboxToggle-' + sid);
       if(boxToggle && boxToggle.checked && p.unitsPerBox){ qty = qty * p.unitsPerBox; }
       if(qty <= 0){ showStatus('Ingresa una cantidad válida.', true); return; }
+      if(mode === 'venta' && qty > (p.stock||0)){ showStatus('Solo hay ' + fmtInt(p.stock||0) + ' u. en stock.', true); return; }
       var clientInput = document.getElementById('sclientInput-' + sid);
       var client = clientInput ? clientInput.value.trim() : '';
       var noteInput = document.getElementById('snoteInput-' + sid);
@@ -4547,14 +4650,20 @@ if ("serviceWorker" in navigator) {
     }
   }
 
+  // Misma protección con transacción que en applyMovement/applyGraceMovement.
   function applySupermaxiMovement(product, type, qty, client, note){
     if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
     var delta = type === 'venta' ? -qty : qty;
-    var newStock = Math.max(0, (product.stock||0) + delta);
-    var actualDelta = newStock - (product.stock||0);
     var nowIso = new Date().toISOString();
-    state.db.doc('supermaxiProducts/' + product.id).update({
-      stock: newStock, lastMovementAt: nowIso, lastMovementBy: state.userName
+    var productRef = state.db.doc('supermaxiProducts/' + product.id);
+    var actualDelta = 0;
+    state.db.runTransaction(function(tx){
+      return tx.get(productRef).then(function(doc){
+        var currentStock = (doc.exists && doc.data().stock) || 0;
+        var newStock = Math.max(0, currentStock + delta);
+        actualDelta = newStock - currentStock;
+        tx.update(productRef, { stock: newStock, lastMovementAt: nowIso, lastMovementBy: state.userName });
+      });
     }).then(function(){
       return state.db.collection('supermaxiMovements').add({
         productId: product.id,
@@ -4568,7 +4677,9 @@ if ("serviceWorker" in navigator) {
         note: note || ''
       });
     }).then(function(){
-      showStatus((type==='venta' ? 'Venta de Supermaxi registrada: ' : 'Ingreso a Supermaxi registrado: ') + qty + ' u. de ' + product.flavor + '.');
+      var moved = Math.abs(actualDelta);
+      var extraNote = (type === 'venta' && moved < qty) ? (' (se ajustó a ' + moved + ' u. porque no había más stock)') : '';
+      showStatus((type==='venta' ? 'Venta de Supermaxi registrada: ' : 'Ingreso a Supermaxi registrado: ') + moved + ' u. de ' + product.flavor + '.' + extraNote);
     }).catch(function(){
       showStatus('No se pudo registrar el movimiento de Supermaxi.', true);
     });
@@ -4758,6 +4869,16 @@ if ("serviceWorker" in navigator) {
     appId: '1:909828817934:web:4ff52320ec241603f2e85f'
   };
 
+  // Antes, si una de estas conexiones en vivo fallaba (por ejemplo un cambio
+  // en las reglas de Firestore, o un problema pasajero de red), la pantalla
+  // se quedaba mostrando los últimos datos recibidos como si fueran actuales,
+  // sin avisar a nadie. Ahora cualquier falla muestra un aviso visible y
+  // queda registrada en la consola para poder diagnosticarla.
+  function notifyLiveDataError(label, err){
+    console.error(label + ' onSnapshot error:', err);
+    showStatus('Se perdió la conexión en vivo con "' + label + '". Los datos que ves pueden estar desactualizados; recarga la página.', true);
+  }
+
   function startListening(db){
       state.db = db;
       state.dbReady = true;
@@ -4767,7 +4888,7 @@ if ("serviceWorker" in navigator) {
         state.products = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         render();
       }, function(err){
-        showStatus('Error leyendo el catálogo de productos.', true);
+        notifyLiveDataError('catálogo de productos', err);
       });
 
       db.collection('movements').orderBy('at','desc').limit(150).onSnapshot(function(snap){
@@ -4775,33 +4896,33 @@ if ("serviceWorker" in navigator) {
         renderHistory();
         renderClientDatalist();
         if(state.activeTab === 'CLIENTE') render();
-      }, function(err){});
+      }, function(err){ notifyLiveDataError('historial de movimientos', err); });
 
       db.collection('graceStock').orderBy('order').onSnapshot(function(snap){
         state.graceItems = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         render();
-      }, function(err){});
+      }, function(err){ notifyLiveDataError('stock de Grace', err); });
 
       db.collection('pendingPayments').orderBy('createdAt','desc').onSnapshot(function(snap){
         state.payments = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         renderPagoNamesDatalist();
         render();
-      }, function(err){});
+      }, function(err){ notifyLiveDataError('pagos pendientes', err); });
 
       db.collection('fairs').orderBy('createdAt','desc').onSnapshot(function(snap){
         state.fairs = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         render();
-      }, function(err){});
+      }, function(err){ notifyLiveDataError('ferias', err); });
 
       db.collection('fairStock').onSnapshot(function(snap){
         state.fairStock = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         render();
-      }, function(err){});
+      }, function(err){ notifyLiveDataError('stock de feria', err); });
 
       db.collection('fairCustomItems').onSnapshot(function(snap){
         state.fairCustomItems = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         render();
-      }, function(err){});
+      }, function(err){ notifyLiveDataError('ítems propios de feria', err); });
 
       db.collection('customItemDefaults').onSnapshot(function(snap){
         var map = {};
@@ -4811,23 +4932,23 @@ if ("serviceWorker" in navigator) {
         });
         state.customItemDefaults = map;
         render();
-      }, function(err){});
+      }, function(err){ notifyLiveDataError('valores por defecto de ítems propios', err); });
 
       db.collection('fairSales').orderBy('createdAt','desc').limit(1000).onSnapshot(function(snap){
         state.fairSales = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         render();
-      }, function(err){ console.error('fairSales onSnapshot error:', err); });
+      }, function(err){ notifyLiveDataError('ventas de feria', err); });
 
       db.collection('supermaxiProducts').orderBy('order').onSnapshot(function(snap){
         state.supermaxiProducts = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         render();
-      }, function(err){});
+      }, function(err){ notifyLiveDataError('catálogo de Supermaxi', err); });
 
       db.collection('supermaxiMovements').orderBy('at','desc').limit(500).onSnapshot(function(snap){
         state.supermaxiMovements = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         renderSupermaxiHistory();
         if(state.activeTab === 'SUPERMAXI') render();
-      }, function(err){});
+      }, function(err){ notifyLiveDataError('historial de Supermaxi', err); });
   }
 
   function connectFirebase(){
