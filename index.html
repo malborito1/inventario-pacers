@@ -1362,7 +1362,7 @@ if ("serviceWorker" in navigator) {
     var days = Math.floor(h/24); if(days < 30) return 'hace ' + days + ' d';
     return d.toLocaleDateString('es-EC');
   }
-  var MESES_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var MESES_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sept','Oct','Nov','Dic'];
   function fmtDateDMY(iso){
     if(!iso) return '';
     var d = new Date(iso);
