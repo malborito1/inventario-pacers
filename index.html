@@ -631,8 +631,20 @@ if ("serviceWorker" in navigator) {
   }
   .pago-reopen:hover{background:var(--border);}
   .pago-del:hover{background:var(--critical-tint); color:var(--critical);}
-  .pagos-total{font-size:14px; color:var(--text-muted); margin:0 0 16px;}
+  .pagos-total{font-size:14px; color:var(--text-muted); margin:0;}
   .pagos-total-amt{font-size:34px; font-weight:800; color:var(--success); margin-left:8px;}
+  .pagos-totals-row{display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px 28px; margin:0 0 16px;}
+  .pagos-distrib-totals{display:flex; gap:24px; flex-wrap:wrap;}
+  .pagos-distrib-block{text-align:right;}
+  .pagos-distrib-label{font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.03em; white-space:nowrap;}
+  .pagos-distrib-amt{font-size:22px; font-weight:800;}
+  .pagos-distrib-amt.upcoming{color:var(--warning);}
+  .pagos-distrib-amt.overdue{color:var(--critical);}
+  .pago-item-distrib{flex-wrap:wrap;}
+  .pago-item-distrib.overdue{border-color:var(--critical); background:var(--critical-tint);}
+  .pago-distrib-tag{font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.02em; color:var(--text-muted); background:var(--surface-2); border-radius:6px; padding:2px 6px; margin-left:8px; vertical-align:middle;}
+  .pago-due{font-size:12px; color:var(--text-muted); flex:0 0 auto; white-space:nowrap;}
+  .pago-vencido-badge{background:var(--critical); color:#fff; font-weight:800; font-size:15px; letter-spacing:.03em; padding:5px 14px; border-radius:8px; flex:0 0 auto;}
 
   /* ---------- Clientes ---------- */
   .cliente-list{display:flex; flex-direction:column; gap:6px;}
@@ -1360,6 +1372,22 @@ if ("serviceWorker" in navigator) {
     var yyyy = d.getFullYear();
     return dd + '/' + mes + '/' + yyyy;
   }
+  // Fecha de hoy en el calendario LOCAL del dispositivo, como 'YYYY-MM-DD'.
+  // Se usa junto con fmtDateOnly para comparar y mostrar fechas de vencimiento
+  // (que vienen de un <input type="date">) sin pasar por new Date(), que
+  // interpreta un string "solo fecha" en UTC y puede correr el día mostrado
+  // según la zona horaria de quien lo mira.
+  function todayDateStr(){
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+  function fmtDateOnly(dateStr){
+    var parts = String(dateStr||'').split('-');
+    if(parts.length !== 3) return '';
+    var yyyy = parts[0], mIdx = parseInt(parts[1],10)-1, dd = parseInt(parts[2],10);
+    if(isNaN(mIdx) || isNaN(dd) || !MESES_ES[mIdx]) return '';
+    return String(dd).padStart(2,'0') + '/' + MESES_ES[mIdx] + '/' + yyyy;
+  }
   function presKey(pres){
     var p = (pres||'').toLowerCase();
     if(p.indexOf('bulk')>=0) return 'bulk';
@@ -1571,6 +1599,10 @@ if ("serviceWorker" in navigator) {
           + '<div class="mini-field"><label>Cliente (opcional)</label><input type="text" id="clientInput-' + p.id + '" list="clientNamesList" value="' + esc(activeClientValue()) + '" placeholder="Nombre del comprador" maxlength="60"></div>'
           + '<div class="mini-field"><label>Notas (opcional)</label><input type="text" id="noteInput-' + p.id + '" placeholder="Ej. evento, pedido especial…" maxlength="120"></div>'
           + '</div>';
+        html += '<div class="mini-field-row">'
+          + '<div class="mini-field"><label>Vencimiento de factura (opcional)</label><input type="date" id="dueDateInput-' + p.id + '"></div>'
+          + '</div>';
+        html += '<p class="hint" style="margin:-6px 0 0;">Pon una fecha solo si esta venta es a un distribuidor a crédito: aparecerá en Pagos como cuenta por cobrar y se marcará "VENCIDO" cuando llegue esa fecha.</p>';
       }
       html += '<button class="confirm-btn" data-action="confirm-move" data-id="' + p.id + '" data-mode="' + openMode + '">' + (isVenta?'Registrar venta':'Registrar ingreso') + '</button>';
       html += '<button class="cancel-btn" data-action="cancel-move" data-id="' + p.id + '">Cancelar</button>';
@@ -1757,21 +1789,62 @@ if ("serviceWorker" in navigator) {
   // ---------------- Pagos pendientes ----------------
   function renderPagos(){
     var root = document.getElementById('categoriesRoot');
-    var pending = state.payments.filter(function(pg){ return pg.status !== 'paid'; });
+    var allPending = state.payments.filter(function(pg){ return pg.status !== 'paid'; });
     var paid = state.payments.filter(function(pg){ return pg.status === 'paid'; })
       .sort(function(a,b){ return (b.paidAt||'').localeCompare(a.paidAt||''); });
+
+    // Los pagos pendientes "de siempre" (sin fecha) y las cuentas por cobrar
+    // de distribuidores (con fecha de vencimiento) se muestran por separado,
+    // cada una con su propio total, porque son cosas distintas para Daniel.
+    var pending = allPending.filter(function(pg){ return !pg.dueDate; });
+    var distrib = allPending.filter(function(pg){ return !!pg.dueDate; })
+      .sort(function(a,b){ return (a.dueDate||'').localeCompare(b.dueDate||''); });
+
+    var today = todayDateStr();
     var total = 0;
     pending.forEach(function(pg){ total += (pg.amount||0); });
-    var html = '<div class="category" data-cat="PAGOS"><div class="category-head"><h2>Pagos pendientes</h2><span class="count">' + pending.length + ' pendientes</span></div>';
+    var totalUpcoming = 0, totalOverdue = 0;
+    distrib.forEach(function(pg){
+      if(pg.dueDate <= today){ totalOverdue += (pg.amount||0); } else { totalUpcoming += (pg.amount||0); }
+    });
+
+    var html = '<div class="category" data-cat="PAGOS"><div class="category-head"><h2>Pagos pendientes</h2><span class="count">' + (pending.length + distrib.length) + ' pendientes</span></div>';
+
+    html += '<div class="pagos-totals-row">';
     html += '<div class="pagos-total">Total pendiente: <span class="pagos-total-amt num">' + fmtMoney(total) + '</span></div>';
+    if(distrib.length){
+      html += '<div class="pagos-distrib-totals">'
+        + '<div class="pagos-distrib-block"><div class="pagos-distrib-label">Por cobrar a distribuidores</div><div class="pagos-distrib-amt upcoming num">' + fmtMoney(totalUpcoming) + '</div></div>'
+        + '<div class="pagos-distrib-block"><div class="pagos-distrib-label">Vencido</div><div class="pagos-distrib-amt overdue num">' + fmtMoney(totalOverdue) + '</div></div>'
+        + '</div>';
+    }
+    html += '</div>';
+
     html += '<div class="pagos-form">' +
       '<input type="text" id="pagoNameInput" list="pagoNamesList" value="' + esc(activePagoNameValue()) + '" placeholder="Nombre" maxlength="60">' +
       '<input type="number" id="pagoAmountInput" placeholder="Monto" min="0" step="0.01">' +
       '<button class="confirm-btn" id="pagoAddBtn" type="button">Agregar</button>' +
       '</div>';
-    if(pending.length === 0){
+
+    if(distrib.length){
+      html += '<div class="pagos-list" style="margin-bottom:14px;">';
+      distrib.forEach(function(pg){
+        var overdue = pg.dueDate <= today;
+        html += '<div class="pago-item pago-item-distrib' + (overdue?' overdue':'') + '">'
+          + '<span class="pago-name">' + esc(pg.name) + '<span class="pago-distrib-tag">Distribuidor</span></span>'
+          + '<span class="pago-due">' + (overdue ? 'Venció ' : 'Vence ') + fmtDateOnly(pg.dueDate) + '</span>'
+          + '<span class="pago-amt num">' + fmtMoney(pg.amount) + '</span>'
+          + (overdue ? '<span class="pago-vencido-badge">VENCIDO</span>' : '<span class="pill ok">Al día</span>')
+          + '<button class="pago-paid" data-pid="' + pg.id + '" aria-label="Marcar como pagado" title="Marcar como pagado">✓</button>'
+          + '<button class="pago-del" data-pid="' + pg.id + '" aria-label="Eliminar" title="Eliminar">✕</button>'
+          + '</div>';
+      });
+      html += '</div>';
+    }
+
+    if(pending.length === 0 && distrib.length === 0){
       html += '<p class="empty-hint">No hay pagos pendientes registrados.</p>';
-    } else {
+    } else if(pending.length > 0){
       html += '<div class="pagos-list">';
       pending.forEach(function(pg){
         html += '<div class="pago-item"><span class="pago-name">' + esc(pg.name) + '</span><span class="pago-amt num">' + fmtMoney(pg.amount) + '</span><button class="pago-paid" data-pid="' + pg.id + '" aria-label="Marcar como pagado" title="Marcar como pagado">✓</button><button class="pago-del" data-pid="' + pg.id + '" aria-label="Eliminar" title="Eliminar">✕</button></div>';
@@ -2168,14 +2241,44 @@ if ("serviceWorker" in navigator) {
       var client = clientInput ? clientInput.value.trim() : '';
       var noteInput = document.getElementById('noteInput-' + id);
       var note = noteInput ? noteInput.value.trim() : '';
+      var dueDateInput = document.getElementById('dueDateInput-' + id);
+      var dueDate = (mode === 'venta' && dueDateInput) ? dueDateInput.value : '';
+      if(dueDate && !client){ showStatus('Si pones fecha de vencimiento, ingresa también el nombre del distribuidor en "Cliente".', true); return; }
       ensureUser(function(){
-        applyMovement(p, mode, qty, client, note);
+        var moveDone = applyMovement(p, mode, qty, client, note);
+        if(mode === 'venta' && dueDate){
+          moveDone.then(function(moved){
+            return registerDistributorInvoice(client, moved * (p.pvpPerUnit||0), dueDate, p);
+          }).catch(function(){
+            showStatus('La venta se registró, pero no se pudo crear la cuenta por cobrar en Pagos. Agrégala ahí manualmente.', true);
+          });
+        }
         if(mode === 'venta' && client) noteClientUsed(client);
         state.openRow = null;
         render();
       });
       return;
     }
+  }
+
+  // Crea, en la pestaña Pagos, la cuenta por cobrar de un distribuidor con
+  // fecha de vencimiento a partir de una venta. Vive en la misma colección
+  // que los pagos pendientes "de siempre" (pendingPayments); lo único que la
+  // distingue es que trae dueDate.
+  function registerDistributorInvoice(client, amount, dueDate, product){
+    if(!state.db) return Promise.reject(new Error('no-db'));
+    return state.db.collection('pendingPayments').add({
+      name: client,
+      amount: amount,
+      dueDate: dueDate,
+      createdAt: new Date().toISOString(),
+      addedBy: state.userName,
+      origin: 'venta',
+      productId: product.id,
+      productLabel: product.presentation + ' · ' + product.flavor
+    }).then(function(){
+      showStatus('Cuenta por cobrar registrada en Pagos: ' + fmtMoney(amount) + ' de ' + client + '.');
+    });
   }
 
   document.addEventListener('click', function(){
