@@ -1989,7 +1989,7 @@ if ("serviceWorker" in navigator) {
       body.innerHTML = '<p class="empty-hint">Aún no hay movimientos registrados.</p>';
       return;
     }
-    body.innerHTML = state.movements.map(historyItemHtml).join('');
+    body.innerHTML = state.movements.map(function(m){ return historyItemHtml(m, state.confirmUndoId); }).join('');
     attachHistoryEvents();
   }
 
