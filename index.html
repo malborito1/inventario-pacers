@@ -2432,7 +2432,7 @@ if ("serviceWorker" in navigator) {
       byLine[line.linea][line.presentacion].push(idx);
     });
     var html = '<table class="imp-table"><thead><tr>'
-      + '<th>Sabor</th><th class="imp-num">Unid/caja</th><th class="imp-num">#Cajas</th><th class="imp-num">Kg</th><th class="imp-num">#Unid</th>'
+      + '<th>Sabor</th><th class="imp-num">Unid/caja</th><th class="imp-num">#Cajas</th><th class="imp-num">#Unid</th>'
       + '<th class="imp-num">$/Caja</th><th class="imp-num">$ Total</th><th class="imp-num">$/Unidad</th><th class="imp-num">UIO</th>'
       + '<th class="imp-num">Venta $/u</th><th class="imp-num">Valor venta</th>'
       + '</tr></thead><tbody>';
@@ -2443,7 +2443,7 @@ if ("serviceWorker" in navigator) {
       var presKeys = Object.keys(presentaciones);
       var totalLineCajas = 0;
       presKeys.forEach(function(pk){ presentaciones[pk].forEach(function(idx){ totalLineCajas += parseFloat(products[idx].cajas)||0; }); });
-      html += '<tr><td colspan="11" class="imp-linegroup-head" style="background:'+accent.tint+'; border-left:5px solid '+accent.color+';">'
+      html += '<tr><td colspan="10" class="imp-linegroup-head" style="background:'+accent.tint+'; border-left:5px solid '+accent.color+';">'
         + (img? '<img src="'+img+'" alt="">':'')
         + '<b style="color:'+accent.color+';">'+ esc(CATEGORY_LABEL[linea] || linea) +'</b>'
         + '<span class="imp-linegroup-count" style="color:'+accent.color+';">'+ totalLineCajas.toLocaleString('es-EC') +' cajas</span>'
@@ -2452,7 +2452,7 @@ if ("serviceWorker" in navigator) {
         var darkenPct = presIdx===0 ? 0 : (presIdx===1 ? 14 : 24);
         var shadeMix = isEffectivelyDark() ? 'white' : 'black';
         var shadeBg = darkenPct>0 ? ('color-mix(in srgb, '+accent.tint+' '+(100-darkenPct)+'%, '+shadeMix+' '+darkenPct+'%)') : accent.tint;
-        html += '<tr><td colspan="11" style="font-weight:800; color:var(--text); font-size:13.5px; padding-top:9px; background:'+shadeBg+';">'+esc(pk)+'</td></tr>';
+        html += '<tr><td colspan="10" style="font-weight:800; color:var(--text); font-size:13.5px; padding-top:9px; background:'+shadeBg+';">'+esc(pk)+'</td></tr>';
         presentaciones[pk].forEach(function(idx){
           var line = products[idx];
           var c = importLineCalc(line);
@@ -2466,9 +2466,8 @@ if ("serviceWorker" in navigator) {
           html += '<td>'+photoHtml+esc(line.sabor)+'</td>';
           html += '<td class="imp-num">'+ (line.unidadesPorCaja||0) +'</td>';
           html += '<td><input type="number" min="0" step="1" class="imp-input-cajas" data-idx="'+idx+'" value="'+(line.cajas||'')+'" onfocus="this.select()"></td>';
-          html += '<td class="imp-num">'+ (hasCajas? c.kg.toLocaleString('es-EC',{maximumFractionDigits:1}) : '') +'</td>';
           html += '<td class="imp-num">'+ (hasCajas? fmtInt(c.unidades) : '') +'</td>';
-          html += '<td><input type="number" min="0" step="0.01" class="imp-input-precio" data-idx="'+idx+'" value="'+(line.precioPorCaja||'')+'" onfocus="this.select()"></td>';
+          html += '<td><input type="number" min="0" step="0.01" class="imp-input-precio" data-idx="'+idx+'" value="'+(hasCajas && line.precioPorCaja? line.precioPorCaja : '')+'" onfocus="this.select()"></td>';
           html += '<td class="imp-num">'+ (c.total>0? fmtMoney(c.total) : '') +'</td>';
           html += '<td class="imp-num">'+ (c.porUnidad>0? fmtMoney(c.porUnidad) : '') +'</td>';
           html += '<td class="imp-num">'+ (uio>0? fmtMoney(uio) : '') +'</td>';
@@ -2479,18 +2478,17 @@ if ("serviceWorker" in navigator) {
       });
     });
     html += '<tr class="imp-totalsrow"><td>Total</td><td></td><td class="imp-num">'+ fmtInt(totals.totalCajas) +'</td>'
-      + '<td class="imp-num">'+ totals.totalKg.toLocaleString('es-EC',{maximumFractionDigits:1}) +'</td>'
-      + '<td class="imp-num">'+ fmtInt(totals.totalUnidades) +'</td><td></td>'
+      + '<td class="imp-num">'+ fmtInt(totals.totalUnidades) +' u<span class="imp-weight-sub">'+ totals.totalKg.toLocaleString('es-EC',{maximumFractionDigits:1}) +' kg</span></td><td></td>'
       + '<td class="imp-num">'+ fmtMoney(totals.totalMercaderia) +'</td><td></td><td></td><td></td>'
       + '<td class="imp-num">'+ fmtMoney(totals.totalVentaProyectada||0) +'</td></tr>';
     var freightPending = imp.freightPending !== false;
     html += '<tr class="imp-freighttotal-row'+(freightPending?' pending':'')+'">'
       + '<td>Freight'+(freightPending?' <span class="imp-field-pending-badge">Pendiente</span>':'')+'</td>'
-      + '<td></td><td></td><td></td><td></td><td></td>'
+      + '<td></td><td></td><td></td><td></td>'
       + '<td class="imp-num imp-freight-cell"><span class="imp-dollar-input">$<input type="number" step="0.01" id="impFreightMain" value="'+(imp.freight!=null?imp.freight:'')+'" placeholder="0.00" onfocus="this.select()"></span></td>'
       + '<td></td><td></td><td></td><td></td>'
       + '</tr>';
-    html += '<tr class="imp-grandtotal-row"><td>Total + Freight</td><td></td><td></td><td></td><td></td><td></td>'
+    html += '<tr class="imp-grandtotal-row"><td>Total + Freight</td><td></td><td></td><td></td><td></td>'
       + '<td class="imp-num">'+ fmtMoney(totals.mercaderiaConFlete) +'</td>'
       + '<td></td><td></td><td></td><td></td></tr>';
     html += '</tbody></table>';
