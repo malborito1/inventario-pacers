@@ -318,6 +318,8 @@ if ("serviceWorker" in navigator) {
   .kpi .value{font-size:22px; font-weight:600; margin-top:4px;}
   .kpi.alert .value{color:var(--critical);}
   .kpi.alert{border-color:var(--critical); background:var(--critical-tint);}
+  .kpi.positive .value{color:var(--success);}
+  .kpi.positive{border-color:var(--success); background:var(--success-tint);}
   .kpi.clickable{cursor:pointer; user-select:none;}
   .kpi.clickable:hover{box-shadow:0 0 0 2px var(--critical), var(--shadow);}
   .kpi.filtering{box-shadow:0 0 0 3px var(--critical), var(--shadow);}
@@ -2581,7 +2583,7 @@ if ("serviceWorker" in navigator) {
       + '<div class="kpi"><div class="label">TOTAL a pagar</div><div class="value num">'+ fmtMoney(totals.granTotal) +'</div></div>'
       + '<div class="kpi"><div class="label">Factor de costeo</div><div class="value num">x'+ (totals.factor||0).toLocaleString('es-EC',{minimumFractionDigits:2,maximumFractionDigits:2}) +'</div></div>'
       + '<div class="kpi"><div class="label">Venta proyectada</div><div class="value num">'+ fmtMoney(totals.totalVentaProyectada||0) +'</div></div>'
-      + '<div class="kpi'+(totals.margenProyectado<0?' alert':'')+'"><div class="label">Margen proyectado</div><div class="value num">'+ fmtMoney(totals.margenProyectado||0) +'</div></div>'
+      + '<div class="kpi'+(totals.margenProyectado>=0?' positive':' alert')+'"><div class="label">Margen proyectado</div><div class="value num">'+ fmtMoney(totals.margenProyectado||0) +'</div></div>'
       + '</div>';
   }
 
