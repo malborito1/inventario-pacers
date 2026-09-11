@@ -941,6 +941,7 @@ if ("serviceWorker" in navigator) {
   .mode-btn:not(.active):hover{color:var(--text);}
   body.imports-mode .controls, body.imports-mode .supermaxi-launcher, body.imports-mode #kpiRow{display:none;}
   body.imports-mode .topbar{border-bottom:3px solid var(--imports-color);}
+  body.imports-mode .wrap{max-width:1560px;}
   .imports-modebar{
     display:none; align-items:center; gap:10px; font-weight:700; font-size:14px;
     color:#fff; background:var(--imports-color);
@@ -956,32 +957,34 @@ if ("serviceWorker" in navigator) {
   .imp-status-recibida{background:var(--success-tint); color:var(--success);}
   .imp-status-cerrada{background:var(--surface-2); color:var(--text-muted);}
   .imp-empty{padding:60px 20px; text-align:center; color:var(--text-muted);}
-  .imp-main{background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); overflow-x:auto;}
-  .imp-cards-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(270px,1fr)); gap:14px; margin-top:16px;}
+  .imp-layout{display:flex; gap:16px; align-items:flex-start;}
+  .imp-main{background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); overflow-x:auto; flex:1 1 0; min-width:0;}
+  .imp-side{flex:0 0 400px; display:flex; flex-direction:column; gap:12px; min-width:0;}
+  @media (max-width:1100px){ .imp-layout{flex-direction:column;} .imp-side{flex:1 1 auto; width:100%;} }
   .imp-card{background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); padding:14px 16px;}
   .imp-card h4{margin:0 0 10px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); font-weight:700;}
-  .imp-linegroup-head{display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:8px; margin:6px 0 2px;}
+  .imp-linegroup-head{display:flex; align-items:center; gap:10px; padding:7px 14px; border-radius:8px; margin:6px 0 2px;}
   .imp-linegroup-count{font-size:11.5px; font-weight:700;}
   .imp-linegroup-head img{width:34px; height:34px; object-fit:contain; border-radius:6px; background:#fff; border:1px solid var(--border);}
   .imp-linegroup-head b{font-size:13px;}
   .imp-table{width:100%; border-collapse:collapse; font-size:12.5px; min-width:760px;}
-  .imp-table th{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); padding:6px 8px; border-bottom:2px solid var(--border); background:var(--surface);}
-  .imp-table td{padding:5px 8px; border-bottom:1px solid var(--border); vertical-align:middle;}
+  .imp-table th{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); padding:5px 8px; border-bottom:2px solid var(--border); background:var(--surface);}
+  .imp-table td{padding:4px 8px; border-bottom:1px solid var(--border); vertical-align:middle;}
   .imp-table input[type=number], .imp-table input[type=text]{width:100%; box-sizing:border-box; padding:5px 6px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:12.5px;}
   .imp-table .imp-num{text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums;}
   .imp-totalsrow td{font-weight:700; background:var(--surface-2);}
   .imp-costs-list{display:flex; flex-direction:column; gap:6px;}
-  .imp-cost-row{display:flex; align-items:center; gap:6px;}
-  .imp-cost-row input[type=text]{flex:1; min-width:0;}
-  .imp-cost-row input[type=number]{width:84px; flex:none;}
+  .imp-cost-row{display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+  .imp-cost-row input[type=text]{flex:1 1 140px; min-width:110px;}
+  .imp-cost-row input[type=number]{width:78px; flex:none;}
   .imp-cost-row input{padding:6px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:12.5px;}
   .imp-cost-check{width:18px; height:18px; flex:none; cursor:pointer;}
   .imp-cost-remove{background:none; border:none; color:var(--critical); cursor:pointer; font-size:15px; flex:none; width:22px;}
   .imp-add-row{background:none; border:1px dashed var(--border); color:var(--text-muted); border-radius:8px; padding:6px 10px; cursor:pointer; font-size:12px; margin-top:6px; width:100%;}
-  .imp-milestone{display:flex; align-items:center; gap:8px; margin-bottom:8px;}
-  .imp-milestone label{width:100px; flex:none; font-size:11.5px; color:var(--text-muted);}
-  .imp-milestone input[type=date]{flex:none; width:132px; padding:6px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:12px;}
-  .imp-milestone input[type=text]{flex:1; min-width:0; padding:6px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:12px;}
+  .imp-milestone{display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin-bottom:10px;}
+  .imp-milestone label{width:100%; flex:none; font-size:11.5px; color:var(--text-muted); font-weight:600;}
+  .imp-milestone input[type=date]{flex:0 0 132px; padding:6px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:12px;}
+  .imp-milestone input[type=text]{flex:1 1 140px; min-width:120px; padding:6px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:12px;}
   .imp-kv{display:flex; justify-content:space-between; font-size:12.5px; padding:3px 0; gap:10px;}
   .imp-kv b{font-variant-numeric:tabular-nums; text-align:right;}
   .imp-kv.imp-grand{border-top:1px solid var(--border); margin-top:6px; padding-top:8px; font-size:14px;}
@@ -1007,6 +1010,16 @@ if ("serviceWorker" in navigator) {
   .imp-pallet-base{width:206px; max-width:100%; height:9px; background:#a9784f; border-radius:2px; margin-top:2px; box-shadow:0 2px 3px rgba(0,0,0,.18);}
   .imp-pallet-more{font-size:11px; color:var(--text-muted); margin-top:4px;}
   .imp-pallet-empty{padding:14px 4px; text-align:center; color:var(--text-muted); font-size:12px;}
+  .imp-pallet-icon{font-size:60px; line-height:1; text-align:center; margin:2px 0 10px;}
+  .imp-freighttotal-row td{background:var(--imports-tint); font-weight:700; padding-top:8px; padding-bottom:8px;}
+  .imp-freighttotal-row input{width:120px; padding:6px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:13px; font-weight:700;}
+  .imp-freighttotal-row.pending td{background:var(--warning-tint);}
+  .imp-freighttotal-row.pending input{border-color:var(--warning); background:var(--surface);}
+  .imp-totals-highlight{background:var(--imports-tint); border-color:var(--imports-color);}
+  .imp-totals-highlight h4{color:var(--imports-color);}
+  .imp-totals-highlight .imp-grand b{color:var(--imports-color);}
+  .imp-row-photo{width:26px; height:26px; border-radius:6px; object-fit:cover; border:1px solid var(--border); vertical-align:middle; margin-right:6px;}
+  .imp-row-photo-placeholder{width:26px; height:26px; border-radius:6px; background:var(--surface-2); display:inline-block; vertical-align:middle; margin-right:6px;}
 </style>
 
 <div class="pin-gate" id="pinGate">
@@ -1281,6 +1294,16 @@ if ("serviceWorker" in navigator) {
     RECOVERY: {color:'var(--cat-recovery-color)', tint:'var(--cat-recovery-tint)'}
   };
   var IMPORT_BOXES_PER_ROW = 9;
+
+  function importFindPhoto(linea, sabor, presentacion){
+    var list = state.products || [];
+    var norm = function(s){ return (s||'').toString().trim().toLowerCase(); };
+    var exact = list.filter(function(p){ return norm(p.category)===norm(linea) && norm(p.flavor)===norm(sabor) && norm(p.presentation)===norm(presentacion); });
+    if(exact.length && exact[0].photoUrl) return exact[0].photoUrl;
+    var byFlavor = list.filter(function(p){ return norm(p.category)===norm(linea) && norm(p.flavor)===norm(sabor); });
+    if(byFlavor.length && byFlavor[0].photoUrl) return byFlavor[0].photoUrl;
+    return null;
+  }
   var IMPORT_PRODUCT_TEMPLATE = [
     {linea:'ENDURANCE', presentacion:'30 servings', sabor:'Mandarin', unidadesPorCaja:12, gramosPorCaja:9720, precioPorCaja:112.46},
     {linea:'ENDURANCE', presentacion:'30 servings', sabor:'Berry', unidadesPorCaja:12, gramosPorCaja:9720, precioPorCaja:112.46},
@@ -2309,12 +2332,13 @@ if ("serviceWorker" in navigator) {
     var pesoKg = totalKg*1.16;
     var pesoLbs = Math.round(pesoKg*2.2*100)/100;
     var vc = imp.volCalc || {};
-    var largo = parseFloat(vc.largo)||0, ancho = parseFloat(vc.ancho)||0, alto = parseFloat(vc.alto)||0, factorConv = parseFloat(vc.factor)||5385;
-    var pesoVolumetrico = factorConv>0 ? Math.round((largo*ancho*alto/factorConv)*100)/100 : 0;
+    var largo = parseFloat(vc.largo)||0, ancho = parseFloat(vc.ancho)||0, altoInput = parseFloat(vc.alto)||0, factorConv = parseFloat(vc.factor)||5385;
+    var altoEfectivo = altoInput>0 ? altoInput : altoCm;
+    var pesoVolumetrico = factorConv>0 ? Math.round((largo*ancho*altoEfectivo/factorConv)*100)/100 : 0;
     return {
       totalCajas:totalCajas, totalKg:totalKg, totalUnidades:totalUnidades, totalMercaderia:totalMercaderia,
       freight:freight, mercaderiaConFlete:mercaderiaConFlete, totalCostosLocales:totalCostosLocales,
-      granTotal:granTotal, factor:factor, filas:filas, altoCm:altoCm, pesoKg:pesoKg, pesoLbs:pesoLbs,
+      granTotal:granTotal, factor:factor, filas:filas, altoCm:altoCm, altoEfectivo:altoEfectivo, pesoKg:pesoKg, pesoLbs:pesoLbs,
       pesoVolumetrico:pesoVolumetrico, totalVentaProyectada:totalVenta, margenProyectado: totalVenta-granTotal
     };
   }
@@ -2324,7 +2348,7 @@ if ("serviceWorker" in navigator) {
     var doc = {
       name: name, cliente: '', status: 'activa',
       createdAt: new Date().toISOString(), createdBy: state.userName||'',
-      freight: 0, pais: 'EEUU', cargaArancelaria: 0,
+      freight: null, freightPending: true, pais: 'EEUU', cargaArancelaria: 0,
       volCalc: {largo:122, ancho:102, alto:0, factor:5385},
       milestones: JSON.parse(JSON.stringify(IMPORT_MILESTONES_TEMPLATE)),
       localCosts: JSON.parse(JSON.stringify(IMPORT_COSTS_TEMPLATE)),
@@ -2382,15 +2406,17 @@ if ("serviceWorker" in navigator) {
         + '<span class="imp-linegroup-count" style="color:'+accent.color+';">'+ totalLineCajas.toLocaleString('es-EC') +' cajas</span>'
         + '</td></tr>';
       presKeys.forEach(function(pk){
-        html += '<tr><td colspan="11" style="font-weight:600; color:var(--text-muted); font-size:11.5px; padding-top:8px;">'+esc(pk)+'</td></tr>';
+        html += '<tr><td colspan="11" style="font-weight:600; color:var(--text-muted); font-size:11.5px; padding-top:8px; background:'+accent.tint+';">'+esc(pk)+'</td></tr>';
         presentaciones[pk].forEach(function(idx){
           var line = products[idx];
           var c = importLineCalc(line);
           var uio = c.porUnidad * (totals.factor||0);
           var precioVenta = parseFloat(line.precioVenta)||0;
           var valorVenta = precioVenta * c.unidades;
-          html += '<tr data-idx="'+idx+'">';
-          html += '<td>'+esc(line.sabor)+'</td>';
+          var photoUrl = importFindPhoto(linea, line.sabor, pk);
+          var photoHtml = photoUrl ? ('<img class="imp-row-photo" src="'+photoUrl+'" alt="">') : '<span class="imp-row-photo-placeholder"></span>';
+          html += '<tr data-idx="'+idx+'" style="background:'+accent.tint+';">';
+          html += '<td>'+photoHtml+esc(line.sabor)+'</td>';
           html += '<td class="imp-num">'+ (line.unidadesPorCaja||0) +'</td>';
           html += '<td><input type="number" min="0" step="1" class="imp-input-cajas" data-idx="'+idx+'" value="'+(line.cajas||0)+'" onfocus="this.select()"></td>';
           html += '<td class="imp-num">'+ c.kg.toLocaleString('es-EC',{maximumFractionDigits:1}) +'</td>';
@@ -2410,31 +2436,18 @@ if ("serviceWorker" in navigator) {
       + '<td class="imp-num">'+ fmtInt(totals.totalUnidades) +'</td><td></td>'
       + '<td class="imp-num">'+ fmtMoney(totals.totalMercaderia) +'</td><td></td><td></td><td></td>'
       + '<td class="imp-num">'+ fmtMoney(totals.totalVentaProyectada||0) +'</td></tr>';
+    var freightPending = imp.freightPending !== false;
+    html += '<tr class="imp-freighttotal-row'+(freightPending?' pending':'')+'">'
+      + '<td colspan="8" style="text-align:right;">Freight (flete internacional)'+(freightPending?' <span class="imp-field-pending-badge">Pendiente</span>':'')+'</td>'
+      + '<td colspan="3"><input type="number" step="0.01" id="impFreightMain" value="'+(imp.freight!=null?imp.freight:'')+'" placeholder="0.00" onfocus="this.select()"></td>'
+      + '</tr>';
     html += '</tbody></table>';
     return html;
   }
 
   function importPalletVisualHtml(totals){
-    var totalCajas = Math.round(totals.totalCajas||0);
-    if(totalCajas<=0) return '<div class="imp-pallet-empty">Ingresa cajas para ver el pallet.</div>';
-    var perRow = IMPORT_BOXES_PER_ROW;
-    var filas = totals.filas||0;
-    var maxRowsShown = 6;
-    var rowsToShow = Math.min(filas, maxRowsShown);
-    var boxesLeft = totalCajas;
-    var html = '<div class="imp-pallet-visual">';
-    html += '<div class="imp-pallet-base"></div>';
-    for(var r=0; r<rowsToShow; r++){
-      html += '<div class="imp-pallet-row">';
-      for(var c=0; c<perRow; c++){
-        if(boxesLeft>0){ html += '<span class="imp-pallet-box filled"></span>'; boxesLeft--; }
-        else { html += '<span class="imp-pallet-box empty"></span>'; }
-      }
-      html += '</div>';
-    }
-    if(filas>maxRowsShown){ html += '<div class="imp-pallet-more">+ '+(filas-maxRowsShown)+' filas más</div>'; }
-    html += '</div>';
-    return html;
+    if((totals.totalCajas||0)<=0) return '<div class="imp-pallet-empty">Ingresa cajas para ver el pallet.</div>';
+    return '<div class="imp-pallet-icon" aria-hidden="true">📦</div>';
   }
 
   function importPalletCardHtml(imp, totals){
@@ -2452,14 +2465,16 @@ if ("serviceWorker" in navigator) {
 
   function importVolCardHtml(imp, totals){
     var vc = imp.volCalc || {};
+    var altoManual = parseFloat(vc.alto)||0;
     return '<div class="imp-card"><h4>Peso volumétrico</h4>'
       + '<div class="imp-field-row">'
       + '<div class="imp-field"><label>Largo (cm)</label><input type="number" id="impVolLargo" value="'+(vc.largo||0)+'" onfocus="this.select()"></div>'
       + '<div class="imp-field"><label>Ancho (cm)</label><input type="number" id="impVolAncho" value="'+(vc.ancho||0)+'" onfocus="this.select()"></div>'
       + '</div><div class="imp-field-row">'
-      + '<div class="imp-field"><label>Alto (cm)</label><input type="number" id="impVolAlto" value="'+(vc.alto||0)+'" onfocus="this.select()"></div>'
+      + '<div class="imp-field"><label>Alto (cm)</label><input type="number" id="impVolAlto" value="'+(totals.altoEfectivo||0)+'" onfocus="this.select()"></div>'
       + '<div class="imp-field"><label>Factor kg/m³</label><input type="number" id="impVolFactor" value="'+(vc.factor||5385)+'" onfocus="this.select()"></div>'
       + '</div>'
+      + (altoManual<=0 ? '<div class="imp-weight-sub" style="margin:-4px 0 8px 2px;">Alto sugerido según el pallet ('+totals.altoCm+' cm). Puedes editarlo si es diferente.</div>' : '')
       + '<div class="imp-kv imp-grand"><span>Peso volumétrico</span><b>'+ totals.pesoVolumetrico.toLocaleString('es-EC',{maximumFractionDigits:2}) +' kg</b></div>'
       + '</div>';
   }
@@ -2477,15 +2492,14 @@ if ("serviceWorker" in navigator) {
     return html + '</div>';
   }
 
-  function importOrigenCardHtml(imp){
-    var freightVal = parseFloat(imp.freight)||0;
-    var cargaVal = parseFloat(imp.cargaArancelaria)||0;
+  function importOrigenCardHtml(imp, totals){
+    var freightPending = imp.freightPending !== false;
     return '<div class="imp-card"><h4>Origen, aduana y flete</h4>'
       + '<div class="imp-field-row">'
       + '<div class="imp-field"><label>País de procedencia</label><input type="text" id="impPais" value="'+esc(imp.pais||'')+'" onfocus="this.select()"></div>'
-      + '<div class="imp-field'+(cargaVal===0?' pending':'')+'"><label>Carga arancelaria'+(cargaVal===0?' <span class="imp-field-pending-badge">Pendiente</span>':'')+'</label><input type="number" step="0.01" id="impCargaArancelaria" value="'+(imp.cargaArancelaria||0)+'" onfocus="this.select()"></div>'
+      + '<div class="imp-field"><label>Carga arancelaria</label><input type="number" step="0.01" id="impCargaArancelaria" value="'+(imp.cargaArancelaria||0)+'" onfocus="this.select()"></div>'
       + '</div>'
-      + '<div class="imp-field'+(freightVal===0?' pending':'')+'"><label>Freight (flete internacional)'+(freightVal===0?' <span class="imp-field-pending-badge">Pendiente</span>':'')+'</label><input type="number" step="0.01" id="impFreight" value="'+(imp.freight||0)+'" onfocus="this.select()"></div>'
+      + '<div class="imp-field'+(freightPending?' pending':'')+'"><label>Freight (flete internacional)'+(freightPending?' <span class="imp-field-pending-badge">Pendiente</span>':'')+'</label><input type="text" value="'+fmtMoney(totals.freight)+'" disabled title="Se edita junto al total, en la tabla de productos"></div>'
       + '</div>';
   }
 
@@ -2507,7 +2521,7 @@ if ("serviceWorker" in navigator) {
   }
 
   function importTotalsCardHtml(imp, totals){
-    var html = '<div class="imp-card"><h4>Totales generales</h4>';
+    var html = '<div class="imp-card imp-totals-highlight"><h4>Totales generales</h4>';
     html += '<div class="imp-kv"><span>Mercadería (FOB)</span><b>'+ fmtMoney(totals.totalMercaderia) +'</b></div>';
     html += '<div class="imp-kv"><span>Freight</span><b>'+ fmtMoney(totals.freight) +'</b></div>';
     html += '<div class="imp-kv"><span>Mercadería + freight</span><b>'+ fmtMoney(totals.mercaderiaConFlete) +'</b></div>';
@@ -2520,6 +2534,16 @@ if ("serviceWorker" in navigator) {
     }
     html += '</div>';
     return html;
+  }
+
+  function importKpisHtml(totals){
+    return '<div class="kpis" style="margin-bottom:16px;">'
+      + '<div class="kpi"><div class="label">Total cajas</div><div class="value num">'+ fmtInt(totals.totalCajas) +'</div></div>'
+      + '<div class="kpi"><div class="label">Peso total <span class="sub">(kg)</span></div><div class="value num">'+ totals.pesoKg.toLocaleString('es-EC',{maximumFractionDigits:1}) +'</div></div>'
+      + '<div class="kpi"><div class="label">TOTAL a pagar</div><div class="value num">'+ fmtMoney(totals.granTotal) +'</div></div>'
+      + '<div class="kpi"><div class="label">Venta proyectada</div><div class="value num">'+ fmtMoney(totals.totalVentaProyectada||0) +'</div></div>'
+      + '<div class="kpi'+(totals.margenProyectado<0?' alert':'')+'"><div class="label">Margen proyectado</div><div class="value num">'+ fmtMoney(totals.margenProyectado||0) +'</div></div>'
+      + '</div>';
   }
 
   function renderImportaciones(){
@@ -2572,14 +2596,17 @@ if ("serviceWorker" in navigator) {
     }
 
     var totals = importTotals(imp);
+    html += importKpisHtml(totals);
+    html += '<div class="imp-layout">';
     html += '<div class="imp-main">' + importProductTableHtml(imp, totals) + '</div>';
-    html += '<div class="imp-cards-grid">';
+    html += '<div class="imp-side">';
     html += importPalletCardHtml(imp, totals);
     html += importVolCardHtml(imp, totals);
     html += importDatesCardHtml(imp);
-    html += importOrigenCardHtml(imp);
+    html += importOrigenCardHtml(imp, totals);
     html += importCostsCardHtml(imp, totals);
     html += importTotalsCardHtml(imp, totals);
+    html += '</div>';
     html += '</div>';
 
     root.innerHTML = html;
@@ -2669,8 +2696,10 @@ if ("serviceWorker" in navigator) {
     if(paisEl) paisEl.addEventListener('change', function(){ updateImportField(imp.id, {pais: paisEl.value}); });
     var cargaEl = document.getElementById('impCargaArancelaria');
     if(cargaEl) cargaEl.addEventListener('change', function(){ updateImportField(imp.id, {cargaArancelaria: parseFloat(cargaEl.value)||0}); });
-    var freightEl = document.getElementById('impFreight');
-    if(freightEl) freightEl.addEventListener('change', function(){ updateImportField(imp.id, {freight: parseFloat(freightEl.value)||0}); });
+    var freightMainEl = document.getElementById('impFreightMain');
+    if(freightMainEl) freightMainEl.addEventListener('change', function(){
+      updateImportField(imp.id, {freight: parseFloat(freightMainEl.value)||0, freightPending: false});
+    });
     document.querySelectorAll('.imp-milestone-date').forEach(function(el){
       el.addEventListener('change', function(){
         var idx = parseInt(el.getAttribute('data-midx'),10);
