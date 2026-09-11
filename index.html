@@ -957,18 +957,21 @@ if ("serviceWorker" in navigator) {
   .imp-status-recibida{background:var(--success-tint); color:var(--success);}
   .imp-status-cerrada{background:var(--surface-2); color:var(--text-muted);}
   .imp-empty{padding:60px 20px; text-align:center; color:var(--text-muted);}
+  .imp-kpis{grid-template-columns:repeat(auto-fit, minmax(150px,1fr));}
   .imp-layout{display:flex; gap:16px; align-items:flex-start;}
   .imp-main{background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); overflow-x:auto; flex:1 1 0; min-width:0;}
-  .imp-side{flex:0 0 400px; display:flex; flex-direction:column; gap:12px; min-width:0;}
+  .imp-side{flex:0 0 400px; display:flex; flex-direction:column; gap:10px; min-width:0;}
   @media (max-width:1100px){ .imp-layout{flex-direction:column;} .imp-side{flex:1 1 auto; width:100%;} }
-  .imp-card{background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); padding:14px 16px;}
-  .imp-card h4{margin:0 0 10px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); font-weight:700;}
+  .imp-card{background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); padding:10px 14px;}
+  .imp-card h4{margin:0 0 7px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); font-weight:700;}
+  .imp-side-row{display:flex; gap:12px;}
+  .imp-side-row > .imp-card{flex:1; min-width:0;}
   .imp-linegroup-head{display:flex; align-items:center; gap:10px; padding:7px 14px; border-radius:8px; margin:6px 0 2px;}
   .imp-linegroup-count{font-size:11.5px; font-weight:700;}
   .imp-linegroup-head img{width:34px; height:34px; object-fit:contain; border-radius:6px; background:#fff; border:1px solid var(--border);}
   .imp-linegroup-head b{font-size:13px;}
   .imp-table{width:100%; border-collapse:collapse; font-size:12.5px; min-width:760px;}
-  .imp-table th{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); padding:5px 8px; border-bottom:2px solid var(--border); background:var(--surface);}
+  .imp-table th{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); padding:5px 8px; border-bottom:2px solid var(--border); background:var(--surface); position:sticky; top:var(--imp-topbar-h, 0px); z-index:5;}
   .imp-table td{padding:4px 8px; border-bottom:1px solid var(--border); vertical-align:middle;}
   .imp-table input[type=number], .imp-table input[type=text]{width:100%; box-sizing:border-box; padding:5px 6px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:12.5px;}
   .imp-table .imp-num{text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums;}
@@ -1012,7 +1015,8 @@ if ("serviceWorker" in navigator) {
   .imp-pallet-empty{padding:14px 4px; text-align:center; color:var(--text-muted); font-size:12px;}
   .imp-pallet-icon{font-size:60px; line-height:1; text-align:center; margin:2px 0 10px;}
   .imp-freighttotal-row td{background:var(--imports-tint); font-weight:700; padding-top:8px; padding-bottom:8px;}
-  .imp-freighttotal-row input{width:120px; padding:6px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:13px; font-weight:700;}
+  .imp-dollar-input{display:inline-flex; align-items:center; gap:3px; justify-content:flex-end; font-weight:700;}
+  .imp-dollar-input input{width:72px; padding:5px 6px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:13px; font-weight:700; text-align:right;}
   .imp-freighttotal-row.pending td{background:var(--warning-tint);}
   .imp-freighttotal-row.pending input{border-color:var(--warning); background:var(--surface);}
   .imp-totals-highlight{background:var(--imports-tint); border-color:var(--imports-color);}
@@ -1020,6 +1024,8 @@ if ("serviceWorker" in navigator) {
   .imp-totals-highlight .imp-grand b{color:var(--imports-color);}
   .imp-row-photo{width:26px; height:26px; border-radius:6px; object-fit:cover; border:1px solid var(--border); vertical-align:middle; margin-right:6px;}
   .imp-row-photo-placeholder{width:26px; height:26px; border-radius:6px; background:var(--surface-2); display:inline-block; vertical-align:middle; margin-right:6px;}
+  .imp-input-cajas, .imp-input-ventau{width:58px !important; text-align:right;}
+  #impClienteInput{color:#3b82f6; font-weight:800; font-size:15px;}
 </style>
 
 <div class="pin-gate" id="pinGate">
@@ -1295,12 +1301,21 @@ if ("serviceWorker" in navigator) {
   };
   var IMPORT_BOXES_PER_ROW = 9;
 
+  var IMPORT_PHOTO_ALIASES = {
+    'tropical café': 'tropical cafeína',
+    'raspberry café': 'raspberry cafeína',
+    'grape': 'uva'
+  };
   function importFindPhoto(linea, sabor, presentacion){
     var list = state.products || [];
     var norm = function(s){ return (s||'').toString().trim().toLowerCase(); };
-    var exact = list.filter(function(p){ return norm(p.category)===norm(linea) && norm(p.flavor)===norm(sabor) && norm(p.presentation)===norm(presentacion); });
+    var candidates = [norm(sabor)];
+    var alias = IMPORT_PHOTO_ALIASES[norm(sabor)];
+    if(alias) candidates.push(alias);
+    var matchFlavor = function(p){ return candidates.indexOf(norm(p.flavor)) !== -1; };
+    var exact = list.filter(function(p){ return norm(p.category)===norm(linea) && matchFlavor(p) && norm(p.presentation)===norm(presentacion); });
     if(exact.length && exact[0].photoUrl) return exact[0].photoUrl;
-    var byFlavor = list.filter(function(p){ return norm(p.category)===norm(linea) && norm(p.flavor)===norm(sabor); });
+    var byFlavor = list.filter(function(p){ return norm(p.category)===norm(linea) && matchFlavor(p); });
     if(byFlavor.length && byFlavor[0].photoUrl) return byFlavor[0].photoUrl;
     return null;
   }
@@ -2405,8 +2420,10 @@ if ("serviceWorker" in navigator) {
         + '<b style="color:'+accent.color+';">'+ esc(CATEGORY_LABEL[linea] || linea) +'</b>'
         + '<span class="imp-linegroup-count" style="color:'+accent.color+';">'+ totalLineCajas.toLocaleString('es-EC') +' cajas</span>'
         + '</td></tr>';
-      presKeys.forEach(function(pk){
-        html += '<tr><td colspan="11" style="font-weight:600; color:var(--text-muted); font-size:11.5px; padding-top:8px; background:'+accent.tint+';">'+esc(pk)+'</td></tr>';
+      presKeys.forEach(function(pk, presIdx){
+        var darkenPct = presIdx===0 ? 0 : (presIdx===1 ? 12 : 20);
+        var shadeBg = darkenPct>0 ? ('color-mix(in srgb, '+accent.tint+' '+(100-darkenPct)+'%, black '+darkenPct+'%)') : accent.tint;
+        html += '<tr><td colspan="11" style="font-weight:800; color:var(--text); font-size:13.5px; padding-top:9px; background:'+shadeBg+';">'+esc(pk)+'</td></tr>';
         presentaciones[pk].forEach(function(idx){
           var line = products[idx];
           var c = importLineCalc(line);
@@ -2415,10 +2432,10 @@ if ("serviceWorker" in navigator) {
           var valorVenta = precioVenta * c.unidades;
           var photoUrl = importFindPhoto(linea, line.sabor, pk);
           var photoHtml = photoUrl ? ('<img class="imp-row-photo" src="'+photoUrl+'" alt="">') : '<span class="imp-row-photo-placeholder"></span>';
-          html += '<tr data-idx="'+idx+'" style="background:'+accent.tint+';">';
+          html += '<tr data-idx="'+idx+'" style="background:'+shadeBg+';">';
           html += '<td>'+photoHtml+esc(line.sabor)+'</td>';
           html += '<td class="imp-num">'+ (line.unidadesPorCaja||0) +'</td>';
-          html += '<td><input type="number" min="0" step="1" class="imp-input-cajas" data-idx="'+idx+'" value="'+(line.cajas||0)+'" onfocus="this.select()"></td>';
+          html += '<td><input type="number" min="0" step="1" class="imp-input-cajas" data-idx="'+idx+'" value="'+(line.cajas||'')+'" placeholder="0" onfocus="this.select()"></td>';
           html += '<td class="imp-num">'+ c.kg.toLocaleString('es-EC',{maximumFractionDigits:1}) +'</td>';
           html += '<td class="imp-num">'+ fmtInt(c.unidades) +'</td>';
           html += '<td><input type="number" min="0" step="0.01" class="imp-input-precio" data-idx="'+idx+'" value="'+(line.precioPorCaja||0)+'" onfocus="this.select()"></td>';
@@ -2438,8 +2455,10 @@ if ("serviceWorker" in navigator) {
       + '<td class="imp-num">'+ fmtMoney(totals.totalVentaProyectada||0) +'</td></tr>';
     var freightPending = imp.freightPending !== false;
     html += '<tr class="imp-freighttotal-row'+(freightPending?' pending':'')+'">'
-      + '<td colspan="8" style="text-align:right;">Freight (flete internacional)'+(freightPending?' <span class="imp-field-pending-badge">Pendiente</span>':'')+'</td>'
-      + '<td colspan="3"><input type="number" step="0.01" id="impFreightMain" value="'+(imp.freight!=null?imp.freight:'')+'" placeholder="0.00" onfocus="this.select()"></td>'
+      + '<td>Freight'+(freightPending?' <span class="imp-field-pending-badge">Pendiente</span>':'')+'</td>'
+      + '<td></td><td></td><td></td><td></td><td></td>'
+      + '<td class="imp-num"><span class="imp-dollar-input">$<input type="number" step="0.01" id="impFreightMain" value="'+(imp.freight!=null?imp.freight:'')+'" placeholder="0.00" onfocus="this.select()"></span></td>'
+      + '<td></td><td></td><td></td><td></td>'
       + '</tr>';
     html += '</tbody></table>';
     return html;
@@ -2537,10 +2556,11 @@ if ("serviceWorker" in navigator) {
   }
 
   function importKpisHtml(totals){
-    return '<div class="kpis" style="margin-bottom:16px;">'
+    return '<div class="kpis imp-kpis" style="margin-bottom:16px;">'
       + '<div class="kpi"><div class="label">Total cajas</div><div class="value num">'+ fmtInt(totals.totalCajas) +'</div></div>'
       + '<div class="kpi"><div class="label">Peso total <span class="sub">(kg)</span></div><div class="value num">'+ totals.pesoKg.toLocaleString('es-EC',{maximumFractionDigits:1}) +'</div></div>'
       + '<div class="kpi"><div class="label">TOTAL a pagar</div><div class="value num">'+ fmtMoney(totals.granTotal) +'</div></div>'
+      + '<div class="kpi"><div class="label">Factor de costeo</div><div class="value num">x'+ (totals.factor||0).toLocaleString('es-EC',{minimumFractionDigits:2,maximumFractionDigits:2}) +'</div></div>'
       + '<div class="kpi"><div class="label">Venta proyectada</div><div class="value num">'+ fmtMoney(totals.totalVentaProyectada||0) +'</div></div>'
       + '<div class="kpi'+(totals.margenProyectado<0?' alert':'')+'"><div class="label">Margen proyectado</div><div class="value num">'+ fmtMoney(totals.margenProyectado||0) +'</div></div>'
       + '</div>';
@@ -2601,9 +2621,8 @@ if ("serviceWorker" in navigator) {
     html += '<div class="imp-main">' + importProductTableHtml(imp, totals) + '</div>';
     html += '<div class="imp-side">';
     html += importPalletCardHtml(imp, totals);
-    html += importVolCardHtml(imp, totals);
+    html += '<div class="imp-side-row">' + importVolCardHtml(imp, totals) + importOrigenCardHtml(imp, totals) + '</div>';
     html += importDatesCardHtml(imp);
-    html += importOrigenCardHtml(imp, totals);
     html += importCostsCardHtml(imp, totals);
     html += importTotalsCardHtml(imp, totals);
     html += '</div>';
@@ -2756,6 +2775,17 @@ if ("serviceWorker" in navigator) {
     });
   }
 
+  function updateImportsTopbarOffset(){
+    var tb = document.querySelector('.topbar');
+    if(tb){ document.documentElement.style.setProperty('--imp-topbar-h', tb.getBoundingClientRect().height + 'px'); }
+    if(!window.__impResizeBound){
+      window.__impResizeBound = true;
+      window.addEventListener('resize', function(){
+        if(document.body.classList.contains('imports-mode')) updateImportsTopbarOffset();
+      });
+    }
+  }
+
   function render(){
     renderKpis();
     renderTabs();
@@ -2777,6 +2807,7 @@ if ("serviceWorker" in navigator) {
     if(supermaxiBtn) supermaxiBtn.classList.toggle('active', state.activeTab === 'SUPERMAXI');
     document.body.classList.toggle('supermaxi-mode', state.activeTab === 'SUPERMAXI');
     document.body.classList.toggle('imports-mode', state.activeTab === 'IMPORTACIONES');
+    if(state.activeTab === 'IMPORTACIONES'){ updateImportsTopbarOffset(); }
     var modeInvBtn = document.getElementById('modeInvBtn');
     if(modeInvBtn) modeInvBtn.classList.toggle('active', state.activeTab !== 'IMPORTACIONES');
     var modeImportsBtn = document.getElementById('modeImportsBtn');
