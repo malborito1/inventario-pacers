@@ -651,6 +651,7 @@ if ("serviceWorker" in navigator) {
   .pago-item-distrib{flex-wrap:wrap;}
   .pago-item-distrib.overdue{border-color:var(--critical); background:var(--critical-tint);}
   .pago-distrib-tag{font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.02em; color:var(--text-muted); background:var(--surface-2); border-radius:6px; padding:2px 6px; margin-left:8px; vertical-align:middle;}
+  .pago-distrib-products{font-size:11.5px; color:var(--text-muted); font-weight:500; margin-top:2px;}
   .pago-due{font-size:12px; color:var(--text-muted); flex:0 0 auto; white-space:nowrap;}
   .pago-vencido-badge{background:var(--critical); color:#fff; font-weight:800; font-size:15px; letter-spacing:.03em; padding:5px 14px; border-radius:8px; flex:0 0 auto;}
 
@@ -1798,8 +1799,9 @@ if ("serviceWorker" in navigator) {
           + '</div>';
         html += '<div class="mini-field-row">'
           + '<div class="mini-field"><label>Vencimiento de factura (opcional)</label><input type="date" id="dueDateInput-' + p.id + '"></div>'
+          + '<div class="mini-field"><label>Margen de descuento % (opcional)</label><input type="number" id="discountInput-' + p.id + '" min="0" max="100" step="1" placeholder="0"></div>'
           + '</div>';
-        html += '<p class="hint" style="margin:-6px 0 0;">Pon una fecha solo si esta venta es a un distribuidor a crédito: aparecerá en Pagos como cuenta por cobrar y se marcará "VENCIDO" cuando llegue esa fecha.</p>';
+        html += '<p class="hint" style="margin:-6px 0 0;">Pon una fecha solo si esta venta es a un distribuidor a crédito: aparecerá en Pagos como cuenta por cobrar y se marcará "VENCIDO" cuando llegue esa fecha. El % de descuento se resta del precio normal para calcular el monto a cobrar.</p>';
       }
       html += '<button class="confirm-btn" data-action="confirm-move" data-id="' + p.id + '" data-mode="' + openMode + '">' + (isVenta?'Registrar venta':'Registrar ingreso') + '</button>';
       html += '<button class="cancel-btn" data-action="cancel-move" data-id="' + p.id + '">Cancelar</button>';
@@ -2024,16 +2026,33 @@ if ("serviceWorker" in navigator) {
       '</div>';
 
     if(distrib.length){
-      html += '<div class="pagos-list" style="margin-bottom:14px;">';
+      // Una misma venta a crédito puede generar varias filas (una por
+      // producto); para Daniel es una sola cuenta por cobrar, así que se
+      // agrupan por cliente + fecha de vencimiento y se suman los montos.
+      var distribGroups = [], distribGroupIndex = {};
       distrib.forEach(function(pg){
-        var overdue = pg.dueDate <= today;
+        var key = (pg.name||'') + '|' + (pg.dueDate||'');
+        if(!distribGroupIndex.hasOwnProperty(key)){
+          distribGroupIndex[key] = distribGroups.length;
+          distribGroups.push({name: pg.name, dueDate: pg.dueDate, amount: 0, ids: [], labels: []});
+        }
+        var grp = distribGroups[distribGroupIndex[key]];
+        grp.amount += (pg.amount||0);
+        grp.ids.push(pg.id);
+        if(pg.productLabel && grp.labels.indexOf(pg.productLabel) === -1) grp.labels.push(pg.productLabel);
+      });
+      html += '<div class="pagos-list" style="margin-bottom:14px;">';
+      distribGroups.forEach(function(grp){
+        var overdue = grp.dueDate <= today;
         html += '<div class="pago-item pago-item-distrib' + (overdue?' overdue':'') + '">'
-          + '<span class="pago-name">' + esc(pg.name) + '<span class="pago-distrib-tag">Distribuidor</span></span>'
-          + '<span class="pago-due">' + (overdue ? 'Venció ' : 'Vence ') + fmtDateOnly(pg.dueDate) + '</span>'
-          + '<span class="pago-amt num">' + fmtMoney(pg.amount) + '</span>'
+          + '<span class="pago-name">' + esc(grp.name) + '<span class="pago-distrib-tag">Distribuidor</span>'
+          + (grp.labels.length ? ('<div class="pago-distrib-products">' + esc(grp.labels.join(' · ')) + '</div>') : '')
+          + '</span>'
+          + '<span class="pago-due">' + (overdue ? 'Venció ' : 'Vence ') + fmtDateOnly(grp.dueDate) + '</span>'
+          + '<span class="pago-amt num">' + fmtMoney(grp.amount) + '</span>'
           + (overdue ? '<span class="pago-vencido-badge">VENCIDO</span>' : '<span class="pill ok">Al día</span>')
-          + '<button class="pago-paid" data-pid="' + pg.id + '" aria-label="Marcar como pagado" title="Marcar como pagado">✓</button>'
-          + '<button class="pago-del" data-pid="' + pg.id + '" aria-label="Eliminar" title="Eliminar">✕</button>'
+          + '<button class="pago-paid" data-pid="' + grp.ids.join(',') + '" aria-label="Marcar como pagado" title="Marcar como pagado">✓</button>'
+          + '<button class="pago-del" data-pid="' + grp.ids.join(',') + '" aria-label="Eliminar" title="Eliminar">✕</button>'
           + '</div>';
       });
       html += '</div>';
@@ -2106,11 +2125,15 @@ if ("serviceWorker" in navigator) {
     });
   }
 
-  function markPagoPaid(id){
+  function markPagoPaid(idOrIds){
     if(!state.db) return;
-    state.db.doc('pendingPayments/' + id).update({
-      status: 'paid', paidAt: new Date().toISOString(), paidBy: state.userName
-    }).then(function(){
+    var ids = String(idOrIds).split(',').filter(Boolean);
+    if(!ids.length) return;
+    Promise.all(ids.map(function(id){
+      return state.db.doc('pendingPayments/' + id).update({
+        status: 'paid', paidAt: new Date().toISOString(), paidBy: state.userName
+      });
+    })).then(function(){
       showStatus('Pago marcado como cobrado.');
     }).catch(function(){ showStatus('No se pudo actualizar.', true); });
   }
@@ -2124,10 +2147,15 @@ if ("serviceWorker" in navigator) {
     }).catch(function(){ showStatus('No se pudo actualizar.', true); });
   }
 
-  function deletePago(id){
+  function deletePago(idOrIds){
     if(!state.db) return;
-    if(!confirm('¿Eliminar este pago pendiente? Esta acción no se puede deshacer.')) return;
-    state.db.doc('pendingPayments/' + id).delete().then(function(){
+    var ids = String(idOrIds).split(',').filter(Boolean);
+    if(!ids.length) return;
+    var msg = ids.length > 1 ? ('¿Eliminar estos ' + ids.length + ' pagos pendientes? Esta acción no se puede deshacer.') : '¿Eliminar este pago pendiente? Esta acción no se puede deshacer.';
+    if(!confirm(msg)) return;
+    Promise.all(ids.map(function(id){
+      return state.db.doc('pendingPayments/' + id).delete();
+    })).then(function(){
       showStatus('Pago eliminado.');
     }).catch(function(){ showStatus('No se pudo eliminar.', true); });
   }
@@ -2906,12 +2934,15 @@ if ("serviceWorker" in navigator) {
       var note = noteInput ? noteInput.value.trim() : '';
       var dueDateInput = document.getElementById('dueDateInput-' + id);
       var dueDate = (mode === 'venta' && dueDateInput) ? dueDateInput.value : '';
+      var discountInput = document.getElementById('discountInput-' + id);
+      var discountPct = (mode === 'venta' && discountInput) ? Math.min(100, Math.max(0, parseFloat(discountInput.value) || 0)) : 0;
       if(dueDate && !client){ showStatus('Si pones fecha de vencimiento, ingresa también el nombre del distribuidor en "Cliente".', true); return; }
       ensureUser(function(){
         var moveDone = applyMovement(p, mode, qty, client, note);
         if(mode === 'venta' && dueDate){
           moveDone.then(function(moved){
-            return registerDistributorInvoice(client, moved * (p.pvpPerUnit||0), dueDate, p);
+            var unitPrice = (p.pvpPerUnit||0) * (1 - discountPct/100);
+            return registerDistributorInvoice(client, moved * unitPrice, dueDate, p, discountPct);
           }).catch(function(){
             showStatus('La venta se registró, pero no se pudo crear la cuenta por cobrar en Pagos. Agrégala ahí manualmente.', true);
           });
@@ -2928,7 +2959,7 @@ if ("serviceWorker" in navigator) {
   // fecha de vencimiento a partir de una venta. Vive en la misma colección
   // que los pagos pendientes "de siempre" (pendingPayments); lo único que la
   // distingue es que trae dueDate.
-  function registerDistributorInvoice(client, amount, dueDate, product){
+  function registerDistributorInvoice(client, amount, dueDate, product, discountPct){
     if(!state.db) return Promise.reject(new Error('no-db'));
     return state.db.collection('pendingPayments').add({
       name: client,
@@ -2938,9 +2969,11 @@ if ("serviceWorker" in navigator) {
       addedBy: state.userName,
       origin: 'venta',
       productId: product.id,
-      productLabel: product.presentation + ' · ' + product.flavor
+      productLabel: product.presentation + ' · ' + product.flavor,
+      discountPct: discountPct || 0
     }).then(function(){
-      showStatus('Cuenta por cobrar registrada en Pagos: ' + fmtMoney(amount) + ' de ' + client + '.');
+      var descNote = (discountPct>0) ? (' (' + discountPct + '% desc.)') : '';
+      showStatus('Cuenta por cobrar registrada en Pagos: ' + fmtMoney(amount) + ' de ' + client + descNote + '.');
     });
   }
 
