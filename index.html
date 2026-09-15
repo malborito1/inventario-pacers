@@ -1392,6 +1392,17 @@ if ("serviceWorker" in navigator) {
     }
     return null;
   }
+  // Empaque de Supermaxi (bodega aparte, cajas distintas al inventario
+  // general): fundas grandes (30 servings) = cajas de 12; sachets Endurance
+  // Fuel = cajas de 90; sachets High Carb (HCF) = cajas de 60.
+  function suggestedSupermaxiUnitsPerBox(category, presentation){
+    if(presentation === '30 servings') return 12;
+    if(presentation === 'Sachets'){
+      if(category === 'ENDURANCE') return 90;
+      if(category === 'HCF') return 60;
+    }
+    return null;
+  }
 
   var GRACE_GROUP_ORDER = ["GRANDE","SACHETS","FLASKS"];
 
@@ -5372,7 +5383,11 @@ if ("serviceWorker" in navigator) {
     var st = statusOf(p);
     var pillLabel = st==='critical' ? 'Stock crítico' : (st==='warn' ? 'Stock bajo' : 'En stock');
     var cajas = p.unitsPerBox ? (p.stock / p.unitsPerBox) : null;
-    var cajasStr = cajas!=null ? cajas.toLocaleString('es-EC', {maximumFractionDigits:1}) + ' cajas aprox.' : '';
+    // Supermaxi vende y descuenta en cajas: la caja es la cifra principal y
+    // las unidades pasan a ser el dato secundario (antes era al revés).
+    var cajasBigStr = cajas!=null ? cajas.toLocaleString('es-EC', {maximumFractionDigits:1}) : fmtInt(p.stock);
+    var stockUnitLabel = cajas!=null ? 'cajas' : 'unidades';
+    var unidadesStr = fmtInt(p.stock) + ' unidades';
     var lastMove = p.lastMovementAt ? ('Últ. movimiento ' + relTime(p.lastMovementAt) + (p.lastMovementBy? ' · ' + esc(p.lastMovementBy):'')) : 'Sin movimientos registrados';
     var openMode = (state.openSupermaxiRow && state.openSupermaxiRow.id === p.id) ? state.openSupermaxiRow.mode : null;
 
@@ -5380,7 +5395,7 @@ if ("serviceWorker" in navigator) {
     html += '<div class="stripe"></div>';
     var photoHtml = p.photoUrl ? ('<img class="p-photo" src="' + p.photoUrl + '" alt="' + esc(p.flavor) + '" loading="lazy">') : '<div class="p-photo-placeholder"></div>';
     html += '<div class="p-name">' + photoHtml + '<div class="p-name-text"><div class="flavor">' + esc(p.flavor) + '</div><div class="pres">' + esc(p.presentation) + '</div><div class="lastmove">' + lastMove + '</div></div></div>';
-    html += '<div class="p-stock"><div class="n num">' + fmtInt(p.stock) + '</div><div class="u">unidades</div>' + (cajasStr?('<div class="cajas">'+cajasStr+'</div>'):'') + boxIconsHtml(cajas) + '</div>';
+    html += '<div class="p-stock"><div class="n num">' + cajasBigStr + '</div><div class="u">' + stockUnitLabel + '</div>' + (cajas!=null?('<div class="cajas">'+unidadesStr+'</div>'):'') + boxIconsHtml(cajas) + '</div>';
     html += '<div class="p-status"><span class="pill ' + st + '">' + pillLabel + '</span></div>';
     html += '<div class="p-actions">';
     html += '<button class="btn-sale" data-saction="venta" data-sid="' + p.id + '">Venta</button>';
@@ -5403,10 +5418,8 @@ if ("serviceWorker" in navigator) {
       html += '<input type="number" min="1" step="1" value="1" id="sqtyInput-' + p.id + '">';
       html += '<button data-saction="qty-inc" data-sid="' + p.id + '">+</button>';
       html += '</div>';
-      html += '<div class="chip-row">' + [1,3,6,12].map(function(n){ return '<button class="chip" data-saction="qty-set" data-sid="'+p.id+'" data-val="'+n+'">'+n+'</button>'; }).join('') + '</div>';
-      if(!isVenta && p.unitsPerBox){
-        html += '<label class="toggle-box"><input type="checkbox" id="sboxToggle-' + p.id + '"> cantidad en cajas (× ' + p.unitsPerBox + ')</label>';
-      }
+      html += '<div class="chip-row">' + [1,2,5,10].map(function(n){ return '<button class="chip" data-saction="qty-set" data-sid="'+p.id+'" data-val="'+n+'">'+n+'</button>'; }).join('') + '</div>';
+      html += '<div class="toggle-box">Cantidad en cajas' + (p.unitsPerBox ? (' (1 caja = ' + p.unitsPerBox + ' u.)') : '') + '</div>';
       if(isVenta){
         html += '<div class="mini-field-row">'
           + '<div class="mini-field"><label>Cliente (opcional)</label><input type="text" id="sclientInput-' + p.id + '" list="clientNamesList" value="' + esc(activeClientValue()) + '" placeholder="Nombre del comprador" maxlength="60"></div>'
@@ -5523,11 +5536,13 @@ if ("serviceWorker" in navigator) {
     if(action === 'confirm-move'){
       var mode = el.getAttribute('data-mode');
       var input2 = document.getElementById('sqtyInput-' + sid);
-      var qty = parseInt(input2 && input2.value, 10) || 0;
-      var boxToggle = document.getElementById('sboxToggle-' + sid);
-      if(boxToggle && boxToggle.checked && p.unitsPerBox){ qty = qty * p.unitsPerBox; }
-      if(qty <= 0){ showStatus('Ingresa una cantidad válida.', true); return; }
-      if(mode === 'venta' && qty > (p.stock||0)){ showStatus('Solo hay ' + fmtInt(p.stock||0) + ' u. en stock.', true); return; }
+      var cajasQty = parseInt(input2 && input2.value, 10) || 0;
+      var qty = p.unitsPerBox ? (cajasQty * p.unitsPerBox) : cajasQty;
+      if(cajasQty <= 0){ showStatus('Ingresa una cantidad de cajas válida.', true); return; }
+      if(mode === 'venta' && qty > (p.stock||0)){
+        var stockCajasMsg = p.unitsPerBox ? ((p.stock/p.unitsPerBox).toLocaleString('es-EC',{maximumFractionDigits:1}) + ' cajas (' + fmtInt(p.stock||0) + ' u.)') : (fmtInt(p.stock||0) + ' u.');
+        showStatus('Solo hay ' + stockCajasMsg + ' en stock.', true); return;
+      }
       var clientInput = document.getElementById('sclientInput-' + sid);
       var client = clientInput ? clientInput.value.trim() : '';
       var noteInput = document.getElementById('snoteInput-' + sid);
@@ -5571,7 +5586,8 @@ if ("serviceWorker" in navigator) {
     }).then(function(){
       var moved = Math.abs(actualDelta);
       var extraNote = (type === 'venta' && moved < qty) ? (' (se ajustó a ' + moved + ' u. porque no había más stock)') : '';
-      showStatus((type==='venta' ? 'Venta de Supermaxi registrada: ' : 'Ingreso a Supermaxi registrado: ') + moved + ' u. de ' + product.flavor + '.' + extraNote);
+      var movedStr = product.unitsPerBox ? ((moved/product.unitsPerBox).toLocaleString('es-EC',{maximumFractionDigits:1}) + ' cajas (' + moved + ' u.)') : (moved + ' u.');
+      showStatus((type==='venta' ? 'Venta de Supermaxi registrada: ' : 'Ingreso a Supermaxi registrado: ') + movedStr + ' de ' + product.flavor + '.' + extraNote);
     }).catch(function(){
       showStatus('No se pudo registrar el movimiento de Supermaxi.', true);
     });
@@ -5639,7 +5655,7 @@ if ("serviceWorker" in navigator) {
         presentation: s.presentation,
         stock: 0,
         lowThreshold: 5,
-        unitsPerBox: (src && src.unitsPerBox) || suggestedUnitsPerBox(s.category, s.presentation) || 1,
+        unitsPerBox: suggestedSupermaxiUnitsPerBox(s.category, s.presentation) || 1,
         costPerUnit: 0,
         pvpPerUnit: 0,
         pvpSinIva: 0,
