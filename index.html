@@ -652,6 +652,12 @@ if ("serviceWorker" in navigator) {
   .pago-item-distrib.overdue{border-color:var(--critical); background:var(--critical-tint);}
   .pago-distrib-tag{font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.02em; color:var(--text-muted); background:var(--surface-2); border-radius:6px; padding:2px 6px; margin-left:8px; vertical-align:middle;}
   .pago-distrib-products{font-size:11.5px; color:var(--text-muted); font-weight:500; margin-top:2px;}
+  .pago-ship-toggle{border:1px dashed var(--border); background:none; color:var(--text-muted); border-radius:8px; padding:5px 9px; font-size:11.5px; cursor:pointer; flex:0 0 auto;}
+  .pago-ship-toggle:hover{background:var(--surface-2);}
+  .pago-ship-form{display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:0 14px 10px; margin-top:-4px;}
+  .pago-ship-value-input{padding:7px 10px; border-radius:8px; border:1px solid var(--border); background:var(--surface); font-size:13px; color:var(--text); width:190px;}
+  .pago-ship-add{border:none; background:var(--success-tint); color:var(--success); border-radius:8px; padding:7px 11px; font-size:12.5px; font-weight:600; cursor:pointer;}
+  .pago-ship-add:hover{background:var(--success); color:#fff;}
   .pago-due{font-size:12px; color:var(--text-muted); flex:0 0 auto; white-space:nowrap;}
   .pago-vencido-badge{background:var(--critical); color:#fff; font-weight:800; font-size:15px; letter-spacing:.03em; padding:5px 14px; border-radius:8px; flex:0 0 auto;}
 
@@ -1439,6 +1445,11 @@ if ("serviceWorker" in navigator) {
     lastClientAt: null,  // ms timestamp; the name auto-expires after LAST_CLIENT_TTL_MS
     lastPagoName: "",
     lastPagoNameAt: null, // ms timestamp; the name auto-expires after LAST_CLIENT_TTL_MS
+    lastDueDate: "",
+    lastDueDateAt: null, // ms timestamp; auto-expires after LAST_CLIENT_TTL_MS, same as el cliente
+    lastDiscountPct: null,
+    lastDiscountPctAt: null, // ms timestamp; auto-expira igual que el cliente y la fecha
+    openShippingRow: null, // key ("nombre|vencimiento") de la fila de Pagos con el mini-form de envío abierto
     stockFilter: null,   // null | 'lowstock'
     collapsedGroups: {}, // gkey ("CAT::presentacion") -> bool, persisted in localStorage
     db: null,
@@ -1507,15 +1518,44 @@ if ("serviceWorker" in navigator) {
     state.lastClientAt = Date.now();
     renderClientChip();
   }
+  function activeDueDateValue(){
+    if(state.lastDueDate && state.lastDueDateAt && (Date.now() - state.lastDueDateAt) < LAST_CLIENT_TTL_MS){
+      return state.lastDueDate;
+    }
+    return '';
+  }
+  function noteDueDateUsed(dueDate){
+    var v = (dueDate||'').trim();
+    if(!v) return;
+    state.lastDueDate = v;
+    state.lastDueDateAt = Date.now();
+  }
+  function activeDiscountValue(){
+    if(state.lastDiscountPct != null && state.lastDiscountPctAt && (Date.now() - state.lastDiscountPctAt) < LAST_CLIENT_TTL_MS){
+      return state.lastDiscountPct;
+    }
+    return '';
+  }
+  function noteDiscountUsed(pct){
+    if(pct == null || isNaN(pct)) return;
+    state.lastDiscountPct = pct;
+    state.lastDiscountPctAt = Date.now();
+  }
   function renderClientChip(){
     var chip = document.getElementById('clientChip');
     if(!chip) return;
     var v = activeClientValue();
-    if(!v){ chip.style.display = 'none'; return; }
+    var due = activeDueDateValue();
+    var disc = activeDiscountValue();
+    if(!v && !due && !disc){ chip.style.display = 'none'; return; }
     chip.style.display = '';
     var mins = Math.max(0, Math.round((Date.now() - state.lastClientAt) / 60000));
     var agoText = mins < 1 ? 'hace instantes' : ('hace ' + mins + ' min');
-    document.getElementById('clientLabel').textContent = 'Último cliente: ' + v + ' (' + agoText + ')';
+    var parts = [];
+    if(v) parts.push('Último cliente: ' + v);
+    if(due) parts.push('vence ' + fmtDateOnly(due));
+    if(disc) parts.push(disc + '% desc.');
+    document.getElementById('clientLabel').textContent = parts.join(' · ') + ' (' + agoText + ')';
   }
   function renderClientDatalist(){
     var seen = {};
@@ -1798,8 +1838,8 @@ if ("serviceWorker" in navigator) {
           + '<div class="mini-field"><label>Notas (opcional)</label><input type="text" id="noteInput-' + p.id + '" placeholder="Ej. evento, pedido especial…" maxlength="120"></div>'
           + '</div>';
         html += '<div class="mini-field-row">'
-          + '<div class="mini-field"><label>Vencimiento de factura (opcional)</label><input type="date" id="dueDateInput-' + p.id + '"></div>'
-          + '<div class="mini-field"><label>Margen de descuento % (opcional)</label><input type="number" id="discountInput-' + p.id + '" min="0" max="100" step="1" placeholder="0"></div>'
+          + '<div class="mini-field"><label>Vencimiento de factura (opcional)</label><input type="date" id="dueDateInput-' + p.id + '" value="' + esc(activeDueDateValue()) + '"></div>'
+          + '<div class="mini-field"><label>Margen de descuento % (opcional)</label><input type="number" id="discountInput-' + p.id + '" min="0" max="100" step="1" placeholder="0" value="' + (activeDiscountValue()===''?'':activeDiscountValue()) + '"></div>'
           + '</div>';
         html += '<p class="hint" style="margin:-6px 0 0;">Pon una fecha solo si esta venta es a un distribuidor a crédito: aparecerá en Pagos como cuenta por cobrar y se marcará "VENCIDO" cuando llegue esa fecha. El % de descuento se resta del precio normal para calcular el monto a cobrar.</p>';
       }
@@ -2029,31 +2069,47 @@ if ("serviceWorker" in navigator) {
       // Una misma venta a crédito puede generar varias filas (una por
       // producto); para Daniel es una sola cuenta por cobrar, así que se
       // agrupan por cliente + fecha de vencimiento y se suman los montos.
+      // El envío (origin:'envio') se agrupa igual pero se seguimiento por
+      // separado para poder mostrar el desglose Productos + Envío.
       var distribGroups = [], distribGroupIndex = {};
       distrib.forEach(function(pg){
         var key = (pg.name||'') + '|' + (pg.dueDate||'');
         if(!distribGroupIndex.hasOwnProperty(key)){
           distribGroupIndex[key] = distribGroups.length;
-          distribGroups.push({name: pg.name, dueDate: pg.dueDate, amount: 0, ids: [], labels: []});
+          distribGroups.push({name: pg.name, dueDate: pg.dueDate, amount: 0, products: 0, shipping: 0, ids: [], labels: [], key: key});
         }
         var grp = distribGroups[distribGroupIndex[key]];
         grp.amount += (pg.amount||0);
         grp.ids.push(pg.id);
-        if(pg.productLabel && grp.labels.indexOf(pg.productLabel) === -1) grp.labels.push(pg.productLabel);
+        if(pg.origin === 'envio'){
+          grp.shipping += (pg.amount||0);
+        } else {
+          grp.products += (pg.amount||0);
+          if(pg.productLabel && grp.labels.indexOf(pg.productLabel) === -1) grp.labels.push(pg.productLabel);
+        }
       });
       html += '<div class="pagos-list" style="margin-bottom:14px;">';
       distribGroups.forEach(function(grp){
         var overdue = grp.dueDate <= today;
+        var shippingOpen = (state.openShippingRow === grp.key);
         html += '<div class="pago-item pago-item-distrib' + (overdue?' overdue':'') + '">'
           + '<span class="pago-name">' + esc(grp.name) + '<span class="pago-distrib-tag">Distribuidor</span>'
           + (grp.labels.length ? ('<div class="pago-distrib-products">' + esc(grp.labels.join(' · ')) + '</div>') : '')
+          + (grp.shipping > 0 ? ('<div class="pago-distrib-products">Productos: ' + fmtMoney(grp.products) + ' + Envío: ' + fmtMoney(grp.shipping) + '</div>') : '')
           + '</span>'
           + '<span class="pago-due">' + (overdue ? 'Venció ' : 'Vence ') + fmtDateOnly(grp.dueDate) + '</span>'
           + '<span class="pago-amt num">' + fmtMoney(grp.amount) + '</span>'
           + (overdue ? '<span class="pago-vencido-badge">VENCIDO</span>' : '<span class="pill ok">Al día</span>')
+          + '<button class="pago-ship-toggle" data-key="' + esc(grp.key) + '" type="button" title="Agregar valor de envío">' + (shippingOpen ? 'Cancelar envío' : '+ Envío') + '</button>'
           + '<button class="pago-paid" data-pid="' + grp.ids.join(',') + '" aria-label="Marcar como pagado" title="Marcar como pagado">✓</button>'
           + '<button class="pago-del" data-pid="' + grp.ids.join(',') + '" aria-label="Eliminar" title="Eliminar">✕</button>'
           + '</div>';
+        if(shippingOpen){
+          html += '<div class="pago-ship-form">'
+            + '<input type="number" class="pago-ship-value-input" placeholder="Valor de envío (sin IVA)" min="0" step="0.01">'
+            + '<button class="pago-ship-add" data-name="' + esc(grp.name) + '" data-duedate="' + esc(grp.dueDate) + '" type="button">Agregar (+15% IVA)</button>'
+            + '</div>';
+        }
       });
       html += '</div>';
     }
@@ -2090,6 +2146,22 @@ if ("serviceWorker" in navigator) {
     });
     root.querySelectorAll('.pago-reopen').forEach(function(btn){
       btn.addEventListener('click', function(){ reopenPago(btn.getAttribute('data-pid')); });
+    });
+    root.querySelectorAll('.pago-ship-toggle').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var key = btn.getAttribute('data-key');
+        state.openShippingRow = (state.openShippingRow === key) ? null : key;
+        renderPagos();
+      });
+    });
+    root.querySelectorAll('.pago-ship-add').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var form = btn.closest('.pago-ship-form');
+        var input = form ? form.querySelector('.pago-ship-value-input') : null;
+        var raw = parseFloat(input && input.value);
+        if(!raw || raw <= 0){ showStatus('Ingresa un valor de envío válido.', true); return; }
+        addShippingToInvoice(btn.getAttribute('data-name'), btn.getAttribute('data-duedate'), raw);
+      });
     });
     var histToggle = document.getElementById('pagosHistoryToggle');
     if(histToggle){
@@ -2145,6 +2217,25 @@ if ("serviceWorker" in navigator) {
     }).then(function(){
       showStatus('Pago devuelto a pendientes.');
     }).catch(function(){ showStatus('No se pudo actualizar.', true); });
+  }
+
+  function addShippingToInvoice(client, dueDate, rawAmount){
+    if(!state.db || !client || !dueDate) return;
+    var amountWithIva = Math.round(rawAmount * 1.15 * 100) / 100;
+    ensureUser(function(){
+      state.db.collection('pendingPayments').add({
+        name: client,
+        amount: amountWithIva,
+        dueDate: dueDate,
+        createdAt: new Date().toISOString(),
+        addedBy: state.userName,
+        origin: 'envio',
+        productLabel: 'Envío'
+      }).then(function(){
+        state.openShippingRow = null;
+        showStatus('Envío agregado: ' + fmtMoney(amountWithIva) + ' (incluye 15% IVA) a la cuenta de ' + client + '.');
+      }).catch(function(){ showStatus('No se pudo agregar el envío.', true); });
+    });
   }
 
   function deletePago(idOrIds){
@@ -2946,6 +3037,8 @@ if ("serviceWorker" in navigator) {
           }).catch(function(){
             showStatus('La venta se registró, pero no se pudo crear la cuenta por cobrar en Pagos. Agrégala ahí manualmente.', true);
           });
+          noteDueDateUsed(dueDate);
+          noteDiscountUsed(discountPct);
         }
         if(mode === 'venta' && client) noteClientUsed(client);
         state.openRow = null;
@@ -5658,6 +5751,10 @@ if ("serviceWorker" in navigator) {
   document.getElementById('clearClientBtn').addEventListener('click', function(){
     state.lastClient = '';
     state.lastClientAt = null;
+    state.lastDueDate = '';
+    state.lastDueDateAt = null;
+    state.lastDiscountPct = null;
+    state.lastDiscountPctAt = null;
     renderClientChip();
   });
   setInterval(renderClientChip, 30000);
