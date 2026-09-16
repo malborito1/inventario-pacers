@@ -1343,6 +1343,24 @@ if ("serviceWorker" in navigator) {
     'raspberry café': 'raspberry cafeína',
     'grape': 'uva'
   };
+  // "20 Servings" (importaciones) es el mismo producto que "20 Servings NF"
+  // del inventario general (Recovery Vanilla) — solo cambió el nombre.
+  var IMPORT_PRESENTATION_ALIASES = { '20 servings': '20 servings nf' };
+
+  function importFindGeneralProduct(linea, sabor, presentacion){
+    var list = state.products || [];
+    var norm = function(s){ return (s||'').toString().trim().toLowerCase(); };
+    var candidates = [norm(sabor)];
+    var alias = IMPORT_PHOTO_ALIASES[norm(sabor)];
+    if(alias) candidates.push(alias);
+    var presCandidates = [norm(presentacion)];
+    var presAlias = IMPORT_PRESENTATION_ALIASES[norm(presentacion)];
+    if(presAlias) presCandidates.push(presAlias);
+    var matchFlavor = function(p){ return candidates.indexOf(norm(p.flavor)) !== -1; };
+    var matchPres = function(p){ return presCandidates.indexOf(norm(p.presentation)) !== -1; };
+    return list.find(function(p){ return norm(p.category)===norm(linea) && matchFlavor(p) && matchPres(p); }) || null;
+  }
+
   function importFindPhoto(linea, sabor, presentacion){
     var list = state.products || [];
     var norm = function(s){ return (s||'').toString().trim().toLowerCase(); };
@@ -2564,7 +2582,7 @@ if ("serviceWorker" in navigator) {
       byLine[line.linea][line.presentacion].push(idx);
     });
     var html = '<table class="imp-table"><thead><tr>'
-      + '<th>Sabor</th><th class="imp-num">Unid/caja</th><th class="imp-num">#Cajas</th><th class="imp-num">#Unid</th>'
+      + '<th>Sabor</th><th class="imp-num">Stock gral.</th><th class="imp-num">#Cajas</th><th class="imp-num">#Unid</th>'
       + '<th class="imp-num">$/Caja</th><th class="imp-num">$ Total</th><th class="imp-num">$/Unidad</th><th class="imp-gap-col"></th><th class="imp-num">UIO</th>'
       + '<th class="imp-num">Venta $/u</th><th class="imp-num">Valor venta</th>'
       + '</tr></thead><tbody>';
@@ -2594,9 +2612,15 @@ if ("serviceWorker" in navigator) {
           var photoUrl = importFindPhoto(linea, line.sabor, pk);
           var photoHtml = photoUrl ? ('<img class="imp-row-photo" src="'+photoUrl+'" alt="">') : '<span class="imp-row-photo-placeholder"></span>';
           var hasCajas = c.cajas > 0;
+          var genProduct = importFindGeneralProduct(linea, line.sabor, pk);
+          var genStatus = genProduct ? statusOf(genProduct) : null;
+          var genStockColor = genStatus==='critical' ? 'var(--critical)' : (genStatus==='warn' ? 'var(--warning)' : 'var(--success)');
+          var genStockHtml = genProduct
+            ? ('<span style="color:'+genStockColor+'; font-weight:700;">' + (genStatus==='critical' ? '⚠ ' : '') + fmtInt(genProduct.stock||0) + '</span>')
+            : '<span style="color:var(--text-muted);">—</span>';
           html += '<tr data-idx="'+idx+'" style="background:'+shadeBg+';">';
           html += '<td>'+photoHtml+esc(line.sabor)+'</td>';
-          html += '<td class="imp-num">'+ (line.unidadesPorCaja||0) +'</td>';
+          html += '<td class="imp-num">'+ genStockHtml +'</td>';
           html += '<td><input type="number" min="0" step="1" class="imp-input-cajas" data-idx="'+idx+'" value="'+(line.cajas||'')+'" onfocus="this.select()"></td>';
           html += '<td class="imp-num">'+ (hasCajas? fmtInt(c.unidades) : '') +'</td>';
           html += '<td><input type="number" min="0" step="0.01" class="imp-input-precio" data-idx="'+idx+'" value="'+(hasCajas && line.precioPorCaja? line.precioPorCaja : '')+'" onfocus="this.select()"></td>';
