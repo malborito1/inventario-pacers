@@ -977,6 +977,9 @@ if ("serviceWorker" in navigator) {
   .imp-toolbar{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px;}
   .imp-select{padding:9px 12px; border-radius:10px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-weight:600; font-size:13px;}
   .imp-status-pill{font-size:11px; font-weight:700; padding:4px 10px; border-radius:999px; text-transform:uppercase; letter-spacing:.04em;}
+  .imp-status-creada{background:var(--surface-2); color:var(--text-muted);}
+  .imp-status-transito_puerto{background:var(--warning-tint); color:var(--warning);}
+  .imp-status-transito_ecu{background:var(--fair-tint); color:var(--fair-color);}
   .imp-status-activa{background:var(--warning-tint); color:var(--warning);}
   .imp-status-recibida{background:var(--success-tint); color:var(--success);}
   .imp-status-cerrada{background:var(--surface-2); color:var(--text-muted);}
@@ -1398,7 +1401,16 @@ if ("serviceWorker" in navigator) {
   ];
   var IMPORT_COSTS_TEMPLATE = ['Gastos en origen','Flete internacional','Gastos locales','Agenciamiento aduanal','Collect fee + gastos origen','Comisión agente','Impuestos SENAE','Transporte a bodega','Honorario agente aduana'].map(function(name){ return {concepto:name, monto:0, pagado:false}; });
   var IMPORT_MILESTONES_TEMPLATE = ['Puse la orden','Recoge en origen','Llega a Miami','Llega a Ecuador','Llega a bodega'].map(function(l){ return {label:l, date:'', note:''}; });
-  function statusLabel(s){ return {activa:'En tránsito', recibida:'Recibida', cerrada:'Cerrada'}[s] || 'En tránsito'; }
+  function statusLabel(s){
+    return {
+      creada:'Creada',
+      transito_puerto:'Tránsito a puerto',
+      activa:'Tránsito a puerto',
+      transito_ecu:'Tránsito a ECU',
+      recibida:'Recibida',
+      cerrada:'Cerrada'
+    }[s] || 'Creada';
+  }
   var PRESENTATION_OPTIONS = ["BULK","30 servings","Sachets","15 Servings","20 Servings NF"];
 
   // Tamaño de caja estándar por categoría para la presentación Sachets
@@ -2539,7 +2551,7 @@ if ("serviceWorker" in navigator) {
   function createImport(name){
     if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
     var doc = {
-      name: name, cliente: '', status: 'activa',
+      name: name, cliente: '', status: 'creada',
       createdAt: new Date().toISOString(), createdBy: state.userName||'',
       freight: null, freightPending: true, pais: 'EEUU', cargaArancelaria: 0,
       volCalc: {largo:122, ancho:102, alto:0, factor:5385},
@@ -2761,9 +2773,12 @@ if ("serviceWorker" in navigator) {
     html += '</select>';
     html += '<button class="btn-history" id="impNewBtn" type="button">+ Nueva importación</button>';
     if(imp){
-      html += '<span class="imp-status-pill imp-status-'+ (imp.status||'activa') +'">'+ statusLabel(imp.status) +'</span>';
+      html += '<span class="imp-status-pill imp-status-'+ (imp.status||'creada') +'">'+ statusLabel(imp.status) +'</span>';
       html += '<select class="imp-select" id="impStatusSelect" style="width:auto;">'
-        + ['activa','recibida','cerrada'].map(function(s){ return '<option value="'+s+'"'+(s===(imp.status||'activa')?' selected':'')+'>'+statusLabel(s)+'</option>'; }).join('')
+        + ['creada','transito_puerto','transito_ecu','recibida','cerrada'].map(function(s){
+            var sel = (s === (imp.status||'creada')) || (imp.status==='activa' && s==='transito_puerto');
+            return '<option value="'+s+'"'+(sel?' selected':'')+'>'+statusLabel(s)+'</option>';
+          }).join('')
         + '</select>';
       html += '<input type="text" class="imp-select" id="impClienteInput" placeholder="Cliente / destino (opcional)" value="'+esc(imp.cliente||'')+'" style="width:200px;">';
       html += '<button class="btn-history btn-danger" id="impDeleteBtn" type="button">Eliminar</button>';
