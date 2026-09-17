@@ -958,7 +958,15 @@ if ("serviceWorker" in navigator) {
     color:#fff; background:var(--imports-color);
     border:2px solid #fff; border-radius:10px; padding:12px 18px; flex:1; min-width:0;
   }
-  .imports-modebar .emoji{font-size:22px; line-height:1;}
+  .imports-modebar .emoji{font-size:72px; line-height:1;}
+  .imports-modebar-text{display:flex; flex-direction:column; gap:3px; min-width:0;}
+  .imports-modebar-title{font-size:48px; font-weight:800; line-height:1.05; letter-spacing:.02em;}
+  .imports-modebar-sub{font-size:20px; font-weight:600; line-height:1.2; opacity:.92;}
+  @media (max-width:700px){
+    .imports-modebar .emoji{font-size:40px;}
+    .imports-modebar-title{font-size:26px;}
+    .imports-modebar-sub{font-size:14px;}
+  }
   body.imports-mode .imports-modebar{display:flex;}
   .imp-totals-compact{flex:0 0 auto; min-width:280px; max-width:400px; background:var(--imports-tint); border:1px solid var(--imports-color); border-radius:10px; padding:8px 14px; display:flex; flex-direction:column; justify-content:center;}
   .imp-totals-compact h4{margin:0 0 3px; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--imports-color); font-weight:800;}
@@ -1110,7 +1118,7 @@ if ("serviceWorker" in navigator) {
     <div class="supermaxi-modebar" id="supermaxiModeBar"><span class="emoji">🏬</span> MODO SUPERMAXI · bodega aparte, no es el inventario general</div>
     <div class="fair-modebar" id="fairModeBar"><span class="emoji">🎪</span> <span id="fairModeBarText">MODO FERIA</span></div>
     <div class="imports-top-row" id="importsTopRow">
-      <div class="imports-modebar" id="importsModeBar"><span class="emoji">🚢</span> MODO IMPORTACIONES · pedidos y logística, no es el inventario</div>
+      <div class="imports-modebar" id="importsModeBar"><span class="emoji">🚢</span><div class="imports-modebar-text"><div class="imports-modebar-title">MODO IMPORTACIONES</div><div class="imports-modebar-sub">pedidos y logística, no es el inventario</div></div></div>
       <div class="imp-totals-compact" id="impTotalsCompact"></div>
     </div>
     <div class="kpis" id="kpiRow"></div>
