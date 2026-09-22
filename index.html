@@ -664,12 +664,16 @@ if ("serviceWorker" in navigator) {
   /* ---------- Clientes ---------- */
   .cliente-list{display:flex; flex-direction:column; gap:6px;}
   .cliente-item{
-    display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    display:flex; flex-direction:column; gap:6px;
     background:var(--success-tint); border:1px solid var(--success); border-radius:10px;
     padding:10px 14px;
   }
+  .cliente-item-head{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;}
   .cliente-name{font-weight:700; font-size:14px; color:var(--text);}
   .cliente-detail{font-size:12.5px; color:var(--text-muted); text-align:right;}
+  .cliente-count{font-weight:500; color:var(--text-muted);}
+  .cliente-products{display:flex; flex-direction:column; gap:3px; padding-left:2px;}
+  .cliente-subitem{font-size:12.5px; color:var(--text);}
 
   /* ---------- Ranking ---------- */
   .ranking-period-field{max-width:220px; margin-bottom:18px;}
@@ -2322,17 +2326,53 @@ if ("serviceWorker" in navigator) {
   function renderCliente(){
     var root = document.getElementById('categoriesRoot');
     var entries = state.movements.filter(function(m){ return m.client && m.client.trim() && m.type === 'venta'; });
-    var html = '<div class="category" data-cat="CLIENTE"><div class="category-head"><h2>Clientes</h2><span class="count">' + entries.length + ' ventas con nombre registrado</span></div>';
     if(entries.length === 0){
-      html += '<p class="empty-hint">Aún no registras nombres de comprador en tus ventas. Usa el campo "Cliente" al registrar una venta.</p>';
-    } else {
-      html += '<div class="cliente-list">';
-      entries.forEach(function(m){
-        html += '<div class="cliente-item"><span class="cliente-name">' + esc(m.client) + '</span><span class="cliente-detail">' + esc(m.productLabel||'') + ' · ' + fmtInt(m.qty) + ' u · ' + fmtDateDMY(m.at) + ' (' + relTime(m.at) + ')</span></div>';
-      });
-      html += '</div>';
+      var emptyHtml = '<div class="category" data-cat="CLIENTE"><div class="category-head"><h2>Clientes</h2><span class="count">0 ventas con nombre registrado</span></div>';
+      emptyHtml += '<p class="empty-hint">Aún no registras nombres de comprador en tus ventas. Usa el campo "Cliente" al registrar una venta.</p></div>';
+      root.innerHTML = emptyHtml;
+      return;
     }
-    html += '</div>';
+    // Agrupa los movimientos del mismo cliente hechos dentro de una ventana
+    // corta de tiempo -- una sola sesión de venta con varios productos,
+    // registrados uno por uno -- en una sola tarjeta, en vez de una fila
+    // por producto.
+    var GROUP_WINDOW_MS = 10 * 60 * 1000;
+    var byClient = {};
+    entries.forEach(function(m){
+      var key = m.client.trim();
+      (byClient[key] = byClient[key] || []).push(m);
+    });
+    var groups = [];
+    Object.keys(byClient).forEach(function(client){
+      var list = byClient[client].slice().sort(function(a,b){ return new Date(b.at) - new Date(a.at); });
+      var current = null;
+      list.forEach(function(m){
+        var t = new Date(m.at).getTime();
+        if(current && (current.lastAt - t) <= GROUP_WINDOW_MS){
+          current.items.push(m);
+          current.lastAt = Math.min(current.lastAt, t);
+        } else {
+          current = { client: client, items: [m], lastAt: t };
+          groups.push(current);
+        }
+      });
+    });
+    groups.sort(function(a,b){ return new Date(b.items[0].at) - new Date(a.items[0].at); });
+    var html = '<div class="category" data-cat="CLIENTE"><div class="category-head"><h2>Clientes</h2><span class="count">' + groups.length + ' ventas con nombre registrado</span></div>';
+    html += '<div class="cliente-list">';
+    groups.forEach(function(g){
+      var mostRecent = g.items[0];
+      var dateHtml = fmtDateDMY(mostRecent.at) + ' (' + relTime(mostRecent.at) + ')';
+      if(g.items.length === 1){
+        var m = g.items[0];
+        html += '<div class="cliente-item"><div class="cliente-item-head"><span class="cliente-name">' + esc(g.client) + '</span><span class="cliente-detail">' + esc(m.productLabel||'') + ' · ' + fmtInt(m.qty) + ' u · ' + dateHtml + '</span></div></div>';
+      } else {
+        var totalQty = g.items.reduce(function(s,m2){ return s + (m2.qty||0); }, 0);
+        var productsHtml = g.items.map(function(m2){ return '<div class="cliente-subitem">' + esc(m2.productLabel||'') + ' · ' + fmtInt(m2.qty) + ' u</div>'; }).join('');
+        html += '<div class="cliente-item"><div class="cliente-item-head"><span class="cliente-name">' + esc(g.client) + ' <span class="cliente-count">(' + g.items.length + ' productos · ' + fmtInt(totalQty) + ' u)</span></span><span class="cliente-detail">' + dateHtml + '</span></div><div class="cliente-products">' + productsHtml + '</div></div>';
+      }
+    });
+    html += '</div></div>';
     root.innerHTML = html;
   }
 
