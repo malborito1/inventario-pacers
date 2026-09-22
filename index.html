@@ -1385,28 +1385,46 @@ if ("serviceWorker" in navigator) {
     if(byFlavor.length && byFlavor[0].photoUrl) return byFlavor[0].photoUrl;
     return null;
   }
-  var IMPORT_PRODUCT_TEMPLATE = [
-    {linea:'ENDURANCE', presentacion:'30 servings', sabor:'Mandarin', unidadesPorCaja:12, gramosPorCaja:9720, precioPorCaja:112.46},
-    {linea:'ENDURANCE', presentacion:'30 servings', sabor:'Berry', unidadesPorCaja:12, gramosPorCaja:9720, precioPorCaja:112.46},
-    {linea:'ENDURANCE', presentacion:'30 servings', sabor:'Lemon', unidadesPorCaja:12, gramosPorCaja:9720, precioPorCaja:112.46},
-    {linea:'ENDURANCE', presentacion:'30 servings', sabor:'Dauwaltermelon', unidadesPorCaja:12, gramosPorCaja:9720, precioPorCaja:112.46},
-    {linea:'ENDURANCE', presentacion:'30 servings', sabor:'Tropical Café', unidadesPorCaja:12, gramosPorCaja:9720, precioPorCaja:112.46},
-    {linea:'ENDURANCE', presentacion:'30 servings', sabor:'Raspberry Café', unidadesPorCaja:12, gramosPorCaja:9720, precioPorCaja:112.46},
-    {linea:'ENDURANCE', presentacion:'30 servings', sabor:'Grape', unidadesPorCaja:12, gramosPorCaja:9720, precioPorCaja:112.46},
-    {linea:'ENDURANCE', presentacion:'30 servings', sabor:'Naked', unidadesPorCaja:12, gramosPorCaja:9720, precioPorCaja:112.46},
-    {linea:'ENDURANCE', presentacion:'Sachets', sabor:'Mandarin', unidadesPorCaja:150, gramosPorCaja:8100, precioPorCaja:124.58},
-    {linea:'ENDURANCE', presentacion:'Sachets', sabor:'Berry', unidadesPorCaja:150, gramosPorCaja:8100, precioPorCaja:124.58},
-    {linea:'ENDURANCE', presentacion:'Sachets', sabor:'Lemon', unidadesPorCaja:150, gramosPorCaja:8100, precioPorCaja:124.58},
-    {linea:'ENDURANCE', presentacion:'Sachets', sabor:'Dauwaltermelon', unidadesPorCaja:150, gramosPorCaja:8100, precioPorCaja:124.58},
-    {linea:'ENDURANCE', presentacion:'Sachets', sabor:'Tropical Café', unidadesPorCaja:150, gramosPorCaja:8100, precioPorCaja:124.58},
-    {linea:'ENDURANCE', presentacion:'Sachets', sabor:'Raspberry Café', unidadesPorCaja:150, gramosPorCaja:8100, precioPorCaja:124.58},
-    {linea:'ENDURANCE', presentacion:'Sachets', sabor:'Grape', unidadesPorCaja:150, gramosPorCaja:8100, precioPorCaja:124.58},
-    {linea:'ENDURANCE', presentacion:'Sachets', sabor:'Naked', unidadesPorCaja:150, gramosPorCaja:8100, precioPorCaja:124.58},
-    {linea:'HCF', presentacion:'Sachets', sabor:'Ginger Lime', unidadesPorCaja:100, gramosPorCaja:9200, precioPorCaja:128.70},
-    {linea:'HCF', presentacion:'Sachets', sabor:'Lemonade', unidadesPorCaja:100, gramosPorCaja:9200, precioPorCaja:128.70},
-    {linea:'RECOVERY', presentacion:'20 Servings', sabor:'Vanilla', unidadesPorCaja:8, gramosPorCaja:7288, precioPorCaja:147.78},
-    {linea:'RECOVERY', presentacion:'Sachets', sabor:'Vanilla New Formula', unidadesPorCaja:150, gramosPorCaja:8100, precioPorCaja:163.40}
-  ];
+  // Peso y precio de caja conocidos por línea+presentación (se conservan de
+  // la plantilla original). Sirven como valor inicial sugerido; el $/Caja
+  // siempre se puede editar por importación en la tabla.
+  var IMPORT_GROUP_DEFAULTS = {
+    'ENDURANCE|30 servings': {gramosPorCaja:9720, precioPorCaja:112.46},
+    'ENDURANCE|Sachets': {gramosPorCaja:8100, precioPorCaja:124.58},
+    'HCF|Sachets': {gramosPorCaja:9200, precioPorCaja:128.70},
+    'RECOVERY|20 Servings NF': {gramosPorCaja:7288, precioPorCaja:147.78},
+    'RECOVERY|Sachets': {gramosPorCaja:8100, precioPorCaja:163.40}
+  };
+  // Arma la lista de líneas para una importación nueva a partir del
+  // inventario general en vivo (en vez de una lista fija en el código): así
+  // cualquier producto que se agregue al inventario general aparece
+  // automáticamente como línea disponible la próxima vez que se cree una
+  // importación, sin tener que tocar código. BULK queda excluido (no se
+  // importa en caja). El peso/precio de caja usa el valor conocido de su
+  // línea+presentación cuando existe; si es una combinación nueva sin dato
+  // conocido, queda en 0 y se completa a mano (igual que hoy con $/Caja).
+  function buildImportProductTemplate(){
+    var lineOrder = ['ENDURANCE','HCF','RECOVERY'];
+    var list = (state.products || []).filter(function(p){ return p.presentation !== 'BULK'; });
+    list = list.slice().sort(function(a,b){
+      var ao = lineOrder.indexOf(a.category), bo = lineOrder.indexOf(b.category);
+      if(ao !== bo) return ao - bo;
+      var ap = a.presentation || '', bp = b.presentation || '';
+      if(ap !== bp) return ap < bp ? -1 : 1;
+      return (a.order||0) - (b.order||0);
+    });
+    return list.map(function(p){
+      var def = IMPORT_GROUP_DEFAULTS[p.category + '|' + p.presentation] || {};
+      return {
+        linea: p.category,
+        presentacion: p.presentation,
+        sabor: p.flavor,
+        unidadesPorCaja: p.unitsPerBox || 1,
+        gramosPorCaja: def.gramosPorCaja || 0,
+        precioPorCaja: def.precioPorCaja || 0
+      };
+    });
+  }
   var IMPORT_COSTS_TEMPLATE = ['Gastos en origen','Flete internacional','Gastos locales','Agenciamiento aduanal','Collect fee + gastos origen','Comisión agente','Impuestos SENAE','Transporte a bodega','Honorario agente aduana'].map(function(name){ return {concepto:name, monto:0, pagado:false}; });
   var IMPORT_MILESTONES_TEMPLATE = ['Puse la orden','Recoge en origen','Llega a Miami','Llega a Ecuador','Llega a bodega'].map(function(l){ return {label:l, date:'', note:''}; });
   function statusLabel(s){
@@ -2565,7 +2583,7 @@ if ("serviceWorker" in navigator) {
       volCalc: {largo:122, ancho:102, alto:0, factor:5385},
       milestones: JSON.parse(JSON.stringify(IMPORT_MILESTONES_TEMPLATE)),
       localCosts: JSON.parse(JSON.stringify(IMPORT_COSTS_TEMPLATE)),
-      products: IMPORT_PRODUCT_TEMPLATE.map(function(t){ return Object.assign({cajas:0, precioVenta:0}, t); })
+      products: buildImportProductTemplate().map(function(t){ return Object.assign({cajas:0, precioVenta:0}, t); })
     };
     state.db.collection('imports').add(doc).then(function(ref){
       state.currentImportId = ref.id;
