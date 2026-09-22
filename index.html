@@ -3764,6 +3764,10 @@ if ("serviceWorker" in navigator) {
     return {ENDURANCE:'var(--cat-endurance-color)', HCF:'var(--cat-hcf-color)', RECOVERY:'var(--cat-recovery-color)'}[cat] || 'var(--text-muted)';
   }
 
+  function stripGraceTag(label){
+    return (label || '').replace(/\s*\(Grace\)\s*$/, '');
+  }
+
   function computeRankingData(period){
     var moves = movementsInPeriod(period).filter(function(m){ return m.type === 'venta'; });
     var byProduct = {};
@@ -3777,7 +3781,12 @@ if ("serviceWorker" in navigator) {
       if(cat && byCategory.hasOwnProperty(cat)) byCategory[cat] += qty;
       var key = m.productId || m.productLabel;
       if(!byProduct[key]){
-        byProduct[key] = { label: m.productLabel || 'Producto', qty: 0, category: cat, photoUrl: product ? product.photoUrl : null };
+        // Ventas por Grace y por inventario general de un mismo producto se
+        // suman en un solo bloque; la etiqueta nunca debe llevar "(Grace)"
+        // -- si hay producto vinculado se usa su nombre normal, si no, se
+        // limpia la etiqueta propia del item de Grace.
+        var cleanLabel = product ? (product.presentation + ' · ' + product.flavor) : (stripGraceTag(m.productLabel) || 'Producto');
+        byProduct[key] = { label: cleanLabel, qty: 0, category: cat, photoUrl: product ? product.photoUrl : null };
       }
       byProduct[key].qty += qty;
     });
