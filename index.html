@@ -1436,6 +1436,9 @@ if ("serviceWorker" in navigator) {
   // agregar a una importación ya creada un producto que se dio de alta
   // después -- sin esto, una importación se queda con la lista fija del
   // momento en que se creó.
+  // Productos descontinuados que siguen activos en Inventario (para vender
+  // el stock restante) pero que no deben poder agregarse a una importacion.
+  var IMPORT_LINE_EXCLUDED_IDS = ['rec-15s-vanilla', 'rec-sachet-vanilla'];
   function missingImportProducts(imp){
     var have = {};
     (imp.products || []).forEach(function(l){
@@ -1443,6 +1446,7 @@ if ("serviceWorker" in navigator) {
     });
     return (state.products || []).filter(function(p){
       if(p.presentation === 'BULK') return false;
+      if(IMPORT_LINE_EXCLUDED_IDS.indexOf(p.id) !== -1) return false;
       return !have[p.category + '|' + p.presentation + '|' + p.flavor];
     });
   }
