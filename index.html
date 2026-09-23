@@ -583,6 +583,7 @@ if ("serviceWorker" in navigator) {
   .drawer-head h3{margin:0; font-size:20px;}
   .drawer-head button{border:none; background:var(--surface-2); width:30px; height:30px; border-radius:8px; cursor:pointer; font-size:15px; color:var(--text);}
   .drawer-body{padding:10px 20px 20px; overflow-y:auto; flex:1;}
+  .move-client{color:var(--supermaxi-color); font-weight:700;}
   .move-item{padding:10px 0; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:2px;}
   .move-item .top{display:flex; justify-content:space-between; font-size:13.5px; font-weight:600;}
   .move-item .top .amt.pos{color:var(--success);}
@@ -2464,7 +2465,7 @@ if ("serviceWorker" in navigator) {
     var sourceTag = m.source === 'grace' ? '<span class="tag-grace">Grace</span>' : (m.fairId ? '<span class="tag-grace" style="background:var(--fair-tint); color:var(--fair-color);">Feria</span>' : '');
     return '<div class="move-item">' +
       '<div class="top"><span>' + esc(m.productLabel||m.productId) + sourceTag + '</span><span class="amt ' + (pos?'pos':'neg') + ' num">' + sign + fmtInt(m.deltaStock) + '</span></div>' +
-      '<div class="meta">' + typeLabel + ' · ' + esc(m.user||'Sin nombre') + ' · ' + relTime(m.at) + (m.note ? (' · ' + esc(m.note)) : '') + (m.client ? (' · Cliente: ' + esc(m.client)) : '') + '</div>' +
+      '<div class="meta">' + typeLabel + ' · ' + esc(m.user||'Sin nombre') + ' · ' + relTime(m.at) + (m.note ? (' · ' + esc(m.note)) : '') + (m.client ? (' · Cliente: <span class="move-client">' + esc(m.client) + '</span>') : '') + '</div>' +
       (actionsHtml ? ('<div class="move-actions">' + actionsHtml + '</div>') : '') +
       '</div>';
   }
@@ -5105,7 +5106,7 @@ if ("serviceWorker" in navigator) {
     return '<div class="move-item">' +
       '<div class="top"><span>' + fairSaleDescription(s) + '</span><span class="amt neg num">' + amt + '</span></div>' +
       '<div class="meta">' + fairSaleTypeLabel(s) + ' · ' + fmtInt(s.qty||0) + ' u. · ' + relTime(s.createdAt) +
-        (s.client ? (' · Cliente: ' + esc(s.client)) : '') + (s.notes ? (' · ' + esc(s.notes)) : '') + '</div>' +
+        (s.client ? (' · Cliente: <span class="move-client">' + esc(s.client) + '</span>') : '') + (s.notes ? (' · ' + esc(s.notes)) : '') + '</div>' +
       (actionsHtml ? ('<div class="move-actions">' + actionsHtml + '</div>') : '') +
       '</div>';
   }
