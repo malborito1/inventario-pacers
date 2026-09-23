@@ -906,6 +906,7 @@ if ("serviceWorker" in navigator) {
   .new-fair-pick-row .nm{font-size:13px; min-width:0;}
   .new-fair-pick-row .nm .pres{color:var(--text-muted); font-size:11.5px;}
   .new-fair-pick-row input{width:100%; min-width:0; padding:6px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-family:inherit;}
+  .imp-addline-search{width:100%; margin-bottom:10px; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-family:inherit;}
   .new-fair-custom-row{display:grid; grid-template-columns:36px 1.5fr 90px 80px 32px; gap:8px; align-items:center; margin-bottom:8px; min-width:0;}
   .new-fair-custom-row input{width:100%; min-width:0; padding:6px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-family:inherit;}
   .new-fair-custom-row > *{min-width:0;}
@@ -1429,6 +1430,70 @@ if ("serviceWorker" in navigator) {
       };
     });
   }
+  // Productos del inventario general que todavía no son una línea de esta
+  // importación (comparando línea+presentación+sabor). Sirve para poder
+  // agregar a una importación ya creada un producto que se dio de alta
+  // después -- sin esto, una importación se queda con la lista fija del
+  // momento en que se creó.
+  function missingImportProducts(imp){
+    var have = {};
+    (imp.products || []).forEach(function(l){
+      have[l.linea + '|' + l.presentacion + '|' + l.sabor] = true;
+    });
+    return (state.products || []).filter(function(p){
+      if(p.presentation === 'BULK') return false;
+      return !have[p.category + '|' + p.presentation + '|' + p.flavor];
+    });
+  }
+
+  function importAddLinePickerRowsHtml(imp, q){
+    if(!imp) return '';
+    var query = (q||'').toLowerCase().trim();
+    var lineOrder = ['ENDURANCE','HCF','RECOVERY'];
+    var missing = missingImportProducts(imp);
+    if(query){
+      missing = missing.filter(function(p){
+        return (p.flavor||'').toLowerCase().indexOf(query)>=0
+          || (p.presentation||'').toLowerCase().indexOf(query)>=0
+          || (p.category||'').toLowerCase().indexOf(query)>=0;
+      });
+    }
+    missing = missing.slice().sort(function(a,b){
+      var ao = lineOrder.indexOf(a.category), bo = lineOrder.indexOf(b.category);
+      if(ao !== bo) return ao - bo;
+      var ap = a.presentation || '', bp = b.presentation || '';
+      if(ap !== bp) return ap < bp ? -1 : 1;
+      return (a.order||0) - (b.order||0);
+    });
+    if(!missing.length){
+      return '<p class="empty-hint">' + (query ? 'No hay productos del inventario que coincidan.' : 'Ya están todos los productos del inventario en esta importación.') + '</p>';
+    }
+    return missing.map(function(p){
+      return '<div class="new-fair-pick-row"><div class="nm">' + esc(p.flavor) + ' <span class="pres">· ' + esc(CATEGORY_LABEL[p.category]||p.category) + ' · ' + esc(p.presentation) + '</span></div>'
+        + '<button class="btn-history imp-addline-pick" type="button" data-pid="' + p.id + '">Agregar</button></div>';
+    }).join('');
+  }
+
+  function addImportLine(imp, productId){
+    var p = findProduct(productId);
+    if(!imp || !p) return;
+    var def = IMPORT_GROUP_DEFAULTS[p.category + '|' + p.presentation] || {};
+    var newLine = {
+      linea: p.category,
+      presentacion: p.presentation,
+      sabor: p.flavor,
+      unidadesPorCaja: p.unitsPerBox || 1,
+      gramosPorCaja: def.gramosPorCaja || 0,
+      precioPorCaja: def.precioPorCaja || 0,
+      cajas: 0,
+      precioVenta: 0
+    };
+    var products = (imp.products || []).slice();
+    products.push(newLine);
+    updateImportField(imp.id, {products: products});
+    showStatus('"' + p.flavor + '" agregado a la importación.');
+  }
+
   var IMPORT_COSTS_TEMPLATE = ['Gastos en origen','Flete internacional','Gastos locales','Agenciamiento aduanal','Collect fee + gastos origen','Comisión agente','Impuestos SENAE','Transporte a bodega','Honorario agente aduana'].map(function(name){ return {concepto:name, monto:0, pagado:false}; });
   var IMPORT_MILESTONES_TEMPLATE = ['Puse la orden','Recoge en origen','Llega a Miami','Llega a Ecuador','Llega a bodega'].map(function(l){ return {label:l, date:'', note:''}; });
   function statusLabel(s){
@@ -2847,6 +2912,7 @@ if ("serviceWorker" in navigator) {
           }).join('')
         + '</select>';
       html += '<input type="text" class="imp-select" id="impClienteInput" placeholder="Cliente / destino (opcional)" value="'+esc(imp.cliente||'')+'" style="width:200px;">';
+      html += '<button class="btn-history" id="impAddLineBtn" type="button">+ Agregar línea</button>';
       html += '<button class="btn-history btn-danger" id="impDeleteBtn" type="button">Eliminar</button>';
     }
     html += '</div>';
@@ -2857,6 +2923,14 @@ if ("serviceWorker" in navigator) {
         + '<button class="btn-history" id="impNewConfirmBtn" type="button">Crear</button>'
         + '<button class="cancel-btn" id="impNewCancelBtn" type="button">Cancelar</button>'
         + '</div></div>';
+    }
+
+    if(state.addImportLineOpen && imp){
+      html += '<div class="imp-card" style="margin-bottom:14px;"><h4>Agregar producto a esta importación</h4>'
+        + '<input type="text" id="impAddLineSearch" class="imp-addline-search" placeholder="Buscar por sabor, línea o presentación" value="'+esc(state.addImportLineQuery||'')+'">'
+        + '<div class="new-fair-picker" id="impAddLinePicker">' + importAddLinePickerRowsHtml(imp, state.addImportLineQuery||'') + '</div>'
+        + '<button class="cancel-btn" id="impAddLineCancelBtn" type="button">Cerrar</button>'
+        + '</div>';
     }
 
     if(state.confirmDeleteImportId){
@@ -2935,6 +3009,32 @@ if ("serviceWorker" in navigator) {
     if(delConfirm) delConfirm.addEventListener('click', function(){ deleteImportNow(state.confirmDeleteImportId); });
     var delCancel = document.getElementById('impDeleteCancelBtn');
     if(delCancel) delCancel.addEventListener('click', function(){ state.confirmDeleteImportId=null; render(); });
+    var addLineBtn = document.getElementById('impAddLineBtn');
+    if(addLineBtn) addLineBtn.addEventListener('click', function(){
+      state.addImportLineOpen = true; state.addImportLineQuery = '';
+      render();
+      var inp = document.getElementById('impAddLineSearch'); if(inp) inp.focus();
+    });
+    var addLineCancel = document.getElementById('impAddLineCancelBtn');
+    if(addLineCancel) addLineCancel.addEventListener('click', function(){ state.addImportLineOpen = false; render(); });
+    var addLineSearch = document.getElementById('impAddLineSearch');
+    if(addLineSearch) addLineSearch.addEventListener('input', function(){
+      state.addImportLineQuery = addLineSearch.value;
+      var picker = document.getElementById('impAddLinePicker');
+      if(picker){ picker.innerHTML = importAddLinePickerRowsHtml(currentImport(), state.addImportLineQuery); attachImportAddLinePickEvents(); }
+    });
+    attachImportAddLinePickEvents();
+  }
+
+  function attachImportAddLinePickEvents(){
+    document.querySelectorAll('.imp-addline-pick').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var imp = currentImport(); if(!imp) return;
+        addImportLine(imp, btn.getAttribute('data-pid'));
+        state.addImportLineOpen = false;
+        render();
+      });
+    });
   }
 
   function attachImportEvents(imp){
