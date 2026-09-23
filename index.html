@@ -518,6 +518,20 @@ if ("serviceWorker" in navigator) {
   .btn-sale:hover{background:var(--sale); color:#fff;}
   .btn-restock{background:var(--success-tint); color:var(--success);}
   .btn-restock:hover{background:var(--success); color:#fff;}
+  .btn-sale-grace{
+    background:var(--grace-tint); color:var(--grace-color);
+    display:flex; flex-direction:column; align-items:center; line-height:1.15;
+    animation: btnGracePulse 2s ease-in-out infinite;
+  }
+  .btn-sale-grace .btn-sale-grace-sub{font-size:8.5px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; opacity:.85;}
+  .btn-sale-grace:hover{background:var(--grace-color); color:#fff;}
+  @keyframes btnGracePulse{
+    0%,100%{ box-shadow:0 0 0 0 rgba(179,70,124,.5); }
+    50%{ box-shadow:0 0 0 5px rgba(179,70,124,0); }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .btn-sale-grace{animation:none;}
+  }
   .btn-kebab{
     background:var(--surface-2); color:var(--text-muted); width:26px; height:26px; padding:0;
     display:flex; align-items:center; justify-content:center; border-radius:7px; font-size:15px;
@@ -2054,7 +2068,7 @@ if ("serviceWorker" in navigator) {
     html += '<div class="p-stock"><div class="n num">' + fmtInt(g.qty) + '</div><div class="u">unidades</div></div>';
     html += '<div class="p-status"><span class="pill ok">Con Grace</span></div>';
     html += '<div class="p-actions">';
-    html += '<button class="btn-sale" data-gaction="venta" data-gid="' + g.id + '">Venta</button>';
+    html += '<button class="btn-sale-grace" data-gaction="venta" data-gid="' + g.id + '">Venta<span class="btn-sale-grace-sub">De Grace</span></button>';
     html += '<button class="btn-restock" data-gaction="reabastecer" data-gid="' + g.id + '">Reabastecer</button>';
     html += '</div>';
 
