@@ -716,6 +716,19 @@ if ("serviceWorker" in navigator) {
   .ranking-bar-track{background:var(--surface-2); border-radius:4px; height:8px; overflow:hidden;}
   .ranking-bar-fill{height:100%; border-radius:4px; min-width:4px;}
   .ranking-qty{font-size:13px; font-weight:700; color:var(--text); flex:0 0 auto; width:56px; text-align:right;}
+  .ranking-view-toggle{
+    display:inline-flex; gap:4px; background:var(--surface-2); padding:4px; border-radius:10px; margin-bottom:14px;
+  }
+  .ranking-view-btn{
+    border:none; background:transparent; color:var(--text-muted); font-weight:600; font-size:12.5px;
+    padding:6px 14px; border-radius:7px; cursor:pointer;
+  }
+  .ranking-view-btn.active{background:var(--surface); color:var(--accent-strong); box-shadow:var(--shadow);}
+  .ranking-avatar{
+    width:34px; height:34px; border-radius:8px; flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+    background:var(--accent-tint); color:var(--accent-strong); font-size:13px; font-weight:700;
+  }
+  .ranking-sub{font-size:11px; color:var(--text-muted); font-weight:500; margin-top:1px;}
 
   /* ---------- Modals ---------- */
   .modal-scrim{
@@ -3953,6 +3966,51 @@ if ("serviceWorker" in navigator) {
     return { totalUnits: totalUnits, byCategory: byCategory, ranked: ranked };
   }
 
+  function computeClientRankingData(period){
+    var moves = movementsInPeriod(period).filter(function(m){
+      return m.type === 'venta' && m.client && m.client.trim();
+    });
+    var byClient = {};
+    var totalUnits = 0;
+    moves.forEach(function(m){
+      var qty = movementUnits(m);
+      totalUnits += qty;
+      var key = m.client.trim();
+      if(!byClient[key]) byClient[key] = { label: key, qty: 0, orders: 0 };
+      byClient[key].qty += qty;
+      byClient[key].orders += 1;
+    });
+    var ranked = Object.keys(byClient).map(function(k){ return byClient[k]; }).sort(function(a,b){ return b.qty - a.qty; });
+    return { totalUnits: totalUnits, ranked: ranked };
+  }
+
+  function clientInitials(name){
+    var parts = (name || '').trim().split(/\s+/).filter(Boolean);
+    if(parts.length === 0) return '?';
+    if(parts.length === 1) return parts[0].slice(0,2).toUpperCase();
+    return (parts[0][0] + parts[parts.length-1][0]).toUpperCase();
+  }
+
+  function buildClientRankingList(ranked){
+    if(ranked.length === 0){
+      return '<p class="empty-hint">No hay ventas con nombre de cliente registradas en este periodo.</p>';
+    }
+    var maxQty = ranked[0].qty || 1;
+    var medals = ['🥇','🥈','🥉'];
+    return '<div class="ranking-list">' + ranked.slice(0,10).map(function(r, i){
+      var pct = Math.max(4, Math.round(r.qty / maxQty * 100));
+      var medal = medals[i] || ('#' + (i+1));
+      return '<div class="ranking-row">' +
+        '<span class="ranking-medal">' + medal + '</span>' +
+        '<div class="ranking-avatar">' + esc(clientInitials(r.label)) + '</div>' +
+        '<div class="ranking-info"><div class="ranking-name">' + esc(r.label) + '</div>' +
+        '<div class="ranking-bar-track"><div class="ranking-bar-fill" style="width:' + pct + '%; background:var(--accent-strong)"></div></div>' +
+        '<div class="ranking-sub">' + fmtInt(r.orders) + (r.orders === 1 ? ' compra registrada' : ' compras registradas') + '</div></div>' +
+        '<span class="ranking-qty num">' + fmtInt(r.qty) + ' u</span>' +
+        '</div>';
+    }).join('') + '</div>';
+  }
+
   function buildDonutSvg(byCategory, totalUnits){
     var cats = [['ENDURANCE'], ['HCF'], ['RECOVERY']];
     var R = 60, CX = 75, CY = 75, CIRC = 2*Math.PI*R, GAP = 6, strokeW = 20;
@@ -4005,7 +4063,12 @@ if ("serviceWorker" in navigator) {
   function renderRanking(){
     var root = document.getElementById('categoriesRoot');
     var period = state.rankingPeriod || 'week';
+    var view = state.rankingView || 'productos';
     var html = '<div class="category" data-cat="RANKING"><div class="category-head"><h2>Ranking de más vendidos</h2><span class="count">' + periodLabel(period) + '</span></div>';
+    html += '<div class="ranking-view-toggle">' +
+      '<button type="button" class="ranking-view-btn' + (view==='productos'?' active':'') + '" data-ranking-view="productos">Productos</button>' +
+      '<button type="button" class="ranking-view-btn' + (view==='clientes'?' active':'') + '" data-ranking-view="clientes">Clientes</button>' +
+      '</div>';
     html += '<div class="field ranking-period-field"><label for="rankingPeriod">Periodo</label><select id="rankingPeriod">' +
       ['today','week','month','year','all'].map(function(p){ return '<option value="' + p + '"' + (p===period?' selected':'') + '>' + periodLabel(p) + '</option>'; }).join('') +
       '</select></div>';
@@ -4014,17 +4077,29 @@ if ("serviceWorker" in navigator) {
       root.innerHTML = html;
       return;
     }
-    var data = computeRankingData(period);
-    html += '<div class="ranking-layout">';
-    html += '<div class="donut-wrap"><div class="donut-svg-wrap">' + buildDonutSvg(data.byCategory, data.totalUnits) +
-      '<div class="donut-center"><div class="donut-center-num num">' + fmtInt(data.totalUnits) + '</div><div class="donut-center-label">unidades</div></div></div>' +
-      buildDonutLegend(data.byCategory, data.totalUnits) + '</div>';
-    html += '<div class="ranking-list-wrap"><h3 class="ranking-subhead">Top sabores</h3>' + buildRankingList(data.ranked) + '</div>';
-    html += '</div></div>';
+    if(view === 'clientes'){
+      var cdata = computeClientRankingData(period);
+      html += '<div class="ranking-list-wrap"><h3 class="ranking-subhead">Top clientes</h3>' + buildClientRankingList(cdata.ranked) + '</div>';
+    } else {
+      var data = computeRankingData(period);
+      html += '<div class="ranking-layout">';
+      html += '<div class="donut-wrap"><div class="donut-svg-wrap">' + buildDonutSvg(data.byCategory, data.totalUnits) +
+        '<div class="donut-center"><div class="donut-center-num num">' + fmtInt(data.totalUnits) + '</div><div class="donut-center-label">unidades</div></div></div>' +
+        buildDonutLegend(data.byCategory, data.totalUnits) + '</div>';
+      html += '<div class="ranking-list-wrap"><h3 class="ranking-subhead">Top sabores</h3>' + buildRankingList(data.ranked) + '</div>';
+      html += '</div>';
+    }
+    html += '</div>';
     root.innerHTML = html;
     document.getElementById('rankingPeriod').addEventListener('change', function(e){
       state.rankingPeriod = e.target.value;
       render();
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-ranking-view]'), function(btn){
+      btn.addEventListener('click', function(){
+        state.rankingView = btn.getAttribute('data-ranking-view');
+        render();
+      });
     });
   }
 
