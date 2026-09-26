@@ -2230,9 +2230,10 @@ if ("serviceWorker" in navigator) {
     html += '</div>';
 
     var pagoDestino = state.pagoDestino || 'general';
+    var pagoNameValue = (state.pagoNameDraft != null) ? state.pagoNameDraft : activePagoNameValue();
     html += '<div class="pagos-form">' +
-      '<input type="text" id="pagoNameInput" list="pagoNamesList" value="' + esc(activePagoNameValue()) + '" placeholder="Nombre" maxlength="60">' +
-      '<input type="number" id="pagoAmountInput" placeholder="Monto" min="0" step="0.01">' +
+      '<input type="text" id="pagoNameInput" list="pagoNamesList" value="' + esc(pagoNameValue) + '" placeholder="Nombre" maxlength="60">' +
+      '<input type="number" id="pagoAmountInput" placeholder="Monto" min="0" step="0.01" value="' + esc(state.pagoAmountDraft||'') + '">' +
       '<select id="pagoDestinoInput" title="A dónde va este rubro">' +
         '<option value="general"' + (pagoDestino==='general'?' selected':'') + '>Total pendiente</option>' +
         '<option value="distribuidor"' + (pagoDestino==='distribuidor'?' selected':'') + '>Por cobrar a distribuidores</option>' +
@@ -2314,6 +2315,18 @@ if ("serviceWorker" in navigator) {
     html += '</div>';
     root.innerHTML = html;
     document.getElementById('pagoAddBtn').addEventListener('click', addPago);
+    var pagoNameEl = document.getElementById('pagoNameInput');
+    if(pagoNameEl){
+      pagoNameEl.addEventListener('input', function(e){
+        state.pagoNameDraft = e.target.value;
+      });
+    }
+    var pagoAmountEl = document.getElementById('pagoAmountInput');
+    if(pagoAmountEl){
+      pagoAmountEl.addEventListener('input', function(e){
+        state.pagoAmountDraft = e.target.value;
+      });
+    }
     var pagoDestinoEl = document.getElementById('pagoDestinoInput');
     if(pagoDestinoEl){
       pagoDestinoEl.addEventListener('change', function(e){
@@ -2386,6 +2399,8 @@ if ("serviceWorker" in navigator) {
         showStatus(isDistribuidor ? 'Cuenta por cobrar a distribuidor agregada.' : 'Pago pendiente agregado.');
         state.pagoDestino = 'general';
         state.pagoDueDate = '';
+        state.pagoNameDraft = null;
+        state.pagoAmountDraft = null;
       }).catch(function(){ showStatus('No se pudo agregar.', true); }).then(function(){
         _addingPago = false;
         if(addBtnEl) addBtnEl.disabled = false;
