@@ -622,6 +622,7 @@ if ("serviceWorker" in navigator) {
   .pagos-form input{padding:9px 11px; border-radius:8px; border:1px solid var(--border); background:var(--surface); font-size:14px; color:var(--text);}
   .pagos-form input[type=text]{flex:1 1 200px;}
   .pagos-form input[type=number]{width:130px;}
+  .pagos-form select{padding:9px 11px; border-radius:8px; border:1px solid var(--border); background:var(--surface); font-size:14px; color:var(--text); flex:0 0 auto;}
   .pagos-list{display:flex; flex-direction:column; gap:6px;}
   .pago-item{
     display:flex; align-items:center; gap:12px; background:var(--surface); border:1px solid var(--border);
@@ -2203,8 +2204,8 @@ if ("serviceWorker" in navigator) {
     // Los pagos pendientes "de siempre" (sin fecha) y las cuentas por cobrar
     // de distribuidores (con fecha de vencimiento) se muestran por separado,
     // cada una con su propio total, porque son cosas distintas para Daniel.
-    var pending = allPending.filter(function(pg){ return !pg.dueDate; });
-    var distrib = allPending.filter(function(pg){ return !!pg.dueDate; })
+    var pending = allPending.filter(function(pg){ return !pg.dueDate && !pg.isDistribuidor; });
+    var distrib = allPending.filter(function(pg){ return !!pg.dueDate || !!pg.isDistribuidor; })
       .sort(function(a,b){ return (a.dueDate||'').localeCompare(b.dueDate||''); });
 
     var today = todayDateStr();
@@ -2212,7 +2213,7 @@ if ("serviceWorker" in navigator) {
     pending.forEach(function(pg){ total += (pg.amount||0); });
     var totalUpcoming = 0, totalOverdue = 0;
     distrib.forEach(function(pg){
-      if(pg.dueDate <= today){ totalOverdue += (pg.amount||0); } else { totalUpcoming += (pg.amount||0); }
+      if(pg.dueDate && pg.dueDate <= today){ totalOverdue += (pg.amount||0); } else { totalUpcoming += (pg.amount||0); }
     });
 
     var html = '<div class="category" data-cat="PAGOS"><div class="category-head"><h2>Pagos pendientes</h2><span class="count">' + (pending.length + distrib.length) + ' pendientes</span></div>';
@@ -2230,6 +2231,10 @@ if ("serviceWorker" in navigator) {
     html += '<div class="pagos-form">' +
       '<input type="text" id="pagoNameInput" list="pagoNamesList" value="' + esc(activePagoNameValue()) + '" placeholder="Nombre" maxlength="60">' +
       '<input type="number" id="pagoAmountInput" placeholder="Monto" min="0" step="0.01">' +
+      '<select id="pagoDestinoInput" title="A dónde va este rubro">' +
+        '<option value="general">Total pendiente</option>' +
+        '<option value="distribuidor">Por cobrar a distribuidores</option>' +
+      '</select>' +
       '<button class="confirm-btn" id="pagoAddBtn" type="button">Agregar</button>' +
       '</div>';
 
@@ -2258,14 +2263,14 @@ if ("serviceWorker" in navigator) {
       });
       html += '<div class="pagos-list" style="margin-bottom:14px;">';
       distribGroups.forEach(function(grp){
-        var overdue = grp.dueDate <= today;
+        var overdue = !!grp.dueDate && grp.dueDate <= today;
         var shippingOpen = (state.openShippingRow === grp.key);
         html += '<div class="pago-item pago-item-distrib' + (overdue?' overdue':'') + '">'
           + '<span class="pago-name">' + esc(grp.name) + '<span class="pago-distrib-tag">Distribuidor</span>'
           + (grp.labels.length ? ('<div class="pago-distrib-products">' + esc(grp.labels.join(' · ')) + '</div>') : '')
           + (grp.shipping > 0 ? ('<div class="pago-distrib-products">Productos: ' + fmtMoney(grp.products) + ' + Envío: ' + fmtMoney(grp.shipping) + '</div>') : '')
           + '</span>'
-          + '<span class="pago-due">' + (overdue ? 'Venció ' : 'Vence ') + fmtDateOnly(grp.dueDate) + '</span>'
+          + '<span class="pago-due">' + (grp.dueDate ? ((overdue ? 'Venció ' : 'Vence ') + fmtDateOnly(grp.dueDate)) : 'Sin fecha') + '</span>'
           + '<span class="pago-amt num">' + fmtMoney(grp.amount) + '</span>'
           + (overdue ? '<span class="pago-vencido-badge">VENCIDO</span>' : '<span class="pill ok">Al día</span>')
           + '<button class="pago-ship-toggle" data-key="' + esc(grp.key) + '" type="button" title="Agregar valor de envío">' + (shippingOpen ? 'Cancelar envío' : '+ Envío') + '</button>'
@@ -2345,19 +2350,21 @@ if ("serviceWorker" in navigator) {
     if(_addingPago) return;
     var nameInput = document.getElementById('pagoNameInput');
     var amtInput = document.getElementById('pagoAmountInput');
+    var destinoInput = document.getElementById('pagoDestinoInput');
     var name = nameInput.value.trim();
     var amount = parseFloat(amtInput.value);
+    var isDistribuidor = destinoInput && destinoInput.value === 'distribuidor';
     if(!name || isNaN(amount) || amount <= 0){ showStatus('Ingresa un nombre y un monto válido.', true); return; }
     if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
     _addingPago = true;
     var addBtnEl = document.getElementById('pagoAddBtn');
     if(addBtnEl) addBtnEl.disabled = true;
     ensureUser(function(){
-      state.db.collection('pendingPayments').add({
-        name: name, amount: amount, createdAt: new Date().toISOString(), addedBy: state.userName
-      }).then(function(){
+      var doc = { name: name, amount: amount, createdAt: new Date().toISOString(), addedBy: state.userName };
+      if(isDistribuidor) doc.isDistribuidor = true;
+      state.db.collection('pendingPayments').add(doc).then(function(){
         notePagoNameUsed(name);
-        showStatus('Pago pendiente agregado.');
+        showStatus(isDistribuidor ? 'Cuenta por cobrar a distribuidor agregada.' : 'Pago pendiente agregado.');
       }).catch(function(){ showStatus('No se pudo agregar.', true); }).then(function(){
         _addingPago = false;
         if(addBtnEl) addBtnEl.disabled = false;
@@ -2388,18 +2395,20 @@ if ("serviceWorker" in navigator) {
   }
 
   function addShippingToInvoice(client, dueDate, rawAmount){
-    if(!state.db || !client || !dueDate) return;
+    if(!state.db || !client) return;
     var amountWithIva = Math.round(rawAmount * 1.15 * 100) / 100;
+    var doc = {
+      name: client,
+      amount: amountWithIva,
+      createdAt: new Date().toISOString(),
+      addedBy: state.userName,
+      origin: 'envio',
+      productLabel: 'Envío',
+      isDistribuidor: true
+    };
+    if(dueDate) doc.dueDate = dueDate;
     ensureUser(function(){
-      state.db.collection('pendingPayments').add({
-        name: client,
-        amount: amountWithIva,
-        dueDate: dueDate,
-        createdAt: new Date().toISOString(),
-        addedBy: state.userName,
-        origin: 'envio',
-        productLabel: 'Envío'
-      }).then(function(){
+      state.db.collection('pendingPayments').add(doc).then(function(){
         state.openShippingRow = null;
         showStatus('Envío agregado: ' + fmtMoney(amountWithIva) + ' (incluye 15% IVA) a la cuenta de ' + client + '.');
       }).catch(function(){ showStatus('No se pudo agregar el envío.', true); });
