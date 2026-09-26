@@ -623,6 +623,7 @@ if ("serviceWorker" in navigator) {
   .pagos-form input[type=text]{flex:1 1 200px;}
   .pagos-form input[type=number]{width:130px;}
   .pagos-form select{padding:9px 11px; border-radius:8px; border:1px solid var(--border); background:var(--surface); font-size:14px; color:var(--text); flex:0 0 auto;}
+  .pagos-form input[type=date]{padding:9px 11px; border-radius:8px; border:1px solid var(--border); background:var(--surface); font-size:14px; color:var(--text); flex:0 0 auto;}
   .pagos-list{display:flex; flex-direction:column; gap:6px;}
   .pago-item{
     display:flex; align-items:center; gap:12px; background:var(--surface); border:1px solid var(--border);
@@ -2228,13 +2229,15 @@ if ("serviceWorker" in navigator) {
     }
     html += '</div>';
 
+    var pagoDestino = state.pagoDestino || 'general';
     html += '<div class="pagos-form">' +
       '<input type="text" id="pagoNameInput" list="pagoNamesList" value="' + esc(activePagoNameValue()) + '" placeholder="Nombre" maxlength="60">' +
       '<input type="number" id="pagoAmountInput" placeholder="Monto" min="0" step="0.01">' +
       '<select id="pagoDestinoInput" title="A dónde va este rubro">' +
-        '<option value="general">Total pendiente</option>' +
-        '<option value="distribuidor">Por cobrar a distribuidores</option>' +
+        '<option value="general"' + (pagoDestino==='general'?' selected':'') + '>Total pendiente</option>' +
+        '<option value="distribuidor"' + (pagoDestino==='distribuidor'?' selected':'') + '>Por cobrar a distribuidores</option>' +
       '</select>' +
+      (pagoDestino === 'distribuidor' ? '<input type="date" id="pagoDueDateInput" title="Vencimiento (opcional)" value="' + esc(state.pagoDueDate||'') + '">' : '') +
       '<button class="confirm-btn" id="pagoAddBtn" type="button">Agregar</button>' +
       '</div>';
 
@@ -2311,6 +2314,19 @@ if ("serviceWorker" in navigator) {
     html += '</div>';
     root.innerHTML = html;
     document.getElementById('pagoAddBtn').addEventListener('click', addPago);
+    var pagoDestinoEl = document.getElementById('pagoDestinoInput');
+    if(pagoDestinoEl){
+      pagoDestinoEl.addEventListener('change', function(e){
+        state.pagoDestino = e.target.value;
+        renderPagos();
+      });
+    }
+    var pagoDueDateEl = document.getElementById('pagoDueDateInput');
+    if(pagoDueDateEl){
+      pagoDueDateEl.addEventListener('change', function(e){
+        state.pagoDueDate = e.target.value;
+      });
+    }
     root.querySelectorAll('.pago-paid').forEach(function(btn){
       btn.addEventListener('click', function(){ markPagoPaid(btn.getAttribute('data-pid')); });
     });
@@ -2351,9 +2367,11 @@ if ("serviceWorker" in navigator) {
     var nameInput = document.getElementById('pagoNameInput');
     var amtInput = document.getElementById('pagoAmountInput');
     var destinoInput = document.getElementById('pagoDestinoInput');
+    var dueDateInput = document.getElementById('pagoDueDateInput');
     var name = nameInput.value.trim();
     var amount = parseFloat(amtInput.value);
     var isDistribuidor = destinoInput && destinoInput.value === 'distribuidor';
+    var dueDate = (isDistribuidor && dueDateInput) ? dueDateInput.value : '';
     if(!name || isNaN(amount) || amount <= 0){ showStatus('Ingresa un nombre y un monto válido.', true); return; }
     if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
     _addingPago = true;
@@ -2362,9 +2380,12 @@ if ("serviceWorker" in navigator) {
     ensureUser(function(){
       var doc = { name: name, amount: amount, createdAt: new Date().toISOString(), addedBy: state.userName };
       if(isDistribuidor) doc.isDistribuidor = true;
+      if(dueDate) doc.dueDate = dueDate;
       state.db.collection('pendingPayments').add(doc).then(function(){
         notePagoNameUsed(name);
         showStatus(isDistribuidor ? 'Cuenta por cobrar a distribuidor agregada.' : 'Pago pendiente agregado.');
+        state.pagoDestino = 'general';
+        state.pagoDueDate = '';
       }).catch(function(){ showStatus('No se pudo agregar.', true); }).then(function(){
         _addingPago = false;
         if(addBtnEl) addBtnEl.disabled = false;
