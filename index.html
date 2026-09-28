@@ -929,6 +929,57 @@ if ("serviceWorker" in navigator) {
   @media (min-width:820px){ .fair-report-grid{grid-template-columns:220px 1fr;} }
   .fair-custom-line{display:flex; justify-content:space-between; font-size:13px; padding:6px 0; border-bottom:1px solid var(--border);}
   .fair-live-note{font-size:12.5px; color:var(--fair-color); background:var(--fair-tint); border-radius:8px; padding:8px 12px; margin-bottom:14px;}
+  .cash-out-list{display:flex; flex-direction:column; gap:8px; margin-bottom:6px;}
+  .cash-out-row{background:var(--surface); border:1px solid var(--border); border-radius:10px; box-shadow:var(--shadow); display:flex; align-items:center; gap:10px; padding:10px 14px;}
+  .cash-out-row .motivo{flex:1 1 auto; font-size:13.5px; font-weight:600;}
+  .cash-out-row .monto{font-family:'IBM Plex Mono', monospace; font-weight:700; font-size:13.5px; color:var(--critical); flex:0 0 auto;}
+  .cash-out-del{border:none; background:none; color:var(--text-muted); cursor:pointer; font-size:15px; width:24px; height:24px; border-radius:6px; flex:0 0 auto;}
+  .cash-out-del:hover{background:var(--surface-2); color:var(--critical);}
+  .cash-out-total{font-size:12.5px; color:var(--text-muted); text-align:right; margin-top:2px;}
+  .cash-out-total b{color:var(--text); font-family:'IBM Plex Mono', monospace;}
+
+  /* ---------- cierre de caja ---------- */
+  .cierre-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(158px,1fr)); gap:10px; margin-bottom:10px;}
+  .cierre-card{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 13px; border-top:3px solid var(--cierre-color, var(--border));}
+  .cierre-card.cierre-wide{grid-column:1 / -1;}
+  .cierre-card-head{display:flex; align-items:center; gap:9px; margin-bottom:10px; height:36px;}
+  .cierre-logo-chip{background:#fff; border-radius:7px; height:36px; padding:5px 8px; flex:0 0 auto; display:flex; align-items:center; box-shadow:inset 0 0 0 1px rgba(0,0,0,.05);}
+  .cierre-logo-chip img{height:100%; width:auto; max-width:104px; display:block; object-fit:contain;}
+  .cierre-logo-icon{height:36px; width:36px; border-radius:9px; flex:0 0 auto; display:block; object-fit:contain;}
+  .cierre-card .cierre-sub{font-size:10.5px; color:var(--text-muted); line-height:1.3;}
+  .cierre-card input[type=number]{
+    width:100%; padding:9px 11px; border-radius:8px; border:1px solid var(--border);
+    background:var(--surface); font-size:14.5px; color:var(--text); font-family:'IBM Plex Mono', monospace;
+    text-align:left; font-variant-numeric:tabular-nums;
+  }
+  .cierre-card input[type=number]:focus{outline:none; border-color:var(--fair-color); box-shadow:0 0 0 3px rgba(75,79,176,.18);}
+  .cierre-card .cierre-static-amt{font-family:'IBM Plex Mono', monospace; font-size:14.5px; font-weight:700; margin-top:8px; display:block;}
+  .cierre-cash-breakdown{margin-top:10px; padding-top:10px; border-top:1px dashed var(--border); display:flex; flex-direction:column; gap:4px; font-size:12px;}
+  .cierre-cash-breakdown-row{display:flex; justify-content:space-between; color:var(--text-muted);}
+  .cierre-cash-breakdown-row.result{color:var(--text); font-weight:700; font-size:13px; padding-top:4px; border-top:1px solid var(--border); margin-top:2px;}
+  .cierre-cash-breakdown-row .num{font-family:'IBM Plex Mono', monospace;}
+  .cierre-total-card{
+    background:var(--fair-color); color:#fff; border-radius:12px; padding:16px 20px; margin-top:4px;
+    display:flex; align-items:center; justify-content:space-between; box-shadow:var(--shadow);
+  }
+  .cierre-total-card .label{font-size:12.5px; text-transform:uppercase; letter-spacing:.05em; opacity:.85;}
+  .cierre-total-card .value{font-family:'IBM Plex Mono', monospace; font-size:28px; font-weight:600; font-variant-numeric:tabular-nums;}
+  .cierre-mismatch-warn{color:var(--critical) !important; background:var(--critical-tint) !important;}
+  .cierre-prop-card{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; box-shadow:var(--shadow);}
+  .cierre-prop-bar{display:flex; height:16px; border-radius:8px; overflow:hidden; background:var(--surface-2); margin-bottom:14px;}
+  .cierre-prop-bar span{height:100%;}
+  .cierre-prop-legend{display:grid; grid-template-columns:1fr 1fr; gap:10px 18px;}
+  @media (max-width:480px){ .cierre-prop-legend{grid-template-columns:1fr;} }
+  .cierre-prop-row{display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12.5px;}
+  .cierre-prop-left{display:flex; align-items:center; gap:8px; min-width:0;}
+  .cierre-prop-logo-chip{
+    background:#fff; border-radius:5px; height:20px; padding:2px 4px; flex:0 0 auto;
+    display:flex; align-items:center; box-shadow:inset 0 0 0 1px rgba(0,0,0,.05);
+  }
+  .cierre-prop-logo-chip img{height:100%; width:auto; max-width:58px; object-fit:contain;}
+  .cierre-prop-logo-icon{height:20px; width:20px; border-radius:5px; flex:0 0 auto;}
+  .cierre-prop-name{color:var(--text); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .cierre-prop-pct{font-family:'IBM Plex Mono', monospace; font-weight:600; color:var(--text-muted); flex:0 0 auto;}
   .supermaxi-note{font-size:12.5px; color:var(--supermaxi-color); background:var(--supermaxi-tint); border-radius:8px; padding:8px 12px; margin-bottom:14px;}
   .supermaxi-toolbar{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px;}
   .new-fair-picker{max-height:360px; overflow-y:auto; border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:14px;}
@@ -1334,6 +1385,10 @@ if ("serviceWorker" in navigator) {
   <div class="modal" id="fairCustomAddModalBody"></div>
 </div>
 
+<div class="modal-scrim" id="fairCashOutModalScrim">
+  <div class="modal" id="fairCashOutModalBody"></div>
+</div>
+
 <div class="modal-scrim" id="reportModalScrim">
   <div class="modal">
     <h3>Reportes y exportación</h3>
@@ -1629,8 +1684,10 @@ if ("serviceWorker" in navigator) {
     fairs: [],
     fairStock: [],
     fairCustomItems: [],
+    fairCashOuts: [],
     fairSales: [],
-    fairView: 'list',      // 'list' | 'detail' | 'report'
+    fairView: 'list',      // 'list' | 'detail' | 'report' | 'closing'
+    fairClosingDraft: null, // {efectivoContado, deuna, payphone, datafast, produbanco, pichincha, guayaquil} mientras se llena el cierre de caja
     currentFairId: null,
     openFairRow: null,     // {id, mode:'venta'} for a fairStock row inline form
     openFairCustomRow: null, // {id, mode:'venta'} for a fairCustomItems row inline form
@@ -1639,6 +1696,7 @@ if ("serviceWorker" in navigator) {
     restockModal: null,    // {productId, qty, note} for the general "Reabastecer" popup
     fairRestockModal: null, // {fairId, productId, qty} for the fair-scoped "Reabastecer feria" popup
     fairCustomAddModal: null, // {fairId, name, price, qty} for adding/restocking an "ítem propio" (ej. Flask) en una feria ya activa
+    fairCashOutModal: null, // {fairId, motivo, monto} for registrar una salida de caja en una feria activa
     fairCloseConfirmOpen: false,  // true muestra el aviso de "¿cerrar esta feria?" dentro de fairDetailHtml
     fairDeleteConfirmOpen: false, // true muestra el aviso de "¿eliminar esta feria?" dentro de fairDetailHtml
     newFairOpen: false,
@@ -4189,6 +4247,8 @@ if ("serviceWorker" in navigator) {
   function findFairCustom(id){ return state.fairCustomItems.filter(function(c){ return c.id===id; })[0]; }
   function fairStockFor(fairId){ return state.fairStock.filter(function(s){ return s.fairId===fairId; }); }
   function fairCustomFor(fairId){ return state.fairCustomItems.filter(function(c){ return c.fairId===fairId; }); }
+  function fairCashOutsFor(fairId){ return state.fairCashOuts.filter(function(c){ return c.fairId===fairId; }).sort(function(a,b){ return (a.createdAt||'') < (b.createdAt||'') ? -1 : 1; }); }
+  function fairCashOutsTotal(fairId){ return fairCashOutsFor(fairId).reduce(function(a,c){ return a+(c.monto||0); }, 0); }
   function fairSalesFor(fairId){ return state.fairSales.filter(function(s){ return s.fairId===fairId; }); }
   // Ventas de la feria sin contar las que ya se deshicieron desde el historial de la feria.
   function activeFairSalesFor(fairId){ return fairSalesFor(fairId).filter(function(s){ return !s.reversed; }); }
@@ -4220,8 +4280,173 @@ if ("serviceWorker" in navigator) {
     if(state.fairView === 'report' && state.currentFairId && findFair(state.currentFairId)){
       root.innerHTML = fairReportHtml(state.currentFairId); attachFairReportEvents(); return;
     }
+    if(state.fairView === 'closing' && state.currentFairId && findFair(state.currentFairId)){
+      root.innerHTML = fairClosingHtml(state.currentFairId); attachFairClosingEvents(); return;
+    }
     root.innerHTML = fairsListHtml();
     attachFairsListEvents();
+  }
+
+  // ---------------- Cierre de caja (pantalla previa a cerrar una feria) ----------------
+  // Métodos de pago con su logo (subido junto al resto del sitio, en assets/pagos/) y su
+  // color de marca real, muestreado directo de los logos que pasó Daniel.
+  var CIERRE_CASH = {key:'efectivo', label:'Efectivo', sub:'Billetes y monedas', logo:'assets/pagos/cash.png', iconStyle:true, color:'#1e8e5a'};
+  var CIERRE_METHODS = [
+    {key:'deuna',      label:'DeUna',      sub:'Pago móvil',    logo:'assets/pagos/deuna.png',      iconStyle:false, color:'#1fc79c'},
+    {key:'payphone',   label:'Payphone',   sub:'Pago móvil',    logo:'assets/pagos/payphone.png',   iconStyle:false, color:'#f86800'},
+    {key:'datafast',   label:'Datafast',   sub:'Tarjeta / POS', logo:'assets/pagos/datafast.png',   iconStyle:false, color:'#00a888'},
+    {key:'produbanco', label:'Produbanco', sub:'Transferencia', logo:'assets/pagos/produbanco.png', iconStyle:false, color:'#006038'},
+    {key:'pichincha',  label:'Pichincha',  sub:'Transferencia', logo:'assets/pagos/pichincha.png',  iconStyle:false, color:'#f8d800'},
+    {key:'guayaquil',  label:'Guayaquil',  sub:'Transferencia', logo:'assets/pagos/guayaquil.png',  iconStyle:false, color:'#b81078'}
+  ];
+  function cierreLogoHtml(m, chipClass, iconClass){
+    return m.iconStyle
+      ? '<img class="' + iconClass + '" src="' + m.logo + '" alt="' + esc(m.label) + '">'
+      : '<div class="' + chipClass + '"><img src="' + m.logo + '" alt="' + esc(m.label) + '"></div>';
+  }
+  function cierreEfectivoCobrado(fairId){
+    var d = state.fairClosingDraft || {};
+    var f = findFair(fairId);
+    var cajaChica = (f && f.cajaChicaInicial) || 0;
+    var salidas = fairCashOutsTotal(fairId);
+    return (parseFloat(d.efectivoContado)||0) - cajaChica + salidas;
+  }
+  function cierreTotal(fairId){
+    var d = state.fairClosingDraft || {};
+    var t = cierreEfectivoCobrado(fairId);
+    CIERRE_METHODS.forEach(function(m){ t += parseFloat(d[m.key])||0; });
+    return t;
+  }
+  function fairClosingHtml(fairId){
+    var f = findFair(fairId);
+    var d = state.fairClosingDraft || {};
+    var cajaChica = f.cajaChicaInicial || 0;
+    var salidas = fairCashOutsTotal(fairId);
+    var html = '<div class="category" data-cat="FERIAS">';
+    html += '<div class="fair-back-row"><button class="fair-back-btn" data-fair-closing-back type="button">← Volver a la feria</button></div>';
+    html += '<div class="fair-header"><div><span class="fair-status-pill active">Cerrando</span><h2>Cierre de caja</h2><div class="fair-date">' + esc(f.name) + '</div></div></div>';
+    html += '<div class="fair-live-note">Cuenta el efectivo y registra lo cobrado en cada método de pago antes de cerrar. Esto queda guardado en el reporte de la feria.</div>';
+
+    html += '<div class="cierre-grid">';
+    html += '<div class="cierre-card cierre-wide" style="--cierre-color:' + CIERRE_CASH.color + ';">' +
+      '<div class="cierre-card-head">' + cierreLogoHtml(CIERRE_CASH, 'cierre-logo-chip', 'cierre-logo-icon') + '</div>' +
+      '<div class="cierre-sub">Cuenta todo el efectivo físico que tienes al cerrar (incluye la caja chica).</div>' +
+      '<input type="number" min="0" step="0.01" id="cierreEfectivoContadoInput" value="' + esc(d.efectivoContado) + '" placeholder="0.00" style="margin-top:8px;">' +
+      '<div class="cierre-cash-breakdown">' +
+        '<div class="cierre-cash-breakdown-row"><span>− Caja chica inicial</span><span class="num">−' + fmtMoney(cajaChica) + '</span></div>' +
+        '<div class="cierre-cash-breakdown-row"><span>+ Salidas de caja</span><span class="num">+' + fmtMoney(salidas) + '</span></div>' +
+        '<div class="cierre-cash-breakdown-row result"><span>= Efectivo cobrado (venta)</span><span class="num" id="cierreBdCobrado">' + fmtMoney(cierreEfectivoCobrado(fairId)) + '</span></div>' +
+      '</div></div>';
+    html += CIERRE_METHODS.map(function(m){
+      return '<div class="cierre-card" style="--cierre-color:' + m.color + ';">' +
+        '<div class="cierre-card-head">' + cierreLogoHtml(m, 'cierre-logo-chip', 'cierre-logo-icon') + '</div>' +
+        '<div class="cierre-sub">' + esc(m.sub) + '</div>' +
+        '<input type="number" min="0" step="0.01" data-cierre-key="' + m.key + '" value="' + esc(d[m.key]) + '" placeholder="0.00" style="margin-top:8px;">' +
+        '</div>';
+    }).join('');
+    html += '</div>';
+
+    html += '<div class="cierre-total-card"><span class="label">Total cobrado</span><span class="value" id="cierreTotalValue">' + fmtMoney(cierreTotal(fairId)) + '</span></div>';
+    html += '<div class="fair-live-note" id="cierreMismatchNote" style="margin-top:10px;"></div>';
+
+    html += '<div class="fair-sub-head">Proporción del cobro</div>';
+    html += '<div class="cierre-prop-card"><div class="cierre-prop-bar" id="cierrePropBar"></div><div class="cierre-prop-legend" id="cierrePropLegend"></div></div>';
+
+    html += '<div class="modal-actions" style="margin-top:20px;">' +
+      '<button class="cancel-btn" data-fair-closing-cancel type="button">Cancelar</button>' +
+      '<button class="confirm-btn" id="confirmFairClosingBtn" type="button">Cerrar feria</button></div>';
+    html += '</div>';
+    return html;
+  }
+
+  function updateCierreComputed(fairId){
+    var bd = document.getElementById('cierreBdCobrado');
+    if(bd) bd.textContent = fmtMoney(cierreEfectivoCobrado(fairId));
+    var t = cierreTotal(fairId);
+    var totalEl = document.getElementById('cierreTotalValue');
+    if(totalEl) totalEl.textContent = fmtMoney(t);
+
+    var revenue = computeFairKpis(fairId).totalSales;
+    var mismatchEl = document.getElementById('cierreMismatchNote');
+    if(mismatchEl){
+      var diff = t - revenue;
+      if(Math.abs(diff) < 0.005){
+        mismatchEl.className = 'fair-live-note';
+        mismatchEl.textContent = 'Cuadra con las ventas registradas de la feria (' + fmtMoney(revenue) + ').';
+      } else {
+        var word = diff > 0 ? 'Sobran' : 'Faltan';
+        mismatchEl.className = 'fair-live-note cierre-mismatch-warn';
+        mismatchEl.textContent = word + ' ' + fmtMoney(Math.abs(diff)) + ' frente a las ventas registradas de la feria (' + fmtMoney(revenue) + ').';
+      }
+    }
+
+    var d = state.fairClosingDraft || {};
+    var allMethods = [{label:CIERRE_CASH.label, logo:CIERRE_CASH.logo, iconStyle:CIERRE_CASH.iconStyle, color:CIERRE_CASH.color, amount:cierreEfectivoCobrado(fairId)}]
+      .concat(CIERRE_METHODS.map(function(m){ return {label:m.label, logo:m.logo, iconStyle:m.iconStyle, color:m.color, amount:parseFloat(d[m.key])||0}; }));
+    var barEl = document.getElementById('cierrePropBar');
+    var legendEl = document.getElementById('cierrePropLegend');
+    if(barEl && legendEl){
+      if(t <= 0){
+        barEl.innerHTML = '';
+        legendEl.innerHTML = '<div class="cierre-prop-row"><span class="cierre-prop-name" style="font-weight:400; color:var(--text-muted);">Ingresa montos para ver la proporción.</span></div>';
+      } else {
+        barEl.innerHTML = allMethods.map(function(m){
+          if(m.amount<=0) return '';
+          var pct = (m.amount/t*100);
+          return '<span style="width:' + pct + '%; background:' + m.color + ';" title="' + esc(m.label) + '"></span>';
+        }).join('');
+        legendEl.innerHTML = allMethods.filter(function(m){ return m.amount > 0; }).map(function(m){
+          var pct = (m.amount/t*100).toFixed(0);
+          return '<div class="cierre-prop-row"><span class="cierre-prop-left">' + cierreLogoHtml(m, 'cierre-prop-logo-chip', 'cierre-prop-logo-icon') +
+            '<span class="cierre-prop-name">' + esc(m.label) + '</span></span><span class="cierre-prop-pct">' + pct + '%</span></div>';
+        }).join('');
+      }
+    }
+  }
+
+  function attachFairClosingEvents(){
+    var fairId = state.currentFairId;
+    var backBtn = document.querySelector('[data-fair-closing-back]');
+    if(backBtn) backBtn.addEventListener('click', function(){
+      state.fairView = 'detail'; state.fairClosingDraft = null; render();
+    });
+    var cancelBtn = document.querySelector('[data-fair-closing-cancel]');
+    if(cancelBtn) cancelBtn.addEventListener('click', function(){
+      state.fairView = 'detail'; state.fairClosingDraft = null; render();
+    });
+    var efInput = document.getElementById('cierreEfectivoContadoInput');
+    if(efInput) efInput.addEventListener('input', function(){
+      state.fairClosingDraft.efectivoContado = efInput.value;
+      updateCierreComputed(fairId);
+    });
+    document.querySelectorAll('[data-cierre-key]').forEach(function(inp){
+      inp.addEventListener('input', function(){
+        state.fairClosingDraft[inp.getAttribute('data-cierre-key')] = inp.value;
+        updateCierreComputed(fairId);
+      });
+    });
+    var confirmBtn = document.getElementById('confirmFairClosingBtn');
+    if(confirmBtn) confirmBtn.addEventListener('click', function(){
+      if(confirmBtn.disabled) return;
+      var d = state.fairClosingDraft || {};
+      var f = findFair(fairId);
+      var cierre = {
+        efectivoContado: parseFloat(d.efectivoContado)||0,
+        cajaChicaInicial: f.cajaChicaInicial||0,
+        salidasTotal: fairCashOutsTotal(fairId),
+        efectivoCobrado: cierreEfectivoCobrado(fairId),
+        deuna: parseFloat(d.deuna)||0,
+        payphone: parseFloat(d.payphone)||0,
+        datafast: parseFloat(d.datafast)||0,
+        produbanco: parseFloat(d.produbanco)||0,
+        pichincha: parseFloat(d.pichincha)||0,
+        guayaquil: parseFloat(d.guayaquil)||0,
+        totalCobrado: cierreTotal(fairId)
+      };
+      confirmBtn.disabled = true;
+      closeFair(fairId, cierre);
+    });
+    updateCierreComputed(fairId);
   }
 
   function fairsListHtml(){
@@ -4284,6 +4509,8 @@ if ("serviceWorker" in navigator) {
     html += '<div class="category-head"><h2>Nueva feria</h2></div>';
     html += '<div class="field"><label for="newFairName">Nombre de la feria</label><input id="newFairName" type="text" maxlength="80" placeholder="Ej. Maratón de Quito"></div>';
     html += '<div class="field"><label for="newFairDate">Fecha / año</label><input id="newFairDate" type="text" maxlength="40" placeholder="Ej. Marzo 2026"></div>';
+    html += '<div class="field"><label for="newFairCajaChica">Caja chica inicial (opcional)</label><input id="newFairCajaChica" type="number" min="0" step="0.01" placeholder="0.00"></div>';
+    html += '<p class="hint" style="margin-top:-4px;">El fondo en efectivo que llevas para dar vueltos. Al cerrar la feria se resta sola de tu efectivo contado, para que dar vueltos no se mezcle con tu venta real.</p>';
     html += '<div class="fair-sub-head">Stock que llevas (productos del catálogo)</div>';
     html += '<div class="field"><input id="newFairSearch" type="search" placeholder="Buscar por sabor o presentación…"></div>';
     html += '<div class="new-fair-picker" id="newFairPicker">' + newFairPickerRowsHtml('') + '</div>';
@@ -4418,6 +4645,7 @@ if ("serviceWorker" in navigator) {
     var dateLabel = document.getElementById('newFairDate').value.trim();
     if(!name){ showStatus('Ingresa un nombre para la feria.', true); return; }
     if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
+    var cajaChicaInicial = parseFloat(document.getElementById('newFairCajaChica').value) || 0;
     var picks = state.newFairPicks;
     var customs = state.newFairCustom.filter(function(c){ return (c.name||'').trim() && parseFloat(c.qty)>0; });
     var overStock = Object.keys(picks).map(function(pid){
@@ -4438,7 +4666,7 @@ if ("serviceWorker" in navigator) {
     ensureUser(function(){
       var nowIso = new Date().toISOString();
       state.db.collection('fairs').add({
-        name: name, dateLabel: dateLabel, status: 'active', createdAt: nowIso, createdBy: state.userName
+        name: name, dateLabel: dateLabel, status: 'active', createdAt: nowIso, createdBy: state.userName, cajaChicaInicial: cajaChicaInicial
       }).then(function(ref){
         var fairId = ref.id;
         var writes = [];
@@ -4491,9 +4719,6 @@ if ("serviceWorker" in navigator) {
       (isActive ? '<button class="btn-history" id="closeFairBtn" type="button">Cerrar feria</button>' : '') +
       '<button class="btn-history btn-danger" id="deleteFairBtn" type="button">🗑 Eliminar feria</button>' +
       '</div></div>';
-    if(isActive){
-      html += '<div id="closeFairConfirm">' + (state.fairCloseConfirmOpen ? closeFairConfirmHtml() : '') + '</div>';
-    }
     html += '<div id="deleteFairConfirm">' + (state.fairDeleteConfirmOpen ? deleteFairConfirmHtml() : '') + '</div>';
 
     if(isActive){
@@ -4517,8 +4742,27 @@ if ("serviceWorker" in navigator) {
       ? '<p class="empty-hint">No agregaste ítems propios (ej. Flasks) a esta feria.</p>'
       : ('<div class="row-list fair-row-list">' + customList.map(function(c){ return fairCustomRowHtml(c, isActive); }).join('') + '</div>');
 
+    if(isActive){
+      var cashOuts = fairCashOutsFor(fairId);
+      html += '<div class="fair-sub-head" style="display:flex; align-items:center; justify-content:space-between; gap:8px;"><span>Caja</span>' +
+        '<button class="btn-history" id="openFairCashOutBtn" type="button">+ Registrar salida</button></div>';
+      html += '<div class="fair-live-note">Caja chica inicial: <b>' + fmtMoney(f.cajaChicaInicial||0) + '</b> — el fondo que llevas para dar vueltos. Se resta sola de tu efectivo al cerrar la feria.</div>';
+      html += cashOuts.length === 0
+        ? '<p class="empty-hint">No has registrado salidas de caja en esta feria.</p>'
+        : ('<div class="cash-out-list">' + cashOuts.map(fairCashOutRowHtml).join('') + '</div>');
+      if(cashOuts.length){
+        html += '<div class="cash-out-total">Total salidas: <b>' + fmtMoney(fairCashOutsTotal(fairId)) + '</b></div>';
+      }
+    }
+
     html += '</div>';
     return html;
+  }
+
+  function fairCashOutRowHtml(c){
+    return '<div class="cash-out-row"><span class="motivo">' + esc(c.motivo) + '</span>' +
+      '<span class="monto">−' + fmtMoney(c.monto||0) + '</span>' +
+      '<button class="cash-out-del" data-cashout-del="' + c.id + '" type="button" title="Eliminar">✕</button></div>';
   }
 
   function fairStockRowHtml(s, isActive, fairId){
@@ -4588,11 +4832,11 @@ if ("serviceWorker" in navigator) {
     var historyBtn = document.querySelector('[data-fair-history]');
     if(historyBtn) historyBtn.addEventListener('click', openFairHistoryDrawer);
     var closeBtn = document.getElementById('closeFairBtn');
-    if(closeBtn) closeBtn.addEventListener('click', function(){ state.fairCloseConfirmOpen = true; render(); });
-    var confirmCloseBtn = document.getElementById('confirmCloseFairBtn');
-    if(confirmCloseBtn) confirmCloseBtn.addEventListener('click', function(){ closeFair(state.currentFairId); });
-    var cancelCloseBtn = document.getElementById('cancelCloseFairBtn');
-    if(cancelCloseBtn) cancelCloseBtn.addEventListener('click', function(){ state.fairCloseConfirmOpen = false; render(); });
+    if(closeBtn) closeBtn.addEventListener('click', function(){
+      state.fairClosingDraft = { efectivoContado:'', deuna:'', payphone:'', datafast:'', produbanco:'', pichincha:'', guayaquil:'' };
+      state.fairView = 'closing';
+      render();
+    });
     var deleteBtn = document.getElementById('deleteFairBtn');
     if(deleteBtn) deleteBtn.addEventListener('click', function(){ state.fairDeleteConfirmOpen = true; render(); });
     var confirmDeleteBtn = document.getElementById('confirmDeleteFairBtn');
@@ -4629,6 +4873,14 @@ if ("serviceWorker" in navigator) {
     if(fairRestockBtn) fairRestockBtn.addEventListener('click', function(){ openFairRestockModal(state.currentFairId); });
     var fairCustomAddBtn = document.getElementById('openFairCustomAddBtn');
     if(fairCustomAddBtn) fairCustomAddBtn.addEventListener('click', function(){ openFairCustomAddModal(state.currentFairId); });
+    var fairCashOutBtn = document.getElementById('openFairCashOutBtn');
+    if(fairCashOutBtn) fairCashOutBtn.addEventListener('click', function(){ openFairCashOutModal(state.currentFairId); });
+    document.querySelectorAll('[data-cashout-del]').forEach(function(el){
+      el.addEventListener('click', function(ev){
+        deleteFairCashOut(el.getAttribute('data-cashout-del'));
+        ev.stopPropagation();
+      });
+    });
   }
 
   // ---------------- Popup de reabastecimiento de una feria específica ----------------
@@ -4831,6 +5083,78 @@ if ("serviceWorker" in navigator) {
         if(confirmBtnEl) confirmBtnEl.disabled = false;
         showStatus('No se pudo agregar el ítem. Intenta de nuevo.', true);
       });
+    });
+  }
+
+  // ---------------- Caja: salidas de caja durante una feria activa ----------------
+  function openFairCashOutModal(fairId){
+    state.fairCashOutModal = { fairId: fairId, motivo: '', monto: '' };
+    document.getElementById('fairCashOutModalScrim').classList.add('open');
+    renderFairCashOutModal();
+  }
+
+  function closeFairCashOutModal(){
+    state.fairCashOutModal = null;
+    document.getElementById('fairCashOutModalScrim').classList.remove('open');
+  }
+
+  function renderFairCashOutModal(){
+    var m = state.fairCashOutModal;
+    if(!m) return;
+    var html = '<h3 style="margin-top:0;">💵 Registrar salida de caja</h3>';
+    html += '<p class="hint" style="margin-top:-6px;">Dinero que sacas de la caja durante la feria (ej. hielo, parqueo). Se descuenta solo del efectivo al cerrar, para no mezclarlo con la venta.</p>';
+    html += '<div class="field"><label for="fcoMotivoInput">Motivo</label><input type="text" id="fcoMotivoInput" placeholder="Ej. Hielo" maxlength="40" value="' + esc(m.motivo) + '"></div>';
+    html += '<div class="field"><label for="fcoMontoInput">Monto</label><input type="number" min="0" step="0.01" id="fcoMontoInput" placeholder="0.00" value="' + esc(m.monto) + '"></div>';
+    html += '<div class="modal-actions"><button class="cancel-btn" id="fcoCancelBtn" type="button">Cancelar</button><button class="confirm-btn" id="fcoConfirmBtn" type="button">Guardar</button></div>';
+    document.getElementById('fairCashOutModalBody').innerHTML = html;
+    attachFairCashOutModalEvents();
+  }
+
+  function attachFairCashOutModalEvents(){
+    var m = state.fairCashOutModal;
+    if(!m) return;
+    var motivoInput = document.getElementById('fcoMotivoInput');
+    if(motivoInput) motivoInput.addEventListener('input', function(){ m.motivo = motivoInput.value; });
+    var montoInput = document.getElementById('fcoMontoInput');
+    if(montoInput) montoInput.addEventListener('input', function(){ m.monto = montoInput.value; });
+    document.getElementById('fcoCancelBtn').addEventListener('click', closeFairCashOutModal);
+    document.getElementById('fcoConfirmBtn').addEventListener('click', confirmFairCashOutModal);
+  }
+
+  function confirmFairCashOutModal(){
+    var m = state.fairCashOutModal;
+    if(!m || m.submitting) return;
+    var motivo = (m.motivo||'').trim();
+    if(!motivo){ showStatus('Ingresa un motivo para la salida.', true); return; }
+    var monto = parseFloat(m.monto);
+    if(!(monto>0)){ showStatus('Ingresa un monto válido.', true); return; }
+    if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
+    var fairId = m.fairId;
+    m.submitting = true;
+    var confirmBtnEl = document.getElementById('fcoConfirmBtn');
+    if(confirmBtnEl) confirmBtnEl.disabled = true;
+    ensureUser(function(){
+      state.db.collection('fairCashOuts').add({
+        fairId: fairId, motivo: motivo, monto: monto, createdAt: new Date().toISOString(), createdBy: state.userName
+      }).then(function(){
+        showStatus('Salida registrada: ' + motivo + ' (' + fmtMoney(monto) + ').');
+        closeFairCashOutModal();
+        render();
+      }).catch(function(){
+        m.submitting = false;
+        if(confirmBtnEl) confirmBtnEl.disabled = false;
+        showStatus('No se pudo registrar la salida. Intenta de nuevo.', true);
+      });
+    });
+  }
+
+  function deleteFairCashOut(id){
+    if(!state.db) return;
+    state.db.doc('fairCashOuts/' + id).delete().then(function(){
+      showStatus('Salida eliminada.');
+      render();
+    }).catch(function(){
+      showStatus('No se pudo eliminar la salida.', true);
     });
   }
 
@@ -5140,15 +5464,16 @@ if ("serviceWorker" in navigator) {
     });
   }
 
-  function closeFair(fairId){
+  function closeFair(fairId, cierre){
     if(!state.db) return;
-    state.db.doc('fairs/' + fairId).update({ status: 'closed', closedAt: new Date().toISOString() }).then(function(){
+    var payload = { status: 'closed', closedAt: new Date().toISOString() };
+    if(cierre) payload.cierre = cierre;
+    state.db.doc('fairs/' + fairId).update(payload).then(function(){
       showStatus('Feria cerrada. Aquí está tu resumen.');
       state.fairView = 'report';
-      state.fairCloseConfirmOpen = false;
+      state.fairClosingDraft = null;
       render();
     }).catch(function(){
-      state.fairCloseConfirmOpen = false;
       showStatus('No se pudo cerrar la feria.', true);
       render();
     });
@@ -5525,6 +5850,54 @@ if ("serviceWorker" in navigator) {
   }
 
   // ---------------- Fair report ----------------
+  function fairCierreReportHtml(f, revenue){
+    var c = f.cierre;
+    var html = '<div class="fair-sub-head">Cierre de caja</div>';
+    html += '<div class="cierre-grid">';
+    html += '<div class="cierre-card cierre-wide" style="--cierre-color:' + CIERRE_CASH.color + ';">' +
+      '<div class="cierre-card-head">' + cierreLogoHtml(CIERRE_CASH, 'cierre-logo-chip', 'cierre-logo-icon') + '</div>' +
+      '<div class="cierre-cash-breakdown">' +
+        '<div class="cierre-cash-breakdown-row"><span>Efectivo contado</span><span class="num">' + fmtMoney(c.efectivoContado||0) + '</span></div>' +
+        '<div class="cierre-cash-breakdown-row"><span>− Caja chica inicial</span><span class="num">−' + fmtMoney(c.cajaChicaInicial||0) + '</span></div>' +
+        '<div class="cierre-cash-breakdown-row"><span>+ Salidas de caja</span><span class="num">+' + fmtMoney(c.salidasTotal||0) + '</span></div>' +
+        '<div class="cierre-cash-breakdown-row result"><span>= Efectivo cobrado (venta)</span><span class="num">' + fmtMoney(c.efectivoCobrado||0) + '</span></div>' +
+      '</div></div>';
+    html += CIERRE_METHODS.map(function(m){
+      return '<div class="cierre-card" style="--cierre-color:' + m.color + ';">' +
+        '<div class="cierre-card-head">' + cierreLogoHtml(m, 'cierre-logo-chip', 'cierre-logo-icon') + '</div>' +
+        '<span class="cierre-static-amt">' + fmtMoney(c[m.key]||0) + '</span></div>';
+    }).join('');
+    html += '</div>';
+    html += '<div class="cierre-total-card"><span class="label">Total cobrado</span><span class="value">' + fmtMoney(c.totalCobrado||0) + '</span></div>';
+    var diff = (c.totalCobrado||0) - revenue;
+    if(Math.abs(diff) < 0.005){
+      html += '<div class="fair-live-note" style="margin-top:10px;">Cuadró con las ventas registradas de la feria (' + fmtMoney(revenue) + ').</div>';
+    } else {
+      var word = diff > 0 ? 'Sobraron' : 'Faltaron';
+      html += '<div class="fair-live-note cierre-mismatch-warn" style="margin-top:10px;">' + word + ' ' + fmtMoney(Math.abs(diff)) + ' frente a las ventas registradas de la feria (' + fmtMoney(revenue) + ').</div>';
+    }
+
+    var allMethods = [{label:CIERRE_CASH.label, logo:CIERRE_CASH.logo, iconStyle:CIERRE_CASH.iconStyle, color:CIERRE_CASH.color, amount:c.efectivoCobrado||0}]
+      .concat(CIERRE_METHODS.map(function(m){ return {label:m.label, logo:m.logo, iconStyle:m.iconStyle, color:m.color, amount:c[m.key]||0}; }));
+    var t = c.totalCobrado||0;
+    if(t > 0){
+      html += '<div class="cierre-prop-card" style="margin-top:14px;"><div class="cierre-prop-bar">';
+      html += allMethods.map(function(m){
+        if(m.amount<=0) return '';
+        var pct = (m.amount/t*100);
+        return '<span style="width:' + pct + '%; background:' + m.color + ';" title="' + esc(m.label) + '"></span>';
+      }).join('');
+      html += '</div><div class="cierre-prop-legend">';
+      html += allMethods.filter(function(m){ return m.amount > 0; }).map(function(m){
+        var pct = (m.amount/t*100).toFixed(0);
+        return '<div class="cierre-prop-row"><span class="cierre-prop-left">' + cierreLogoHtml(m, 'cierre-prop-logo-chip', 'cierre-prop-logo-icon') +
+          '<span class="cierre-prop-name">' + esc(m.label) + '</span></span><span class="cierre-prop-pct">' + pct + '%</span></div>';
+      }).join('');
+      html += '</div></div>';
+    }
+    return html;
+  }
+
   function fairReportHtml(fairId){
     var f = findFair(fairId);
     var sales = activeFairSalesFor(fairId);
@@ -5622,6 +5995,10 @@ if ("serviceWorker" in navigator) {
           '<span class="fair-report-kpi-sub">' + fmtMoney(t.revenue) + '</span></div></div>';
       }).join('') +
       '</div>';
+
+    if(f.cierre){
+      html += fairCierreReportHtml(f, revenue);
+    }
 
     html += '<div class="fair-report-grid">';
     html += '<div>' + buildDonutSvg(byCat, catTotal) + buildDonutLegend(byCat, catTotal) + '</div>';
@@ -6202,6 +6579,11 @@ if ("serviceWorker" in navigator) {
         state.fairCustomItems = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         render();
       }, function(err){ notifyLiveDataError('ítems propios de feria', err); });
+
+      db.collection('fairCashOuts').onSnapshot(function(snap){
+        state.fairCashOuts = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+        render();
+      }, function(err){ notifyLiveDataError('salidas de caja de feria', err); });
 
       db.collection('customItemDefaults').onSnapshot(function(snap){
         var map = {};
