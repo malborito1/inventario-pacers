@@ -627,6 +627,37 @@ if ("serviceWorker" in navigator) {
   .tag-reversed{font-size:11px; color:var(--text-muted); font-style:italic;}
   .empty-hint{color:var(--text-muted); font-size:13px; padding:20px 0; text-align:center;}
 
+  /* ---------- Mini-calendario de ventas (dentro del Historial general) ---------- */
+  .hist-cal{margin:6px 0 14px; border:1px solid var(--border); border-radius:12px; padding:10px 12px; background:var(--surface-2);}
+  .hist-cal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;}
+  .hist-cal-title-wrap{display:flex; flex-direction:column; align-items:center; gap:1px;}
+  .hist-cal-title{font-weight:700; font-size:13.5px; text-transform:capitalize;}
+  .hist-cal-today-btn{border:none; background:none; color:var(--accent); font-size:10.5px; font-weight:600; cursor:pointer; text-decoration:underline; padding:0;}
+  .hist-cal-nav{border:none; background:var(--surface); width:26px; height:26px; border-radius:7px; cursor:pointer; font-size:14px; line-height:1; color:var(--text); display:flex; align-items:center; justify-content:center; flex:none;}
+  .hist-cal-nav:hover{background:var(--accent-tint); color:var(--accent-strong);}
+  .hist-cal-nav-disabled{visibility:hidden;}
+  .hist-cal-weekdays{display:grid; grid-template-columns:repeat(7,1fr); gap:2px; margin-bottom:4px;}
+  .hist-cal-weekdays span{font-size:10px; color:var(--text-muted); text-align:center; font-weight:600; text-transform:uppercase;}
+  .hist-cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:2px;}
+  .hist-cal-day{
+    position:relative; aspect-ratio:1; border:none; background:none; border-radius:7px; cursor:pointer;
+    font-size:12px; color:var(--text); display:flex; align-items:center; justify-content:center; font-family:inherit;
+  }
+  .hist-cal-day:hover{background:var(--surface);}
+  .hist-cal-day.is-today{font-weight:700; color:var(--accent-strong);}
+  .hist-cal-day.is-selected{background:var(--accent); color:#fff;}
+  .hist-cal-day.has-sales::after{
+    content:''; position:absolute; bottom:3px; left:50%; transform:translateX(-50%);
+    width:4px; height:4px; border-radius:50%; background:var(--success);
+  }
+  .hist-cal-day.is-selected.has-sales::after{background:#fff;}
+  .hist-cal-day.is-blank{cursor:default; pointer-events:none;}
+  .hist-cal-filter-bar{
+    display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12.5px; font-weight:600;
+    background:var(--accent-tint); color:var(--accent-strong); border-radius:8px; padding:8px 12px; margin-bottom:10px;
+  }
+  .hist-cal-clear{border:none; background:none; color:var(--accent-strong); font-size:11.5px; font-weight:700; cursor:pointer; text-decoration:underline; white-space:nowrap; padding:0; font-family:inherit;}
+
   /* ---------- Pagos pendientes ---------- */
   .pagos-form{display:flex; gap:8px; margin:2px 0 18px; flex-wrap:wrap;}
   .pagos-form input{padding:9px 11px; border-radius:8px; border:1px solid var(--border); background:var(--surface); font-size:14px; color:var(--text);}
@@ -1678,6 +1709,8 @@ if ("serviceWorker" in navigator) {
     openGraceRow: null,  // {id, mode: 'venta'|'reabastecer'}
     openKebab: null,
     confirmUndoId: null,
+    historyCalendarMonth: null, // 'YYYY-MM' que muestra el mini-calendario del Historial; null = mes actual
+    historyCalendarSelectedDate: null, // 'YYYY-MM-DD' si se filtró el Historial a un día puntual, si no null
     confirmFairUndoId: null,
     pagosHistoryOpen: false,
     userName: "",
@@ -2671,15 +2704,112 @@ if ("serviceWorker" in navigator) {
       '</div>';
   }
 
+  // Clave de fecha LOCAL 'YYYY-MM-DD' para un timestamp ISO (m.at), igual criterio que
+  // todayDateStr(): getFullYear/getMonth/getDate del dispositivo, no UTC.
+  function localDateKey(iso){
+    var d = new Date(iso);
+    if(isNaN(d.getTime())) return '';
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+
+  // {'YYYY-MM-DD': cantidad de ventas} para los días de monthStr ('YYYY-MM') que tuvieron
+  // al menos una venta. Solo cuenta type==='venta': es lo que el punto del calendario señala.
+  function historySalesDatesInMonth(monthStr){
+    var counts = {};
+    state.movements.forEach(function(m){
+      if(m.type !== 'venta' || !m.at) return;
+      var key = localDateKey(m.at);
+      if(key.indexOf(monthStr) === 0) counts[key] = (counts[key]||0) + 1;
+    });
+    return counts;
+  }
+
+  function shiftHistoryCalendarMonth(delta){
+    var base = state.historyCalendarMonth || todayDateStr().slice(0,7);
+    var parts = base.split('-');
+    var d = new Date(parseInt(parts[0],10), parseInt(parts[1],10)-1 + delta, 1);
+    state.historyCalendarMonth = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    renderHistory();
+  }
+
+  // Mini-calendario mensual (semana empieza en lunes) con un punto en los días que
+  // tuvieron ventas; tocar un día filtra la lista de movimientos de abajo a ese día.
+  function historyCalendarHtml(){
+    var monthStr = state.historyCalendarMonth || todayDateStr().slice(0,7);
+    var parts = monthStr.split('-');
+    var year = parseInt(parts[0],10), monthIdx = parseInt(parts[1],10) - 1;
+    var daysInMonth = new Date(year, monthIdx+1, 0).getDate();
+    var leadBlanks = (new Date(year, monthIdx, 1).getDay() + 6) % 7; // 0=lunes
+    var salesDates = historySalesDatesInMonth(monthStr);
+    var today = todayDateStr();
+    var selected = state.historyCalendarSelectedDate;
+    var isCurrentMonth = monthStr === today.slice(0,7);
+
+    var html = '<div class="hist-cal">';
+    html += '<div class="hist-cal-head">' +
+      '<button class="hist-cal-nav" type="button" data-history-cal-prev title="Mes anterior">‹</button>' +
+      '<div class="hist-cal-title-wrap"><span class="hist-cal-title">' + MESES_ES[monthIdx] + ' ' + year + '</span>' +
+      (isCurrentMonth ? '' : '<button class="hist-cal-today-btn" type="button" data-history-cal-today>Hoy</button>') +
+      '</div>' +
+      '<button class="hist-cal-nav' + (isCurrentMonth ? ' hist-cal-nav-disabled' : '') + '" type="button" data-history-cal-next' + (isCurrentMonth ? ' disabled' : '') + ' title="Mes siguiente">›</button>' +
+      '</div>';
+    html += '<div class="hist-cal-weekdays">' + ['L','M','M','J','V','S','D'].map(function(d){ return '<span>' + d + '</span>'; }).join('') + '</div>';
+    html += '<div class="hist-cal-grid">';
+    for(var i=0; i<leadBlanks; i++){ html += '<span class="hist-cal-day is-blank"></span>'; }
+    for(var day=1; day<=daysInMonth; day++){
+      var dateKey = monthStr + '-' + String(day).padStart(2,'0');
+      var cls = 'hist-cal-day';
+      if(dateKey === today) cls += ' is-today';
+      if(dateKey === selected) cls += ' is-selected';
+      if(salesDates[dateKey]) cls += ' has-sales';
+      html += '<button class="' + cls + '" type="button" data-history-cal-day="' + dateKey + '">' + day + '</button>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  function attachHistoryCalendarEvents(){
+    var prevBtn = document.querySelector('[data-history-cal-prev]');
+    if(prevBtn) prevBtn.addEventListener('click', function(){ shiftHistoryCalendarMonth(-1); });
+    var nextBtn = document.querySelector('[data-history-cal-next]');
+    if(nextBtn && !nextBtn.disabled) nextBtn.addEventListener('click', function(){ shiftHistoryCalendarMonth(1); });
+    var todayBtn = document.querySelector('[data-history-cal-today]');
+    if(todayBtn) todayBtn.addEventListener('click', function(){
+      state.historyCalendarMonth = todayDateStr().slice(0,7);
+      renderHistory();
+    });
+    document.querySelectorAll('[data-history-cal-day]').forEach(function(el){
+      el.addEventListener('click', function(){
+        var d = el.getAttribute('data-history-cal-day');
+        state.historyCalendarSelectedDate = (state.historyCalendarSelectedDate === d) ? null : d;
+        renderHistory();
+      });
+    });
+    var clearBtn = document.querySelector('[data-history-cal-clear]');
+    if(clearBtn) clearBtn.addEventListener('click', function(){
+      state.historyCalendarSelectedDate = null;
+      renderHistory();
+    });
+  }
+
   function renderHistory(){
     var badge = document.getElementById('historyCount');
     badge.textContent = state.movements.length;
     var body = document.getElementById('historyBody');
-    if(state.movements.length === 0){
-      body.innerHTML = '<p class="empty-hint">Aún no hay movimientos registrados.</p>';
-      return;
+    var selected = state.historyCalendarSelectedDate;
+    var list = selected
+      ? state.movements.filter(function(m){ return m.type === 'venta' && localDateKey(m.at) === selected; })
+      : state.movements;
+    var html = historyCalendarHtml();
+    if(selected){
+      html += '<div class="hist-cal-filter-bar"><span>Ventas del ' + fmtDateOnly(selected) + ' (' + list.length + ')</span>' +
+        '<button class="hist-cal-clear" type="button" data-history-cal-clear>Ver todo el historial</button></div>';
     }
-    body.innerHTML = state.movements.map(function(m){ return historyItemHtml(m, state.confirmUndoId); }).join('');
+    html += list.length === 0
+      ? ('<p class="empty-hint">' + (selected ? 'No hubo ventas ese día.' : 'Aún no hay movimientos registrados.') + '</p>')
+      : list.map(function(m){ return historyItemHtml(m, state.confirmUndoId); }).join('');
+    body.innerHTML = html;
+    attachHistoryCalendarEvents();
     attachHistoryEvents();
   }
 
