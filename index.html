@@ -997,7 +997,7 @@ if ("serviceWorker" in navigator) {
   .new-fair-pick-row .nm .pres{color:var(--text-muted); font-size:11.5px;}
   .new-fair-pick-row input{width:100%; min-width:0; padding:6px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-family:inherit;}
   .imp-addline-search{width:100%; margin-bottom:10px; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-family:inherit;}
-  .new-fair-custom-row{display:grid; grid-template-columns:36px 1.5fr 90px 80px 32px; gap:8px; align-items:center; margin-bottom:8px; min-width:0;}
+  .new-fair-custom-row{display:grid; grid-template-columns:36px 1.3fr 80px 80px 80px 32px; gap:8px; align-items:center; margin-bottom:8px; min-width:0;}
   .new-fair-custom-row input{width:100%; min-width:0; padding:6px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-family:inherit;}
   .new-fair-custom-row > *{min-width:0;}
   .new-fair-custom-remove{border:none; background:none; color:var(--critical); font-size:16px; cursor:pointer;}
@@ -4613,6 +4613,7 @@ if ("serviceWorker" in navigator) {
         '<input type="file" accept="image/*" data-custom-photo-input="' + i + '" style="display:none"></label>' +
         '<input type="text" placeholder="Nombre (ej. Flask)" data-custom-field="name" data-custom-idx="' + i + '" value="' + esc(row.name||'') + '">' +
         '<input type="number" min="0" step="0.01" placeholder="Precio" data-custom-field="price" data-custom-idx="' + i + '" value="' + (row.price||'') + '">' +
+        '<input type="number" min="0" step="0.01" placeholder="Costo" data-custom-field="cost" data-custom-idx="' + i + '" value="' + (row.cost||'') + '" title="Costo unitario, para calcular rentabilidad">' +
         '<input type="number" min="0" step="1" placeholder="Cantidad" data-custom-field="qty" data-custom-idx="' + i + '" value="' + (row.qty||'') + '">' +
         '<button class="new-fair-custom-remove" data-remove-custom="' + i + '" type="button" aria-label="Quitar">✕</button>' +
         '</div>';
@@ -4634,8 +4635,19 @@ if ("serviceWorker" in navigator) {
   function saveCustomItemDefault(name, photoUrl){
     var key = customItemDefaultKey(name);
     if(!key || !photoUrl || !state.db) return;
-    state.db.doc('customItemDefaults/' + key).set({ name: (name||'').trim(), photoUrl: photoUrl })
+    state.db.doc('customItemDefaults/' + key).set({ name: (name||'').trim(), photoUrl: photoUrl }, { merge: true })
       .catch(function(err){ console.error('customItemDefaults set error:', err); });
+  }
+
+  // Recuerda el costo unitario de un ítem propio (ej. Flask) por nombre, para que la
+  // próxima vez que se agregue (en una nueva feria o reabasteciendo una activa) el
+  // campo de costo se rellene solo.
+  function saveCustomItemDefaultCost(name, cost){
+    var key = customItemDefaultKey(name);
+    var val = parseFloat(cost);
+    if(!key || !(val>0) || !state.db) return;
+    state.db.doc('customItemDefaults/' + key).set({ name: (name||'').trim(), costPerUnit: val }, { merge: true })
+      .catch(function(err){ console.error('customItemDefaults cost set error:', err); });
   }
 
   function attachCustomRowEvents(){
@@ -4647,9 +4659,9 @@ if ("serviceWorker" in navigator) {
         state.newFairCustom[idx][field] = el.value;
         if(field === 'name'){
           var row = state.newFairCustom[idx];
+          var key = customItemDefaultKey(el.value);
+          var def = key ? state.customItemDefaults[key] : null;
           if(!row.photoUrl){
-            var key = customItemDefaultKey(el.value);
-            var def = key ? state.customItemDefaults[key] : null;
             if(def && def.photoUrl){
               row.photoUrl = def.photoUrl;
               var rowEl = el.closest('.new-fair-custom-row');
@@ -4659,6 +4671,14 @@ if ("serviceWorker" in navigator) {
           } else {
             saveCustomItemDefault(el.value, row.photoUrl);
           }
+          if(!row.cost && def && def.costPerUnit){
+            row.cost = def.costPerUnit;
+            var costInputEl = document.querySelector('[data-custom-field="cost"][data-custom-idx="' + idx + '"]');
+            if(costInputEl) costInputEl.value = row.cost;
+          }
+        } else if(field === 'cost'){
+          var row2 = state.newFairCustom[idx];
+          if((row2.name||'').trim()) saveCustomItemDefaultCost(row2.name, el.value);
         }
       });
     });
@@ -4749,7 +4769,7 @@ if ("serviceWorker" in navigator) {
         });
         customs.forEach(function(c){
           writes.push(state.db.collection('fairCustomItems').add({
-            fairId: fairId, name: c.name.trim(), price: parseFloat(c.price)||0, plannedQty: parseInt(c.qty,10)||0,
+            fairId: fairId, name: c.name.trim(), price: parseFloat(c.price)||0, costPerUnit: parseFloat(c.cost)||0, plannedQty: parseInt(c.qty,10)||0,
             soldQty: 0, freeQty: 0, photoUrl: c.photoUrl || '', createdAt: nowIso
           }));
         });
@@ -5080,7 +5100,7 @@ if ("serviceWorker" in navigator) {
   // sin borrar y recrear toda la feria. Este popup reutiliza el mismo patrón que
   // "Reabastecer feria" para el stock de catálogo.
   function openFairCustomAddModal(fairId){
-    state.fairCustomAddModal = { fairId: fairId, name: '', price: '', qty: 1 };
+    state.fairCustomAddModal = { fairId: fairId, name: '', price: '', cost: '', costTouched: false, qty: 1 };
     document.getElementById('fairCustomAddModalScrim').classList.add('open');
     renderFairCustomAddModal();
   }
@@ -5116,13 +5136,27 @@ if ("serviceWorker" in navigator) {
     var existing = nameTrim ? fairCustomFor(m.fairId).filter(function(c){ return (c.name||'').trim().toLowerCase() === nameTrim.toLowerCase(); })[0] : null;
     var existingWrap = document.getElementById('fcaExistingWrap');
     if(existingWrap) existingWrap.innerHTML = existing ? ('<div class="fair-sale-remaining">Ya en esta feria: ' + fmtInt(existing.plannedQty||0) + ' u.</div>') : '';
+    if(!existing && !m.costTouched && nameTrim && !m.cost){
+      var defKey = customItemDefaultKey(nameTrim);
+      var def0 = defKey ? state.customItemDefaults[defKey] : null;
+      if(def0 && def0.costPerUnit) m.cost = def0.costPerUnit;
+    }
     var priceWrap = document.getElementById('fcaPriceWrap');
     if(priceWrap){
       var priceHtml = '<div class="field"><label>Precio unitario (USD)</label><input type="number" min="0" step="0.01" id="fcaPriceInput" placeholder="0.00" value="' + (m.price||'') + '"' + (existing?' disabled':'') + '></div>';
       if(existing) priceHtml += '<p class="hint" style="margin-top:-6px;">El precio ya quedó definido para este ítem; se ajusta desde la venta si hace falta.</p>';
+      var costVal = existing ? (existing.costPerUnit||0) : (m.cost||'');
+      priceHtml += '<div class="field"><label>Costo unitario (USD)</label><input type="number" min="0" step="0.01" id="fcaCostInput" placeholder="0.00" value="' + costVal + '"' + (existing?' disabled':'') + '></div>';
+      if(existing){
+        priceHtml += '<p class="hint" style="margin-top:-6px;">El costo ya quedó definido para este ítem.</p>';
+      } else if(nameTrim){
+        priceHtml += '<p class="hint" style="margin-top:-6px;">Se usa para calcular la rentabilidad de la feria. Se recuerda para la próxima vez que agregues "' + esc(nameTrim) + '".</p>';
+      }
       priceWrap.innerHTML = priceHtml;
       var priceInput = document.getElementById('fcaPriceInput');
       if(priceInput) priceInput.addEventListener('input', function(){ m.price = priceInput.value; });
+      var costInput = document.getElementById('fcaCostInput');
+      if(costInput) costInput.addEventListener('input', function(){ m.cost = costInput.value; m.costTouched = true; });
     }
   }
 
@@ -5149,6 +5183,7 @@ if ("serviceWorker" in navigator) {
     if(qty <= 0){ showStatus('Ingresa una cantidad válida.', true); return; }
     if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
     var price = parseFloat(m.price) || 0;
+    var cost = parseFloat(m.cost) || 0;
     var fairId = m.fairId;
     var existing = fairCustomFor(fairId).filter(function(c){ return (c.name||'').trim().toLowerCase() === name.toLowerCase(); })[0];
     var key = customItemDefaultKey(name);
@@ -5162,11 +5197,12 @@ if ("serviceWorker" in navigator) {
         promise = state.db.doc('fairCustomItems/' + existing.id).update({ plannedQty: (existing.plannedQty||0) + qty });
       } else {
         promise = state.db.collection('fairCustomItems').add({
-          fairId: fairId, name: name, price: price, plannedQty: qty, soldQty: 0, freeQty: 0,
+          fairId: fairId, name: name, price: price, costPerUnit: cost, plannedQty: qty, soldQty: 0, freeQty: 0,
           photoUrl: (def && def.photoUrl) || '', createdAt: new Date().toISOString()
         });
       }
       promise.then(function(){
+        if(!existing && cost>0) saveCustomItemDefaultCost(name, cost);
         showStatus('Feria reabastecida: +' + fmtInt(qty) + ' u. de ' + name + '.');
         closeFairCustomAddModal();
         render();
@@ -6062,7 +6098,7 @@ if ("serviceWorker" in navigator) {
     return html;
   }
 
-  function fairProfitabilityHtml(fairId, f, revenue, cogs, hasCustomItems){
+  function fairProfitabilityHtml(fairId, f, revenue, cogs, uncostedCustomNames){
     var standCost = f.standCost || 0;
     var otherCosts = fairCostsTotal(fairId);
     var cashOuts = fairCashOutsTotal(fairId);
@@ -6086,8 +6122,8 @@ if ("serviceWorker" in navigator) {
     } else {
       html += '<div class="fair-live-note cierre-mismatch-warn">Todavía no cubres los costos de la feria: faltan ' + fmtMoney(Math.abs(profit)) + '.</div>';
     }
-    if(hasCustomItems){
-      html += '<p class="hint" style="margin-top:6px;">No incluye el costo de tus ítems propios (ej. Flasks): no tienen un costo registrado en el sistema.</p>';
+    if(uncostedCustomNames && uncostedCustomNames.length){
+      html += '<p class="hint" style="margin-top:6px;">No incluye el costo de: ' + uncostedCustomNames.map(esc).join(', ') + ' (todavía no tienen un costo unitario registrado).</p>';
     }
     return html;
   }
@@ -6106,6 +6142,10 @@ if ("serviceWorker" in navigator) {
     var sachetCounts = {};
     var sachetRevenue = {};
     var customTotals = {};
+    var customCostByName = {};
+    fairCustomFor(fairId).forEach(function(c){
+      customCostByName[(c.name||'').trim().toLowerCase()] = c.costPerUnit || 0;
+    });
 
     sales.forEach(function(s){
       revenue += (s.total||0);
@@ -6144,6 +6184,7 @@ if ("serviceWorker" in navigator) {
         var t = customTotals[s.name] || {sold:0, free:0, revenue:0};
         t.sold += s.qty||0; t.revenue += s.total||0;
         customTotals[s.name] = t;
+        cogs += (s.qty||0) * (customCostByName[(s.name||'').trim().toLowerCase()] || 0);
       } else if(s.kind === 'flask_free'){
         var tn = customTotals[s.name] || {sold:0, free:0, revenue:0};
         tn.free += s.qty||0;
@@ -6192,7 +6233,10 @@ if ("serviceWorker" in navigator) {
       }).join('') +
       '</div>';
 
-    html += fairProfitabilityHtml(fairId, f, revenue, cogs, customNames.length>0);
+    var uncostedCustomNames = customNames.filter(function(name){
+      return !(customCostByName[(name||'').trim().toLowerCase()] > 0);
+    });
+    html += fairProfitabilityHtml(fairId, f, revenue, cogs, uncostedCustomNames);
 
     if(f.cierre){
       html += fairCierreReportHtml(f, revenue);
