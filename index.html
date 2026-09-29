@@ -2661,8 +2661,9 @@ if ("serviceWorker" in navigator) {
         showStatus(isDistribuidor ? 'Cuenta por cobrar a distribuidor agregada.' : 'Pago pendiente agregado.');
         state.pagoDestino = 'general';
         state.pagoDueDate = '';
-        state.pagoNameDraft = null;
-        state.pagoAmountDraft = null;
+        state.pagoNameDraft = '';
+        state.pagoAmountDraft = '';
+        render();
       }).catch(function(){ showStatus('No se pudo agregar.', true); }).then(function(){
         _addingPago = false;
         if(addBtnEl) addBtnEl.disabled = false;
