@@ -1465,8 +1465,13 @@ if ("serviceWorker" in navigator) {
         <option value="week">Esta semana</option>
         <option value="month">Este mes</option>
         <option value="year">Este año</option>
+        <option value="custom">Personalizado</option>
         <option value="all">Todo el historial cargado</option>
       </select>
+    </div>
+    <div class="mini-field-row" id="reportCustomRangeFields" style="display:none;">
+      <div class="mini-field"><label>Desde</label><input type="date" id="reportRangeStart"></div>
+      <div class="mini-field"><label>Hasta</label><input type="date" id="reportRangeEnd"></div>
     </div>
     <pre class="report-summary-box" id="reportSummaryBox">Cargando…</pre>
     <div class="modal-actions" style="justify-content:flex-start; flex-wrap:wrap;">
@@ -1927,6 +1932,29 @@ if ("serviceWorker" in navigator) {
     var yyyy = parts[0], mIdx = parseInt(parts[1],10)-1, dd = parseInt(parts[2],10);
     if(isNaN(mIdx) || isNaN(dd) || !MESES_ES[mIdx]) return '';
     return String(dd).padStart(2,'0') + '/' + MESES_ES[mIdx] + '/' + yyyy;
+  }
+  // Convierte un 'YYYY-MM-DD' (de un <input type="date">) a un Date LOCAL a medianoche, por
+  // la misma razon que fmtDateOnly evita "new Date(dateStr)": ese parseo interpreta la fecha
+  // en UTC y puede correr un dia segun el huso horario de quien mira.
+  function parseLocalDateStr(dateStr){
+    var parts = String(dateStr||'').split('-');
+    if(parts.length !== 3) return null;
+    var yyyy = parseInt(parts[0],10), mIdx = parseInt(parts[1],10)-1, dd = parseInt(parts[2],10);
+    if(isNaN(yyyy) || isNaN(mIdx) || isNaN(dd)) return null;
+    return new Date(yyyy, mIdx, dd);
+  }
+  // Si se elige "Personalizado" sin haber fijado antes un rango, arranca con los ultimos 7
+  // dias en vez de quedar vacio. Ranking > Ventas y el modal de Reportes comparten
+  // state.customRangeStart/End, asi el rango elegido en uno tambien queda listo en el otro.
+  function ensureCustomRangeDefaults(){
+    if(!state.customRangeStart || !state.customRangeEnd){
+      var end = new Date();
+      var start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 6);
+      if(!state.customRangeStart){
+        state.customRangeStart = start.getFullYear() + '-' + String(start.getMonth()+1).padStart(2,'0') + '-' + String(start.getDate()).padStart(2,'0');
+      }
+      if(!state.customRangeEnd) state.customRangeEnd = todayDateStr();
+    }
   }
   function presKey(pres){
     var p = (pres||'').toLowerCase();
@@ -4161,11 +4189,22 @@ if ("serviceWorker" in navigator) {
       start = new Date(now.getFullYear(), now.getMonth(), 1);
     } else if(period === 'year'){
       start = new Date(now.getFullYear(), 0, 1);
+    } else if(period === 'custom'){
+      var s = parseLocalDateStr(state.customRangeStart);
+      var e = parseLocalDateStr(state.customRangeEnd);
+      var end = e ? new Date(e.getFullYear(), e.getMonth(), e.getDate(), 23, 59, 59, 999) : now;
+      return { start: s, end: end };
     }
     return { start: start, end: now };
   }
 
   function periodLabel(period){
+    if(period === 'custom'){
+      if(state.customRangeStart && state.customRangeEnd){
+        return fmtDateOnly(state.customRangeStart) + ' – ' + fmtDateOnly(state.customRangeEnd);
+      }
+      return 'Personalizado';
+    }
     return {today:'Hoy', week:'Esta semana', month:'Este mes', year:'Este año', all:'Todo el historial cargado'}[period] || period;
   }
 
@@ -4315,15 +4354,40 @@ if ("serviceWorker" in navigator) {
     if(box) box.textContent = buildSummaryText(period);
   }
 
+  // Muestra/oculta los campos Desde/Hasta del modal de Reportes segun el periodo elegido, y
+  // los deja sincronizados con state.customRangeStart/End (el mismo rango que usa Ranking >
+  // Ventas, para no tener que elegir la fecha dos veces).
+  function syncReportCustomRangeUI(){
+    var period = document.getElementById('reportPeriod').value;
+    var wrap = document.getElementById('reportCustomRangeFields');
+    if(!wrap) return;
+    wrap.style.display = (period === 'custom') ? '' : 'none';
+    var s = document.getElementById('reportRangeStart');
+    var e = document.getElementById('reportRangeEnd');
+    if(s){ s.max = todayDateStr(); s.value = state.customRangeStart || ''; }
+    if(e){ e.max = todayDateStr(); e.value = state.customRangeEnd || ''; }
+  }
+
   document.getElementById('openReportBtn').addEventListener('click', function(){
     document.getElementById('reportModalScrim').classList.add('open');
     document.getElementById('reportSummaryBox').textContent = 'Cargando…';
+    syncReportCustomRangeUI();
     ensureExtendedMovements(renderReportPreview);
   });
   document.getElementById('reportCloseBtn').addEventListener('click', function(){
     document.getElementById('reportModalScrim').classList.remove('open');
   });
-  document.getElementById('reportPeriod').addEventListener('change', function(){
+  document.getElementById('reportPeriod').addEventListener('change', function(e){
+    if(e.target.value === 'custom') ensureCustomRangeDefaults();
+    syncReportCustomRangeUI();
+    ensureExtendedMovements(renderReportPreview);
+  });
+  document.getElementById('reportRangeStart').addEventListener('change', function(e){
+    state.customRangeStart = e.target.value;
+    ensureExtendedMovements(renderReportPreview);
+  });
+  document.getElementById('reportRangeEnd').addEventListener('change', function(e){
+    state.customRangeEnd = e.target.value;
     ensureExtendedMovements(renderReportPreview);
   });
   document.getElementById('copySummaryBtn').addEventListener('click', function(){
@@ -4345,6 +4409,8 @@ if ("serviceWorker" in navigator) {
 
   // ---------------- Ranking de más vendidos ----------------
   state.rankingPeriod = 'week';
+  state.customRangeStart = null; // 'YYYY-MM-DD', rango personalizado (Ranking > Ventas y modal de Reportes)
+  state.customRangeEnd = null;   // 'YYYY-MM-DD'
 
   function catColorVar(cat){
     return {ENDURANCE:'var(--cat-endurance-color)', HCF:'var(--cat-hcf-color)', RECOVERY:'var(--cat-recovery-color)'}[cat] || 'var(--text-muted)';
@@ -4378,6 +4444,34 @@ if ("serviceWorker" in navigator) {
     });
     var ranked = Object.keys(byProduct).map(function(k){ return byProduct[k]; }).sort(function(a,b){ return b.qty - a.qty; });
     return { totalUnits: totalUnits, byCategory: byCategory, ranked: ranked };
+  }
+
+  function computeSalesData(period){
+    var moves = movementsInPeriod(period).filter(function(m){ return m.type === 'venta'; });
+    var totalUnits = 0, totalRevenue = 0;
+    var byCategoryRevenue = {ENDURANCE:0, HCF:0, RECOVERY:0};
+    var byProduct = {};
+    moves.forEach(function(m){
+      var qty = movementUnits(m);
+      totalUnits += qty;
+      var product = m.productId ? findProduct(m.productId) : null;
+      var cat = product ? product.category : null;
+      var pvp = product ? (product.pvpPerUnit||0) : 0;
+      var revenue = qty * pvp;
+      totalRevenue += revenue;
+      if(cat && byCategoryRevenue.hasOwnProperty(cat)) byCategoryRevenue[cat] += revenue;
+      var key = m.productId || m.productLabel;
+      if(!byProduct[key]){
+        var cleanLabel = product ? (product.presentation + ' · ' + product.flavor) : (stripGraceTag(m.productLabel) || 'Producto');
+        byProduct[key] = { label: cleanLabel, qty: 0, revenue: 0, category: cat, photoUrl: product ? product.photoUrl : null };
+      }
+      byProduct[key].qty += qty;
+      byProduct[key].revenue += revenue;
+    });
+    var ranked = Object.keys(byProduct).map(function(k){ return byProduct[k]; }).sort(function(a,b){ return b.revenue - a.revenue; });
+    var salesCount = moves.length;
+    var avgTicket = salesCount > 0 ? (totalRevenue / salesCount) : 0;
+    return { totalUnits: totalUnits, totalRevenue: totalRevenue, byCategoryRevenue: byCategoryRevenue, ranked: ranked, salesCount: salesCount, avgTicket: avgTicket };
   }
 
   function computeClientRankingData(period){
@@ -4445,23 +4539,28 @@ if ("serviceWorker" in navigator) {
     return '<svg viewBox="0 0 150 150">' + segs + '</svg>';
   }
 
-  function buildDonutLegend(byCategory, totalUnits){
+  function buildDonutLegend(byCategory, totalUnits, fmtVal){
+    fmtVal = fmtVal || function(v){ return fmtInt(v) + ' u'; };
     var cats = [['ENDURANCE','Endurance'], ['HCF','HCF'], ['RECOVERY','Recovery']];
     return '<div class="donut-legend">' + cats.map(function(c){
       var val = byCategory[c[0]] || 0;
       var pct = totalUnits>0 ? Math.round(val/totalUnits*100) : 0;
-      return '<div class="donut-legend-item"><span class="donut-dot" style="background:'+catColorVar(c[0])+'"></span>' + c[1] + ' — ' + fmtInt(val) + ' u (' + pct + '%)</div>';
+      return '<div class="donut-legend-item"><span class="donut-dot" style="background:'+catColorVar(c[0])+'"></span>' + c[1] + ' — ' + fmtVal(val) + ' (' + pct + '%)</div>';
     }).join('') + '</div>';
   }
 
-  function buildRankingList(ranked){
+  function buildRankingList(ranked, opts){
+    opts = opts || {};
+    var valueKey = opts.valueKey || 'qty';
+    var fmtVal = opts.formatValue || function(v){ return fmtInt(v) + ' u'; };
     if(ranked.length === 0){
-      return '<p class="empty-hint">No hay ventas registradas en este periodo.</p>';
+      return '<p class="empty-hint">' + (opts.emptyText || 'No hay ventas registradas en este periodo.') + '</p>';
     }
-    var maxQty = ranked[0].qty || 1;
+    var maxVal = ranked[0][valueKey] || 1;
     var medals = ['🥇','🥈','🥉'];
     return '<div class="ranking-list">' + ranked.slice(0,10).map(function(r, i){
-      var pct = Math.max(4, Math.round(r.qty / maxQty * 100));
+      var val = r[valueKey] || 0;
+      var pct = Math.max(4, Math.round(val / maxVal * 100));
       var medal = medals[i] || ('#' + (i+1));
       var photoHtml = r.photoUrl ? ('<img class="ranking-photo" src="' + r.photoUrl + '" alt="">') : '<div class="ranking-photo-placeholder"></div>';
       return '<div class="ranking-row">' +
@@ -4469,7 +4568,7 @@ if ("serviceWorker" in navigator) {
         photoHtml +
         '<div class="ranking-info"><div class="ranking-name">' + esc(r.label) + '</div>' +
         '<div class="ranking-bar-track"><div class="ranking-bar-fill" style="width:' + pct + '%; background:' + catColorVar(r.category) + '"></div></div></div>' +
-        '<span class="ranking-qty num">' + fmtInt(r.qty) + ' u</span>' +
+        '<span class="ranking-qty num">' + fmtVal(val) + '</span>' +
         '</div>';
     }).join('') + '</div>';
   }
@@ -4482,10 +4581,17 @@ if ("serviceWorker" in navigator) {
     html += '<div class="ranking-view-toggle">' +
       '<button type="button" class="ranking-view-btn' + (view==='productos'?' active':'') + '" data-ranking-view="productos">Productos</button>' +
       '<button type="button" class="ranking-view-btn' + (view==='clientes'?' active':'') + '" data-ranking-view="clientes">Clientes</button>' +
+      '<button type="button" class="ranking-view-btn' + (view==='ventas'?' active':'') + '" data-ranking-view="ventas">Ventas</button>' +
       '</div>';
     html += '<div class="field ranking-period-field"><label for="rankingPeriod">Periodo</label><select id="rankingPeriod">' +
-      ['today','week','month','year','all'].map(function(p){ return '<option value="' + p + '"' + (p===period?' selected':'') + '>' + periodLabel(p) + '</option>'; }).join('') +
+      ['today','week','month','year','custom','all'].map(function(p){ return '<option value="' + p + '"' + (p===period?' selected':'') + '>' + (p==='custom'?'Personalizado':periodLabel(p)) + '</option>'; }).join('') +
       '</select></div>';
+    if(period === 'custom'){
+      html += '<div class="mini-field-row">' +
+        '<div class="mini-field"><label>Desde</label><input type="date" id="rankingRangeStart" value="' + esc(state.customRangeStart||'') + '" max="' + todayDateStr() + '"></div>' +
+        '<div class="mini-field"><label>Hasta</label><input type="date" id="rankingRangeEnd" value="' + esc(state.customRangeEnd||'') + '" max="' + todayDateStr() + '"></div>' +
+        '</div>';
+    }
     if(state.extMovementsLoading && !state.extMovements){
       html += '<p class="empty-hint">Cargando historial de ventas…</p></div>';
       root.innerHTML = html;
@@ -4494,6 +4600,21 @@ if ("serviceWorker" in navigator) {
     if(view === 'clientes'){
       var cdata = computeClientRankingData(period);
       html += '<div class="ranking-list-wrap"><h3 class="ranking-subhead">Top clientes</h3>' + buildClientRankingList(cdata.ranked) + '</div>';
+    } else if(view === 'ventas'){
+      var sdata = computeSalesData(period);
+      html += '<div class="kpis" style="margin-bottom:18px;">' +
+        '<div class="kpi kpi-ventas-totales"><div class="label">Ventas totales</div><div class="value num">' + fmtMoney(sdata.totalRevenue) + '</div></div>' +
+        '<div class="kpi"><div class="label">Unidades vendidas</div><div class="value num">' + fmtInt(sdata.totalUnits) + '</div></div>' +
+        '<div class="kpi"><div class="label">N° de ventas</div><div class="value num">' + fmtInt(sdata.salesCount) + '</div></div>' +
+        '<div class="kpi"><div class="label">Ticket promedio</div><div class="value num">' + fmtMoney(sdata.avgTicket) + '</div></div>' +
+        '</div>';
+      html += '<div class="ranking-layout">';
+      html += '<div class="donut-wrap"><div class="donut-svg-wrap">' + buildDonutSvg(sdata.byCategoryRevenue, sdata.totalRevenue) +
+        '<div class="donut-center"><div class="donut-center-num num">' + fmtMoney(sdata.totalRevenue) + '</div><div class="donut-center-label">vendido</div></div></div>' +
+        buildDonutLegend(sdata.byCategoryRevenue, sdata.totalRevenue, function(v){ return fmtMoney(v); }) + '</div>';
+      html += '<div class="ranking-list-wrap"><h3 class="ranking-subhead">Top productos por venta</h3>' +
+        buildRankingList(sdata.ranked, { valueKey:'revenue', formatValue: function(v){ return fmtMoney(v); }, emptyText:'No hay ventas registradas en este periodo.' }) + '</div>';
+      html += '</div>';
     } else {
       var data = computeRankingData(period);
       html += '<div class="ranking-layout">';
@@ -4507,8 +4628,13 @@ if ("serviceWorker" in navigator) {
     root.innerHTML = html;
     document.getElementById('rankingPeriod').addEventListener('change', function(e){
       state.rankingPeriod = e.target.value;
+      if(state.rankingPeriod === 'custom') ensureCustomRangeDefaults();
       render();
     });
+    var rStart = document.getElementById('rankingRangeStart');
+    var rEnd = document.getElementById('rankingRangeEnd');
+    if(rStart) rStart.addEventListener('change', function(e){ state.customRangeStart = e.target.value; render(); });
+    if(rEnd) rEnd.addEventListener('change', function(e){ state.customRangeEnd = e.target.value; render(); });
     Array.prototype.forEach.call(document.querySelectorAll('[data-ranking-view]'), function(btn){
       btn.addEventListener('click', function(){
         state.rankingView = btn.getAttribute('data-ranking-view');
