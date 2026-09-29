@@ -1718,6 +1718,7 @@ if ("serviceWorker" in navigator) {
     search: "",
     openRow: null,       // {id, mode: 'venta'|'reabastecer'}
     openGraceRow: null,  // {id, mode: 'venta'|'reabastecer'}
+    openGraceKebab: null, // id del item de Grace con el menu (Subir/Bajar) abierto
     openKebab: null,
     confirmUndoId: null,
     historyCalendarMonth: null, // 'YYYY-MM' que muestra el mini-calendario del Historial; null = mes actual
@@ -2240,6 +2241,28 @@ if ("serviceWorker" in navigator) {
   }
 
   // ---------------- Grace inventory ----------------
+  function moveGraceItem(gid, dir){
+    var g = findGraceItem(gid);
+    if(!g || !state.db) return;
+    var siblings = state.graceItems.filter(function(x){ return x.group === g.group; })
+      .slice().sort(function(a,b){ return (a.order||0) - (b.order||0); });
+    var idx = -1;
+    siblings.forEach(function(x,i){ if(x.id === gid) idx = i; });
+    var swapIdx = idx + dir;
+    if(idx < 0 || swapIdx < 0 || swapIdx >= siblings.length) return;
+    var other = siblings[swapIdx];
+    var orderA = g.order, orderB = other.order;
+    var batch = state.db.batch();
+    batch.update(state.db.doc('graceStock/' + g.id), { order: orderB });
+    batch.update(state.db.doc('graceStock/' + other.id), { order: orderA });
+    batch.commit().then(function(){
+      showStatus('Orden de Grace actualizado.');
+    }).catch(function(err){
+      console.error('moveGraceItem error:', err);
+      showStatus('No se pudo actualizar el orden.', true);
+    });
+  }
+
   function graceItemRowHtml(g){
     var openMode = (state.openGraceRow && state.openGraceRow.id === g.id) ? state.openGraceRow.mode : null;
     var linked = g.linkedProductId ? findProduct(g.linkedProductId) : null;
@@ -2255,7 +2278,15 @@ if ("serviceWorker" in navigator) {
     html += '<div class="p-actions">';
     html += '<button class="btn-sale-grace" data-gaction="venta" data-gid="' + g.id + '">Venta<span class="btn-sale-grace-sub">De Grace</span></button>';
     html += '<button class="btn-restock" data-gaction="reabastecer" data-gid="' + g.id + '">Reabastecer</button>';
+    html += '<button class="btn-kebab" data-gaction="kebab" data-gid="' + g.id + '" aria-label="Más opciones">⋯</button>';
     html += '</div>';
+
+    if(state.openGraceKebab === g.id){
+      html += '<div class="kebab-menu">' +
+        '<button data-gaction="move-up" data-gid="' + g.id + '">↑ Subir en la lista</button>' +
+        '<button data-gaction="move-down" data-gid="' + g.id + '">↓ Bajar en la lista</button>' +
+        '</div>';
+    }
 
     if(openMode){
       var isVenta = openMode === 'venta';
@@ -2344,6 +2375,16 @@ if ("serviceWorker" in navigator) {
       return;
     }
     if(action === 'cancel-move'){ state.openGraceRow = null; render(); return; }
+    if(action === 'kebab'){
+      state.openGraceKebab = (state.openGraceKebab === gid) ? null : gid;
+      render();
+      return;
+    }
+    if(action === 'move-up' || action === 'move-down'){
+      state.openGraceKebab = null;
+      moveGraceItem(gid, action === 'move-up' ? -1 : 1);
+      return;
+    }
     if(action === 'qty-inc' || action === 'qty-dec' || action === 'qty-set'){
       var input = document.getElementById('gqtyInput-' + gid);
       if(!input) return;
