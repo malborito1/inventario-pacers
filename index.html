@@ -561,6 +561,14 @@ if ("serviceWorker" in navigator) {
     background:none; border:none; text-align:left; padding:10px 14px; font-size:13px; cursor:pointer; color:var(--text);
   }
   .kebab-menu button:hover{background:var(--surface-2);}
+  .kebab-menu button.danger{color:var(--critical);}
+
+  .grace-delete-confirm{
+    grid-column:1/-1; margin-top:8px; padding:10px 14px; border-top:1px dashed var(--critical);
+    background:var(--critical-tint); border-radius:0 0 8px 8px;
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  }
+  .grace-delete-confirm span{font-size:12.5px; color:var(--critical); font-weight:600;}
 
   .inline-form{
     grid-column:1/-1; padding:10px 14px 4px 14px; border-top:1px dashed var(--border); margin-top:8px;
@@ -1718,7 +1726,8 @@ if ("serviceWorker" in navigator) {
     search: "",
     openRow: null,       // {id, mode: 'venta'|'reabastecer'}
     openGraceRow: null,  // {id, mode: 'venta'|'reabastecer'}
-    openGraceKebab: null, // id del item de Grace con el menu (Subir/Bajar) abierto
+    openGraceKebab: null, // id del item de Grace con el menu (Subir/Bajar/Eliminar) abierto
+    confirmDeleteGraceId: null, // id del item de Grace esperando confirmacion de "Eliminar"
     openKebab: null,
     confirmUndoId: null,
     historyCalendarMonth: null, // 'YYYY-MM' que muestra el mini-calendario del Historial; null = mes actual
@@ -2241,6 +2250,17 @@ if ("serviceWorker" in navigator) {
   }
 
   // ---------------- Grace inventory ----------------
+  function deleteGraceItem(gid){
+    if(!state.db) return;
+    state.db.doc('graceStock/' + gid).delete().then(function(){
+      state.confirmDeleteGraceId = null;
+      showStatus('Ítem de Grace eliminado.');
+    }).catch(function(err){
+      console.error('deleteGraceItem error:', err);
+      showStatus('No se pudo eliminar el ítem de Grace.', true);
+    });
+  }
+
   function moveGraceItem(gid, dir){
     var g = findGraceItem(gid);
     if(!g || !state.db) return;
@@ -2285,7 +2305,14 @@ if ("serviceWorker" in navigator) {
       html += '<div class="kebab-menu">' +
         '<button data-gaction="move-up" data-gid="' + g.id + '">↑ Subir en la lista</button>' +
         '<button data-gaction="move-down" data-gid="' + g.id + '">↓ Bajar en la lista</button>' +
+        '<button class="danger" data-gaction="delete" data-gid="' + g.id + '">🗑 Eliminar</button>' +
         '</div>';
+    }
+
+    if(state.confirmDeleteGraceId === g.id){
+      html += '<div class="grace-delete-confirm"><span>¿Eliminar "' + esc(g.label) + '" del inventario de Grace? Esta acción no se puede deshacer.</span>'
+        + '<button class="confirm-btn" data-gaction="confirm-delete" data-gid="' + g.id + '" style="background:var(--critical);">Sí, eliminar</button>'
+        + '<button class="cancel-btn" data-gaction="cancel-delete" data-gid="' + g.id + '">Cancelar</button></div>';
     }
 
     if(openMode){
@@ -2383,6 +2410,21 @@ if ("serviceWorker" in navigator) {
     if(action === 'move-up' || action === 'move-down'){
       state.openGraceKebab = null;
       moveGraceItem(gid, action === 'move-up' ? -1 : 1);
+      return;
+    }
+    if(action === 'delete'){
+      state.openGraceKebab = null;
+      state.confirmDeleteGraceId = gid;
+      render();
+      return;
+    }
+    if(action === 'cancel-delete'){
+      state.confirmDeleteGraceId = null;
+      render();
+      return;
+    }
+    if(action === 'confirm-delete'){
+      deleteGraceItem(gid);
       return;
     }
     if(action === 'qty-inc' || action === 'qty-dec' || action === 'qty-set'){
