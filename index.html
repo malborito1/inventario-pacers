@@ -441,6 +441,10 @@ if ("serviceWorker" in navigator) {
   .group-label.pres-sachets .pres-chip{background:var(--pres-sachets-tint); color:var(--pres-sachets-color);}
   .group-label.pres-15s .pres-chip{background:var(--pres-15s-tint); color:var(--pres-15s-color);}
   .group-label.pres-20s .pres-chip{background:var(--pres-20s-tint); color:var(--pres-20s-color);}
+  .grace-family-break{
+    grid-column:1 / -1; margin-top:10px; padding-top:8px; border-top:1px dashed var(--border);
+    font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted);
+  }
 
   .row-list{
     display:grid; grid-template-columns:repeat(2,1fr);
@@ -2303,7 +2307,16 @@ if ("serviceWorker" in navigator) {
       if(!items || !items.length) return;
       var presClass = grp === 'GRANDE' ? 'pres-30s' : (grp === 'SACHETS' ? 'pres-sachets' : 'pres-bulk');
       html += '<div class="group-label ' + presClass + '"><span class="pres-chip">' + grp + '</span></div><div class="row-list">';
-      items.forEach(function(g){ html += graceItemRowHtml(g); });
+      var prevCat = null;
+      items.forEach(function(g){
+        var linked = g.linkedProductId ? findProduct(g.linkedProductId) : null;
+        var cat = linked ? linked.category : null;
+        if(cat && prevCat && cat !== prevCat){
+          html += '<div class="grace-family-break">' + esc(CATEGORY_LABEL[cat] || cat) + '</div>';
+        }
+        if(cat) prevCat = cat;
+        html += graceItemRowHtml(g);
+      });
       html += '</div>';
     });
     html += '</div>';
