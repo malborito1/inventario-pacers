@@ -1042,6 +1042,12 @@ if ("serviceWorker" in navigator) {
   .cierre-prop-name{color:var(--text); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .cierre-prop-pct{font-family:'IBM Plex Mono', monospace; font-weight:600; color:var(--text-muted); flex:0 0 auto;}
   .supermaxi-note{font-size:12.5px; color:var(--supermaxi-color); background:var(--supermaxi-tint); border-radius:8px; padding:8px 12px; margin-bottom:14px;}
+  .supermaxi-sales-toggle{
+    display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-weight:600;
+    color:var(--supermaxi-color); background:var(--supermaxi-tint); border:1px solid var(--supermaxi-color);
+    padding:6px 12px; border-radius:8px; cursor:pointer; margin-bottom:14px;
+  }
+  .supermaxi-sales-toggle input{accent-color:var(--supermaxi-color); cursor:pointer;}
   .supermaxi-toolbar{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px;}
   .new-fair-picker{max-height:360px; overflow-y:auto; border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:14px;}
   .new-fair-pick-row{display:grid; grid-template-columns:1fr 90px; align-items:center; gap:10px; padding:6px 2px; min-width:0;}
@@ -1473,6 +1479,7 @@ if ("serviceWorker" in navigator) {
       <div class="mini-field"><label>Desde</label><input type="date" id="reportRangeStart"></div>
       <div class="mini-field"><label>Hasta</label><input type="date" id="reportRangeEnd"></div>
     </div>
+    <label class="supermaxi-sales-toggle"><input type="checkbox" id="reportIncludeSupermaxi" checked> 🏬 Incluir ventas de Supermaxi</label>
     <pre class="report-summary-box" id="reportSummaryBox">Cargando…</pre>
     <div class="modal-actions" style="justify-content:flex-start; flex-wrap:wrap;">
       <button class="confirm-btn" id="copySummaryBtn" type="button">📋 Copiar resumen</button>
@@ -4208,9 +4215,9 @@ if ("serviceWorker" in navigator) {
     return {today:'Hoy', week:'Esta semana', month:'Este mes', year:'Este año', all:'Todo el historial cargado'}[period] || period;
   }
 
-  function movementsInPeriod(period){
+  function filterMovementsByPeriod(movements, period){
     var range = periodRange(period);
-    return allMovements().filter(function(m){
+    return movements.filter(function(m){
       if(m.reversed) return false;
       if(!m.at) return false;
       var d = new Date(m.at);
@@ -4218,6 +4225,9 @@ if ("serviceWorker" in navigator) {
       if(d > range.end) return false;
       return true;
     });
+  }
+  function movementsInPeriod(period){
+    return filterMovementsByPeriod(allMovements(), period);
   }
 
   function numEC(n){ return (n||0).toLocaleString('es-EC', {minimumFractionDigits:2, maximumFractionDigits:2}); }
@@ -4232,17 +4242,13 @@ if ("serviceWorker" in navigator) {
   }
 
   function buildSummaryText(period){
-    var moves = movementsInPeriod(period).filter(function(m){ return m.type === 'venta'; });
+    var rows = collectSalesForPeriod(period);
     var totalUnits = 0, totalRevenue = 0;
     var byProduct = {};
-    moves.forEach(function(m){
-      var qty = movementUnits(m);
-      totalUnits += qty;
-      var product = m.productId ? findProduct(m.productId) : null;
-      var pvp = product ? (product.pvpPerUnit||0) : 0;
-      totalRevenue += qty * pvp;
-      var key = m.productLabel || 'Producto';
-      byProduct[key] = (byProduct[key]||0) + qty;
+    rows.forEach(function(r){
+      totalUnits += r.qty;
+      totalRevenue += r.qty * r.pvp;
+      byProduct[r.label] = (byProduct[r.label]||0) + r.qty;
     });
     var topEntries = Object.keys(byProduct).map(function(k){ return [k, byProduct[k]]; }).sort(function(a,b){ return b[1]-a[1]; });
     var top = topEntries.slice(0,3);
@@ -4252,7 +4258,7 @@ if ("serviceWorker" in navigator) {
     state.payments.filter(function(pg){ return pg.status !== 'paid'; }).forEach(function(pg){ pendingTotal += (pg.amount||0); });
 
     var lines = [];
-    lines.push('📊 Resumen Pacers Life – ' + periodLabel(period));
+    lines.push('📊 Resumen Pacers Life – ' + periodLabel(period) + (state.includeSupermaxiSales ? ' (incl. Supermaxi)' : ''));
     lines.push('Ventas: ' + fmtInt(totalUnits) + ' unidades · ' + fmtMoney(totalRevenue));
     if(top.length){
       lines.push('Top productos: ' + top.map(function(t){ return t[0] + ' (' + fmtInt(t[1]) + ' u)'; }).join(', '));
@@ -4366,6 +4372,8 @@ if ("serviceWorker" in navigator) {
     var e = document.getElementById('reportRangeEnd');
     if(s){ s.max = todayDateStr(); s.value = state.customRangeStart || ''; }
     if(e){ e.max = todayDateStr(); e.value = state.customRangeEnd || ''; }
+    var smToggle = document.getElementById('reportIncludeSupermaxi');
+    if(smToggle) smToggle.checked = state.includeSupermaxiSales;
   }
 
   document.getElementById('openReportBtn').addEventListener('click', function(){
@@ -4390,6 +4398,10 @@ if ("serviceWorker" in navigator) {
     state.customRangeEnd = e.target.value;
     ensureExtendedMovements(renderReportPreview);
   });
+  document.getElementById('reportIncludeSupermaxi').addEventListener('change', function(e){
+    state.includeSupermaxiSales = e.target.checked;
+    ensureExtendedMovements(renderReportPreview);
+  });
   document.getElementById('copySummaryBtn').addEventListener('click', function(){
     var period = document.getElementById('reportPeriod').value;
     copyToClipboard(buildSummaryText(period), 'Resumen copiado al portapapeles.');
@@ -4411,6 +4423,7 @@ if ("serviceWorker" in navigator) {
   state.rankingPeriod = 'week';
   state.customRangeStart = null; // 'YYYY-MM-DD', rango personalizado (Ranking > Ventas y modal de Reportes)
   state.customRangeEnd = null;   // 'YYYY-MM-DD'
+  state.includeSupermaxiSales = true; // si el $ de ventas (Ranking > Ventas y Reportes) suma tambien lo vendido en Supermaxi
 
   function catColorVar(cat){
     return {ENDURANCE:'var(--cat-endurance-color)', HCF:'var(--cat-hcf-color)', RECOVERY:'var(--cat-recovery-color)'}[cat] || 'var(--text-muted)';
@@ -4446,30 +4459,59 @@ if ("serviceWorker" in navigator) {
     return { totalUnits: totalUnits, byCategory: byCategory, ranked: ranked };
   }
 
+  // Ventas del periodo ya resueltas contra su catalogo de origen (inventario general o
+  // Supermaxi/La Favorita, que vive en una coleccion totalmente aparte), listas para sumar
+  // unidades e ingresos. state.includeSupermaxiSales decide si se agregan las de Supermaxi.
+  // La usan tanto Ranking > Ventas como el resumen del modal de Reportes, para no repetir en
+  // dos lugares la logica de "a que catalogo pertenece este movimiento".
+  function collectSalesForPeriod(period){
+    var rows = [];
+    movementsInPeriod(period).filter(function(m){ return m.type === 'venta'; }).forEach(function(m){
+      var product = m.productId ? findProduct(m.productId) : null;
+      rows.push({
+        qty: movementUnits(m),
+        pvp: product ? (product.pvpPerUnit||0) : 0,
+        category: product ? product.category : null,
+        label: product ? (product.presentation + ' · ' + product.flavor) : (stripGraceTag(m.productLabel) || 'Producto'),
+        photoUrl: product ? product.photoUrl : null,
+        key: (m.productId || m.productLabel) + '|main'
+      });
+    });
+    if(state.includeSupermaxiSales){
+      filterMovementsByPeriod(state.supermaxiMovements, period).filter(function(m){ return m.type === 'venta'; }).forEach(function(m){
+        var product = m.productId ? findSupermaxiProduct(m.productId) : null;
+        var baseLabel = product ? (product.presentation + ' · ' + product.flavor) : (m.productLabel || 'Producto');
+        rows.push({
+          qty: movementUnits(m),
+          pvp: product ? (product.pvpPerUnit||0) : 0,
+          category: product ? product.category : null,
+          label: baseLabel + ' (Supermaxi)',
+          photoUrl: product ? product.photoUrl : null,
+          key: (m.productId || m.productLabel) + '|supermaxi'
+        });
+      });
+    }
+    return rows;
+  }
+
   function computeSalesData(period){
-    var moves = movementsInPeriod(period).filter(function(m){ return m.type === 'venta'; });
+    var rows = collectSalesForPeriod(period);
     var totalUnits = 0, totalRevenue = 0;
     var byCategoryRevenue = {ENDURANCE:0, HCF:0, RECOVERY:0};
     var byProduct = {};
-    moves.forEach(function(m){
-      var qty = movementUnits(m);
-      totalUnits += qty;
-      var product = m.productId ? findProduct(m.productId) : null;
-      var cat = product ? product.category : null;
-      var pvp = product ? (product.pvpPerUnit||0) : 0;
-      var revenue = qty * pvp;
+    rows.forEach(function(r){
+      totalUnits += r.qty;
+      var revenue = r.qty * r.pvp;
       totalRevenue += revenue;
-      if(cat && byCategoryRevenue.hasOwnProperty(cat)) byCategoryRevenue[cat] += revenue;
-      var key = m.productId || m.productLabel;
-      if(!byProduct[key]){
-        var cleanLabel = product ? (product.presentation + ' · ' + product.flavor) : (stripGraceTag(m.productLabel) || 'Producto');
-        byProduct[key] = { label: cleanLabel, qty: 0, revenue: 0, category: cat, photoUrl: product ? product.photoUrl : null };
+      if(r.category && byCategoryRevenue.hasOwnProperty(r.category)) byCategoryRevenue[r.category] += revenue;
+      if(!byProduct[r.key]){
+        byProduct[r.key] = { label: r.label, qty: 0, revenue: 0, category: r.category, photoUrl: r.photoUrl };
       }
-      byProduct[key].qty += qty;
-      byProduct[key].revenue += revenue;
+      byProduct[r.key].qty += r.qty;
+      byProduct[r.key].revenue += revenue;
     });
     var ranked = Object.keys(byProduct).map(function(k){ return byProduct[k]; }).sort(function(a,b){ return b.revenue - a.revenue; });
-    var salesCount = moves.length;
+    var salesCount = rows.length;
     var avgTicket = salesCount > 0 ? (totalRevenue / salesCount) : 0;
     return { totalUnits: totalUnits, totalRevenue: totalRevenue, byCategoryRevenue: byCategoryRevenue, ranked: ranked, salesCount: salesCount, avgTicket: avgTicket };
   }
@@ -4602,6 +4644,7 @@ if ("serviceWorker" in navigator) {
       html += '<div class="ranking-list-wrap"><h3 class="ranking-subhead">Top clientes</h3>' + buildClientRankingList(cdata.ranked) + '</div>';
     } else if(view === 'ventas'){
       var sdata = computeSalesData(period);
+      html += '<label class="supermaxi-sales-toggle"><input type="checkbox" id="ventasIncludeSupermaxi"' + (state.includeSupermaxiSales?' checked':'') + '> 🏬 Incluir ventas de Supermaxi</label>';
       html += '<div class="kpis" style="margin-bottom:18px;">' +
         '<div class="kpi kpi-ventas-totales"><div class="label">Ventas totales</div><div class="value num">' + fmtMoney(sdata.totalRevenue) + '</div></div>' +
         '<div class="kpi"><div class="label">Unidades vendidas</div><div class="value num">' + fmtInt(sdata.totalUnits) + '</div></div>' +
@@ -4635,6 +4678,8 @@ if ("serviceWorker" in navigator) {
     var rEnd = document.getElementById('rankingRangeEnd');
     if(rStart) rStart.addEventListener('change', function(e){ state.customRangeStart = e.target.value; render(); });
     if(rEnd) rEnd.addEventListener('change', function(e){ state.customRangeEnd = e.target.value; render(); });
+    var supermaxiToggle = document.getElementById('ventasIncludeSupermaxi');
+    if(supermaxiToggle) supermaxiToggle.addEventListener('change', function(e){ state.includeSupermaxiSales = e.target.checked; render(); });
     Array.prototype.forEach.call(document.querySelectorAll('[data-ranking-view]'), function(btn){
       btn.addEventListener('click', function(){
         state.rankingView = btn.getAttribute('data-ranking-view');
