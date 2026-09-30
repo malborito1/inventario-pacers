@@ -4579,7 +4579,12 @@ if ("serviceWorker" in navigator) {
     if(!state.db){ callback(); return; }
     if(state.extMovements){ callback(); return; }
     state.extMovementsLoading = true;
-    state.db.collection('movements').orderBy('at','desc').limit(1000).get().then(function(snap){
+    // Sin limit(): antes se cortaba en las 1000 más recientes, lo cual
+    // excluía silenciosamente movimientos historicos antiguos (p.ej. enero-
+    // febrero 2025) de Ranking/Reportes una vez que la coleccion supero los
+    // 1000 documentos. Se trae la coleccion completa para que los calculos
+    // de Ranking/Reportes sean siempre exactos.
+    state.db.collection('movements').orderBy('at','desc').get().then(function(snap){
       state.extMovements = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
       state.extMovementsLoading = false;
       callback();
