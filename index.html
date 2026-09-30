@@ -780,8 +780,11 @@ if ("serviceWorker" in navigator) {
   .ranking-bar-fill{height:100%; border-radius:4px; min-width:4px;}
   .ranking-qty{font-size:13px; font-weight:700; color:var(--text); flex:0 0 auto; width:56px; text-align:right;}
   .ranking-qty-col{display:flex; flex-direction:column; align-items:flex-end; flex:0 0 auto; gap:1px;}
-  .ranking-qty-col .ranking-qty{width:auto;}
-  .ranking-revenue{font-size:11.5px; font-weight:600; color:var(--accent-strong); white-space:nowrap;}
+  /* En el ranking de Clientes el valor principal es el monto en dólares
+     (grande, verde) y las unidades quedan como dato secundario, más chico. */
+  .ranking-revenue{font-size:15px; font-weight:800; color:var(--success); white-space:nowrap;}
+  .ranking-client-units{font-size:11px; font-weight:600; color:var(--text-muted); white-space:nowrap;}
+  .ranking-client-search-field{margin:2px 0 14px; max-width:320px;}
   .ranking-view-toggle{
     display:inline-flex; gap:4px; background:var(--surface-2); padding:4px; border-radius:10px; margin-bottom:14px;
   }
@@ -2841,7 +2844,11 @@ if ("serviceWorker" in navigator) {
   // ---------------- Clientes ----------------
   function renderCliente(){
     var root = document.getElementById('categoriesRoot');
-    var entries = state.movements.filter(function(m){ return m.client && m.client.trim() && m.type === 'venta'; });
+    // !m.reversed: si una venta se deshizo desde el Historial (p.ej. porque
+    // se registró desde el producto equivocado y debía salir de Grace), el
+    // movimiento original queda marcado como revertido y no debe seguir
+    // apareciendo aquí como si esa cantidad se le hubiese vendido al cliente.
+    var entries = state.movements.filter(function(m){ return m.client && m.client.trim() && m.type === 'venta' && !m.reversed; });
     if(entries.length === 0){
       var emptyHtml = '<div class="category" data-cat="CLIENTE"><div class="category-head"><h2>Clientes</h2><span class="count">0 ventas con nombre registrado</span></div>';
       emptyHtml += '<p class="empty-hint">Aún no registras nombres de comprador en tus ventas. Usa el campo "Cliente" al registrar una venta.</p></div>';
@@ -5058,7 +5065,11 @@ if ("serviceWorker" in navigator) {
         byClient['__supermaxi__'] = { label: 'La Favorita (Supermaxi)', qty: smQty, orders: countSaleGroups(smMoves), revenue: smRevenue };
       }
     }
-    var ranked = Object.keys(byClient).map(function(k){ return byClient[k]; }).sort(function(a,b){ return b.qty - a.qty; });
+    // Ordenado por monto en dólares comprados (revenue), no por unidades: es
+    // el número que mejor refleja el valor real de cada cliente para el
+    // negocio (un cliente puede comprar pocas unidades de producto caro y
+    // valer más que uno que compra muchas unidades baratas).
+    var ranked = Object.keys(byClient).map(function(k){ return byClient[k]; }).sort(function(a,b){ return b.revenue - a.revenue; });
     return { totalUnits: totalUnits, totalRevenue: totalRevenue, ranked: ranked };
   }
 
@@ -5069,22 +5080,25 @@ if ("serviceWorker" in navigator) {
     return (parts[0][0] + parts[parts.length-1][0]).toUpperCase();
   }
 
-  function buildClientRankingList(ranked){
+  function buildClientRankingList(ranked, opts){
+    opts = opts || {};
+    var limit = opts.limit != null ? opts.limit : 10;
     if(ranked.length === 0){
-      return '<p class="empty-hint">No hay ventas con nombre de cliente registradas en este periodo.</p>';
+      return '<p class="empty-hint">' + (opts.emptyText || 'No hay ventas con nombre de cliente registradas en este periodo.') + '</p>';
     }
-    var maxQty = ranked[0].qty || 1;
+    // ranked ya viene ordenado por revenue desc (ver computeClientRankingData).
+    var maxRevenue = ranked[0].revenue || 1;
     var medals = ['🥇','🥈','🥉'];
-    return '<div class="ranking-list">' + ranked.slice(0,10).map(function(r, i){
-      var pct = Math.max(4, Math.round(r.qty / maxQty * 100));
+    return '<div class="ranking-list">' + ranked.slice(0, limit).map(function(r, i){
+      var pct = Math.max(4, Math.round((r.revenue||0) / maxRevenue * 100));
       var medal = medals[i] || ('#' + (i+1));
       return '<div class="ranking-row">' +
         '<span class="ranking-medal">' + medal + '</span>' +
         '<div class="ranking-avatar">' + esc(clientInitials(r.label)) + '</div>' +
         '<div class="ranking-info"><div class="ranking-name">' + esc(r.label) + '</div>' +
-        '<div class="ranking-bar-track"><div class="ranking-bar-fill" style="width:' + pct + '%; background:var(--accent-strong)"></div></div>' +
+        '<div class="ranking-bar-track"><div class="ranking-bar-fill" style="width:' + pct + '%; background:var(--success)"></div></div>' +
         '<div class="ranking-sub">' + fmtInt(r.orders) + (r.orders === 1 ? ' compra registrada' : ' compras registradas') + '</div></div>' +
-        '<div class="ranking-qty-col"><span class="ranking-qty num">' + fmtInt(r.qty) + ' u</span><span class="ranking-revenue num">' + fmtMoney(r.revenue) + '</span></div>' +
+        '<div class="ranking-qty-col"><span class="ranking-revenue num">' + fmtMoney(r.revenue) + '</span><span class="ranking-client-units num">' + fmtInt(r.qty) + ' u</span></div>' +
         '</div>';
     }).join('') + '</div>';
   }
@@ -5170,7 +5184,16 @@ if ("serviceWorker" in navigator) {
     if(view === 'clientes'){
       var cdata = computeClientRankingData(period);
       html += '<label class="supermaxi-sales-toggle"><input type="checkbox" id="ventasIncludeSupermaxi"' + (state.includeSupermaxiSales?' checked':'') + '> 🏬 Incluir ventas de Supermaxi</label>';
-      html += '<div class="ranking-list-wrap"><h3 class="ranking-subhead">Top clientes <span class="ranking-subhead-total num">' + fmtMoney(cdata.totalRevenue) + ' en total</span></h3>' + buildClientRankingList(cdata.ranked) + '</div>';
+      html += '<div class="mini-field ranking-client-search-field"><label for="rankingClientSearch">Buscar cliente</label>' +
+        '<input type="text" id="rankingClientSearch" list="rankingClientSearchList" autocomplete="off" placeholder="Nombre del cliente…" value="' + esc(state.rankingClientSearch||'') + '">' +
+        '<datalist id="rankingClientSearchList">' + cdata.ranked.map(function(r){ return '<option value="' + esc(r.label) + '">'; }).join('') + '</datalist></div>';
+      var clientSearchQ = (state.rankingClientSearch||'').trim().toLowerCase();
+      var clientFiltered = clientSearchQ ? cdata.ranked.filter(function(r){ return r.label.toLowerCase().indexOf(clientSearchQ) !== -1; }) : cdata.ranked;
+      var clientListOpts = clientSearchQ
+        ? { limit: clientFiltered.length, emptyText: 'No se encontraron clientes con ese nombre en este periodo.' }
+        : { limit: 10 };
+      html += '<div class="ranking-list-wrap"><h3 class="ranking-subhead">Top clientes <span class="ranking-subhead-total num">' + fmtMoney(cdata.totalRevenue) + ' en total</span></h3>' +
+        '<div id="rankingClientResultsBox">' + buildClientRankingList(clientFiltered, clientListOpts) + '</div></div>';
     } else if(view === 'ventas'){
       var sdata = computeSalesData(period);
       html += '<label class="supermaxi-sales-toggle"><input type="checkbox" id="ventasIncludeSupermaxi"' + (state.includeSupermaxiSales?' checked':'') + '> 🏬 Incluir ventas de Supermaxi</label>';
@@ -5209,6 +5232,21 @@ if ("serviceWorker" in navigator) {
     if(rEnd) rEnd.addEventListener('change', function(e){ state.customRangeEnd = e.target.value; render(); });
     var supermaxiToggle = document.getElementById('ventasIncludeSupermaxi');
     if(supermaxiToggle) supermaxiToggle.addEventListener('change', function(e){ state.includeSupermaxiSales = e.target.checked; render(); });
+    var clientSearchInput = document.getElementById('rankingClientSearch');
+    if(clientSearchInput){
+      // Solo se vuelve a pintar la lista de resultados (no toda la pestaña
+      // Ranking vía render()), para que el cursor no pierda el foco en cada
+      // letra que se escribe -- mismo patrón que el buscador de líneas al
+      // agregar un ítem a una importación (impAddLineSearch).
+      clientSearchInput.addEventListener('input', function(e){
+        state.rankingClientSearch = e.target.value;
+        var q = state.rankingClientSearch.trim().toLowerCase();
+        var filtered = q ? cdata.ranked.filter(function(r){ return r.label.toLowerCase().indexOf(q) !== -1; }) : cdata.ranked;
+        var opts = q ? { limit: filtered.length, emptyText: 'No se encontraron clientes con ese nombre en este periodo.' } : { limit: 10 };
+        var box = document.getElementById('rankingClientResultsBox');
+        if(box) box.innerHTML = buildClientRankingList(filtered, opts);
+      });
+    }
     Array.prototype.forEach.call(document.querySelectorAll('[data-ranking-view]'), function(btn){
       btn.addEventListener('click', function(){
         state.rankingView = btn.getAttribute('data-ranking-view');
