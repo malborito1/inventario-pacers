@@ -1980,9 +1980,15 @@ if ("serviceWorker" in navigator) {
     if(disc) parts.push(disc + '% desc.');
     document.getElementById('clientLabel').textContent = parts.join(' · ') + ' (' + agoText + ')';
   }
+  // allMovements(): usa state.extMovements (historial COMPLETO, sin el límite de
+  // 150 más recientes de state.movements) en cuanto está disponible -- así el
+  // autocompletado de cliente incluye a alguien a quien solo se le vendió hace
+  // meses (p.ej. importado de una factura histórica), no solo a los clientes de
+  // los últimos movimientos. Antes de que extMovements termine de cargar (los
+  // primeros segundos tras abrir la app) cae de vuelta a state.movements.
   function renderClientDatalist(){
     var seen = {};
-    state.movements.forEach(function(m){ if(m.client && m.client.trim()) seen[m.client.trim()] = true; });
+    allMovements().forEach(function(m){ if(m.client && m.client.trim()) seen[m.client.trim()] = true; });
     var dl = document.getElementById('clientNamesList');
     if(!dl) return;
     dl.innerHTML = Object.keys(seen).sort().map(function(n){ return '<option value="' + esc(n) + '">'; }).join('');
@@ -7946,6 +7952,13 @@ if ("serviceWorker" in navigator) {
       state.db = db;
       state.dbReady = true;
       showConnBanner(false);
+
+      // Carga el historial COMPLETO de movimientos (no solo los últimos 150) desde
+      // el arranque, para que el autocompletado de "Cliente" ya incluya a todo el
+      // que alguna vez se le vendió algo (incl. ventas históricas importadas) sin
+      // tener que abrir primero Ranking/Reportes, que es lo único que antes
+      // disparaba esta carga.
+      ensureExtendedMovements(renderClientDatalist);
 
       db.collection('products').orderBy('order').onSnapshot(function(snap){
         state.products = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
