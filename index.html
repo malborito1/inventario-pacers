@@ -768,6 +768,7 @@ if ("serviceWorker" in navigator) {
   .donut-dot{width:10px; height:10px; border-radius:50%; flex:0 0 auto;}
   .ranking-list-wrap{flex:1 1 320px; min-width:280px;}
   .ranking-subhead{font-size:15px; font-weight:700; margin:0 0 12px; color:var(--text);}
+  .ranking-subhead-total{font-size:12px; font-weight:600; color:var(--text-muted); margin-left:8px;}
   .ranking-list{display:flex; flex-direction:column; gap:10px;}
   .ranking-row{display:flex; align-items:center; gap:12px;}
   .ranking-medal{font-size:16px; width:22px; text-align:center; flex:0 0 auto;}
@@ -778,6 +779,9 @@ if ("serviceWorker" in navigator) {
   .ranking-bar-track{background:var(--surface-2); border-radius:4px; height:8px; overflow:hidden;}
   .ranking-bar-fill{height:100%; border-radius:4px; min-width:4px;}
   .ranking-qty{font-size:13px; font-weight:700; color:var(--text); flex:0 0 auto; width:56px; text-align:right;}
+  .ranking-qty-col{display:flex; flex-direction:column; align-items:flex-end; flex:0 0 auto; gap:1px;}
+  .ranking-qty-col .ranking-qty{width:auto;}
+  .ranking-revenue{font-size:11.5px; font-weight:600; color:var(--accent-strong); white-space:nowrap;}
   .ranking-view-toggle{
     display:inline-flex; gap:4px; background:var(--surface-2); padding:4px; border-radius:10px; margin-bottom:14px;
   }
@@ -4904,17 +4908,24 @@ if ("serviceWorker" in navigator) {
       return m.type === 'venta' && m.client && m.client.trim();
     });
     var byClient = {};
-    var totalUnits = 0;
+    var totalUnits = 0, totalRevenue = 0;
     moves.forEach(function(m){
       var qty = movementUnits(m);
+      // Valor estimado al precio de lista actual (mismo criterio que el resto del
+      // dashboard, ej. la pestaña Ventas). Para facturas históricas con descuento
+      // de distribuidor puede diferir un poco del monto real facturado.
+      var product = m.productId ? findProduct(m.productId) : null;
+      var revenue = qty * (product ? (product.pvpPerUnit || 0) : 0);
       totalUnits += qty;
+      totalRevenue += revenue;
       var key = m.client.trim();
-      if(!byClient[key]) byClient[key] = { label: key, qty: 0, orders: 0 };
+      if(!byClient[key]) byClient[key] = { label: key, qty: 0, orders: 0, revenue: 0 };
       byClient[key].qty += qty;
       byClient[key].orders += 1;
+      byClient[key].revenue += revenue;
     });
     var ranked = Object.keys(byClient).map(function(k){ return byClient[k]; }).sort(function(a,b){ return b.qty - a.qty; });
-    return { totalUnits: totalUnits, ranked: ranked };
+    return { totalUnits: totalUnits, totalRevenue: totalRevenue, ranked: ranked };
   }
 
   function clientInitials(name){
@@ -4939,7 +4950,7 @@ if ("serviceWorker" in navigator) {
         '<div class="ranking-info"><div class="ranking-name">' + esc(r.label) + '</div>' +
         '<div class="ranking-bar-track"><div class="ranking-bar-fill" style="width:' + pct + '%; background:var(--accent-strong)"></div></div>' +
         '<div class="ranking-sub">' + fmtInt(r.orders) + (r.orders === 1 ? ' compra registrada' : ' compras registradas') + '</div></div>' +
-        '<span class="ranking-qty num">' + fmtInt(r.qty) + ' u</span>' +
+        '<div class="ranking-qty-col"><span class="ranking-qty num">' + fmtInt(r.qty) + ' u</span><span class="ranking-revenue num">' + fmtMoney(r.revenue) + '</span></div>' +
         '</div>';
     }).join('') + '</div>';
   }
@@ -5024,7 +5035,7 @@ if ("serviceWorker" in navigator) {
     }
     if(view === 'clientes'){
       var cdata = computeClientRankingData(period);
-      html += '<div class="ranking-list-wrap"><h3 class="ranking-subhead">Top clientes</h3>' + buildClientRankingList(cdata.ranked) + '</div>';
+      html += '<div class="ranking-list-wrap"><h3 class="ranking-subhead">Top clientes <span class="ranking-subhead-total num">' + fmtMoney(cdata.totalRevenue) + ' en total</span></h3>' + buildClientRankingList(cdata.ranked) + '</div>';
     } else if(view === 'ventas'){
       var sdata = computeSalesData(period);
       html += '<label class="supermaxi-sales-toggle"><input type="checkbox" id="ventasIncludeSupermaxi"' + (state.includeSupermaxiSales?' checked':'') + '> 🏬 Incluir ventas de Supermaxi</label>';
