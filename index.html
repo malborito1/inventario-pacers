@@ -833,6 +833,11 @@ if ("serviceWorker" in navigator) {
   .modal-wide{max-width:640px;}
   .modal-xwide{max-width:980px;}
   .btn-histimport{border-color:#8a6d3b; color:#8a6d3b;}
+  .hist-batch-row{margin-bottom:12px;}
+  .hist-batch-row select{
+    background:var(--surface-2); border:1px solid var(--border); border-radius:6px;
+    color:var(--text); padding:4px 8px; font-size:13px; margin-left:6px;
+  }
   .hist-summary{
     display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px;
   }
@@ -1550,8 +1555,8 @@ if ("serviceWorker" in navigator) {
 
 <div class="modal-scrim" id="histImportModalScrim">
   <div class="modal modal-xwide">
-    <h3>Importar ventas históricas 2026</h3>
-    <p class="hint">Facturas y notas de venta a distribuidores emitidas antes de este dashboard (carpeta "Facturas Ventas 2026"). Se registran como ventas en el resumen y Ranking, con su fecha real de emisión, <b>sin tocar el stock actual</b>. Revisa cada línea antes de confirmar — esta acción no se puede deshacer desde aquí.</p>
+    <h3 id="histImportModalTitle">Importar ventas históricas</h3>
+    <p class="hint" id="histImportModalHint">Facturas y notas de venta a distribuidores emitidas antes de este dashboard. Se registran como ventas en el resumen y Ranking, con su fecha real de emisión, <b>sin tocar el stock actual</b>. Revisa cada línea antes de confirmar — esta acción no se puede deshacer desde aquí.</p>
     <div id="histImportBody">Cargando…</div>
     <div class="modal-actions">
       <button class="cancel-btn" id="histImportCloseBtn" type="button">Cerrar</button>
@@ -1871,11 +1876,9 @@ if ("serviceWorker" in navigator) {
     newImportName: '',
     confirmDeleteImportId: null,
 
-    // ---------------- Importar historico (facturas 2026 pre-dashboard) ----------------
-    histImportStagingRaw: undefined, // undefined = aun no se consulto Firestore; null = Firestore no tiene datos cargados; array = datos listos
-    histImportInvoices: null, // se arma la primera vez que se abre el modal, a partir de histImportStagingRaw
-    histImportDone: null,     // {at, by} si ya se corrio, o false si se confirmo que no; null = no se ha revisado aun
-    histImportRunning: false
+    // ---------------- Importar historico (facturas pre-dashboard, por anio) ----------------
+    histImportBatch: '2025', // lote actualmente seleccionado en el modal (ver HIST_IMPORT_BATCHES)
+    histImportData: {}       // { '2026': {stagingRaw, invoices, done, running}, '2025': {...} }, se llena on-demand via histBatchState()
   };
 
   try { state.userName = localStorage.getItem('pl_inv_user') || ""; } catch(e){}
@@ -3726,17 +3729,31 @@ if ("serviceWorker" in navigator) {
   // ---------------- Event delegation ----------------
   function findProduct(id){ return state.products.filter(function(p){ return p.id===id; })[0]; }
 
-  // ==================== Importar historico (facturas 2026) ====================
+  // ==================== Importar historico (facturas por anio) ====================
   // Datos ya parseados y normalizados fuera de linea (PDF -> texto -> match por
-  // codigo de barras contra el catalogo real) a partir de la carpeta "Facturas
-  // Ventas 2026" que Daniel comparto. Cada item trae category/flavor/presentation
+  // codigo de barras contra el catalogo real) a partir de cada carpeta "Facturas
+  // Ventas <anio>" que Daniel comparte. Cada item trae category/flavor/presentation
   // ya resueltos cuando fue posible (needs_review=false), o null + needs_review=true
   // cuando no se pudo interpretar con certeza y hace falta elegirlo a mano aqui.
-  // Los datos de las 83 facturas historicas (nombres de distribuidores, montos,
-  // fechas) NUNCA se embeben en este archivo publico: viven en el documento
-  // Firestore histImportStaging/facturas2026, cargado una sola vez por un admin
-  // real (ver histImportUploadStaging) y leido en tiempo de ejecucion.
+  // Los datos de las facturas historicas (nombres de distribuidores, montos,
+  // fechas) NUNCA se embeben en este archivo publico: viven en un documento
+  // Firestore histImportStaging/facturas<batch> por lote/anio, cargado una sola
+  // vez por un admin real (ver histImportUploadStaging) y leido en tiempo de
+  // ejecucion. Cada lote es independiente: importar/confirmar el lote 2025 no
+  // afecta ni puede volver a correr el lote 2026 (ya completado y bloqueado).
+  var HIST_IMPORT_BATCHES = ['2025', '2026'];
 
+  function histBatchState(batch){
+    if(!state.histImportData[batch]){
+      state.histImportData[batch] = {
+        stagingRaw: undefined, // undefined = aun no se consulto Firestore; null = Firestore no tiene datos cargados; array = datos listos
+        invoices: null,        // se arma la primera vez que se abre el modal, a partir de stagingRaw
+        done: null,            // {at, by} si ya se corrio, o false si se confirmo que no; null = no se ha revisado aun
+        running: false
+      };
+    }
+    return state.histImportData[batch];
+  }
 
   function resolveHistProduct(category, flavor, presentation){
     if(!category || !flavor || !presentation) return null;
@@ -3764,10 +3781,11 @@ if ("serviceWorker" in navigator) {
     return html;
   }
 
-  function initHistImportState(){
-    if(state.histImportInvoices) return;
-    if(!state.histImportStagingRaw) return; // aun no se cargaron los datos desde Firestore
-    state.histImportInvoices = state.histImportStagingRaw.map(function(raw, invIdx){
+  function initHistImportState(batch){
+    var bs = histBatchState(batch);
+    if(bs.invoices) return;
+    if(!bs.stagingRaw) return; // aun no se cargaron los datos desde Firestore
+    bs.invoices = bs.stagingRaw.map(function(raw, invIdx){
       var items = raw.items.map(function(it, itIdx){
         var matched = it.needs_review ? null : resolveHistProduct(it.category, it.flavor, it.presentation);
         return {
@@ -3796,8 +3814,8 @@ if ("serviceWorker" in navigator) {
     });
   }
 
-  function histImportSummary(){
-    var inv = state.histImportInvoices || [];
+  function histImportSummary(batch){
+    var inv = histBatchState(batch).invoices || [];
     var includedInv = inv.filter(function(x){ return x.included; });
     var totalItems = 0, pendingReview = 0, totalUnits = 0;
     includedInv.forEach(function(x){
@@ -3811,15 +3829,34 @@ if ("serviceWorker" in navigator) {
     return { includedCount: includedInv.length, totalCount: inv.length, totalItems: totalItems, totalUnits: totalUnits, pendingReview: pendingReview };
   }
 
+  function histBatchSelectHtml(){
+    if(HIST_IMPORT_BATCHES.length < 2) return '';
+    var html = '<div class="hist-batch-row"><label>Lote: <select id="histImportBatchSelect">';
+    HIST_IMPORT_BATCHES.forEach(function(b){
+      html += '<option value="' + b + '"' + (b===state.histImportBatch?' selected':'') + '>Facturas ' + b + '</option>';
+    });
+    html += '</select></label></div>';
+    return html;
+  }
+
   function renderHistImportModal(){
     var box = document.getElementById('histImportBody');
     if(!box) return;
-    if(state.histImportStagingRaw === undefined){
-      box.innerHTML = 'Cargando…';
+    var batch = state.histImportBatch;
+    var bs = histBatchState(batch);
+    var titleEl = document.getElementById('histImportModalTitle');
+    if(titleEl) titleEl.textContent = 'Importar ventas históricas ' + batch;
+    var hintEl = document.getElementById('histImportModalHint');
+    if(hintEl) hintEl.innerHTML = 'Facturas y notas de venta a distribuidores emitidas antes de este dashboard (carpeta "Facturas Ventas ' + batch + '"). Se registran como ventas en el resumen y Ranking, con su fecha real de emisión, <b>sin tocar el stock actual</b>. Revisa cada línea antes de confirmar — esta acción no se puede deshacer desde aquí.';
+    var batchSelectHtml = histBatchSelectHtml();
+    if(bs.stagingRaw === undefined){
+      box.innerHTML = batchSelectHtml + 'Cargando…';
+      document.getElementById('histImportConfirmBtn').style.display = 'none';
       return;
     }
-    if(!state.histImportStagingRaw){
-      box.innerHTML = '<p class="hint">Todavía no se cargaron los datos de las facturas históricas a la base de datos. '
+    if(!bs.stagingRaw){
+      box.innerHTML = batchSelectHtml
+        + '<p class="hint">Todavía no se cargaron los datos de las facturas históricas ' + batch + ' a la base de datos. '
         + 'Selecciona el archivo <code>hist_import_data.json</code> (una sola vez) para continuar.</p>'
         + '<input type="file" id="histImportUploadInput" accept="application/json">'
         + '<div class="modal-actions" style="justify-content:flex-start;"><button class="confirm-btn" id="histImportUploadBtn" type="button">⬆️ Cargar datos a la base de datos</button></div>';
@@ -3829,16 +3866,16 @@ if ("serviceWorker" in navigator) {
       return;
     }
     document.getElementById('histImportConfirmBtn').style.display = '';
-    if(state.histImportDone){
-      box.innerHTML = '<div class="hist-done-banner">✅ Esta importación ya se realizó el '
-        + esc(new Date(state.histImportDone.at).toLocaleString('es-EC')) + ' por ' + esc(state.histImportDone.by)
+    if(bs.done){
+      box.innerHTML = batchSelectHtml + '<div class="hist-done-banner">✅ Esta importación ya se realizó el '
+        + esc(new Date(bs.done.at).toLocaleString('es-EC')) + ' por ' + esc(bs.done.by)
         + '. Para evitar duplicar ventas, no se puede volver a correr desde aquí.</div>';
       document.getElementById('histImportConfirmBtn').style.display = 'none';
       return;
     }
-    initHistImportState();
-    var s = histImportSummary();
-    var html = '<div class="hist-summary">'
+    initHistImportState(batch);
+    var s = histImportSummary(batch);
+    var html = batchSelectHtml + '<div class="hist-summary">'
       + '<div class="hs-item"><b>' + s.includedCount + ' / ' + s.totalCount + '</b>facturas incluidas</div>'
       + '<div class="hs-item"><b>' + s.totalItems + '</b>líneas a registrar</div>'
       + '<div class="hs-item"><b>' + fmtInt(s.totalUnits) + '</b>unidades totales</div>'
@@ -3848,7 +3885,7 @@ if ("serviceWorker" in navigator) {
       + '<button class="btn-history" type="button" data-hist-toggle-all="1">Marcar todas</button>'
       + '<button class="btn-history" type="button" data-hist-toggle-all="0">Desmarcar todas</button>'
       + '</div>';
-    state.histImportInvoices.forEach(function(inv, idx){
+    bs.invoices.forEach(function(inv, idx){
       html += '<div class="hist-invoice' + (inv.open?' open':'') + (inv.included?'':' excluded') + '" data-hi-idx="' + idx + '">';
       html += '<div class="hist-invoice-head" data-hi-head="' + idx + '">';
       html += '<input type="checkbox" data-hi-include="' + idx + '"' + (inv.included?' checked':'') + ' onclick="event.stopPropagation()">';
@@ -3880,42 +3917,49 @@ if ("serviceWorker" in navigator) {
       var head = e.target.closest('[data-hi-head]');
       if(head && !e.target.closest('input')){
         var idx = parseInt(head.getAttribute('data-hi-head'), 10);
-        state.histImportInvoices[idx].open = !state.histImportInvoices[idx].open;
+        histBatchState(state.histImportBatch).invoices[idx].open = !histBatchState(state.histImportBatch).invoices[idx].open;
         renderHistImportModal();
         return;
       }
       var toggleAll = e.target.closest('[data-hist-toggle-all]');
       if(toggleAll){
         var val = toggleAll.getAttribute('data-hist-toggle-all') === '1';
-        state.histImportInvoices.forEach(function(inv){ inv.included = val; });
+        histBatchState(state.histImportBatch).invoices.forEach(function(inv){ inv.included = val; });
         renderHistImportModal();
       }
     });
     box.addEventListener('change', function(e){
+      var batchSel = e.target.closest('#histImportBatchSelect');
+      if(batchSel){
+        state.histImportBatch = batchSel.value;
+        box.innerHTML = 'Cargando…';
+        loadHistBatchIfNeeded(state.histImportBatch).then(renderHistImportModal);
+        return;
+      }
       var chk = e.target.closest('[data-hi-include]');
       if(chk){
         var idx = parseInt(chk.getAttribute('data-hi-include'), 10);
-        state.histImportInvoices[idx].included = chk.checked;
+        histBatchState(state.histImportBatch).invoices[idx].included = chk.checked;
         renderHistImportModal();
         return;
       }
       var nameInput = e.target.closest('[data-hi-name]');
       if(nameInput){
         var idx2 = parseInt(nameInput.getAttribute('data-hi-name'), 10);
-        state.histImportInvoices[idx2].distribuidor = nameInput.value;
+        histBatchState(state.histImportBatch).invoices[idx2].distribuidor = nameInput.value;
         return;
       }
       var dateInput = e.target.closest('[data-hi-date]');
       if(dateInput){
         var idx3 = parseInt(dateInput.getAttribute('data-hi-date'), 10);
-        state.histImportInvoices[idx3].fecha = dateInput.value;
+        histBatchState(state.histImportBatch).invoices[idx3].fecha = dateInput.value;
         return;
       }
       var sel = e.target.closest('[data-hi-item]');
       if(sel){
         var parts = sel.getAttribute('data-hi-item').split('|');
         var invIdx = parseInt(parts[0], 10), itIdx = parseInt(parts[1], 10);
-        var item = state.histImportInvoices[invIdx].items[itIdx];
+        var item = histBatchState(state.histImportBatch).invoices[invIdx].items[itIdx];
         item.productId = sel.value || null;
         item.skip = !sel.value;
         renderHistImportModal();
@@ -3927,18 +3971,19 @@ if ("serviceWorker" in navigator) {
     var input = document.getElementById('histImportUploadInput');
     var file = input && input.files && input.files[0];
     if(!file){ showStatus('Elige primero el archivo hist_import_data.json.', true); return; }
+    var batchId = state.histImportBatch;
     ensureUser(function(){
       var reader = new FileReader();
       reader.onload = function(){
         var parsed;
         try { parsed = JSON.parse(reader.result); }
         catch(e){ showStatus('Ese archivo no es un JSON válido.', true); return; }
-        state.db.doc('histImportStaging/facturas2026').set({
+        state.db.doc('histImportStaging/facturas' + batchId).set({
           invoices: parsed,
           uploadedAt: new Date().toISOString(),
           uploadedBy: state.userName
         }).then(function(){
-          state.histImportStagingRaw = parsed;
+          histBatchState(batchId).stagingRaw = parsed;
           showStatus('Datos cargados: ' + parsed.length + ' facturas.');
           renderHistImportModal();
         }).catch(function(){
@@ -3950,8 +3995,10 @@ if ("serviceWorker" in navigator) {
   }
 
   function histImportConfirm(){
-    if(state.histImportRunning) return;
-    var s = histImportSummary();
+    var batchId = state.histImportBatch;
+    var bs = histBatchState(batchId);
+    if(bs.running) return;
+    var s = histImportSummary(batchId);
     if(s.pendingReview > 0){
       showStatus('Todavía hay ' + s.pendingReview + ' línea(s) sin producto asignado. Elige un producto o "Omitir esta línea" antes de confirmar.', true);
       return;
@@ -3962,10 +4009,10 @@ if ("serviceWorker" in navigator) {
     }
     if(!window.confirm('Vas a registrar ' + s.totalItems + ' líneas de venta histórica (' + s.includedCount + ' facturas), sin tocar el stock actual. Esto no se puede deshacer desde aquí. ¿Confirmas?')) return;
     ensureUser(function(){
-      state.histImportRunning = true;
+      bs.running = true;
       renderHistImportModal();
       var docs = [];
-      state.histImportInvoices.forEach(function(inv){
+      bs.invoices.forEach(function(inv){
         if(!inv.included) return;
         inv.items.forEach(function(it){
           if(it.skip || !it.productId) return;
@@ -3982,7 +4029,7 @@ if ("serviceWorker" in navigator) {
             client: (inv.distribuidor || '').trim(),
             note: 'Venta histórica importada' + (inv.numero ? (' · Factura/Nota #' + inv.numero) : '') + ' (' + inv.file + ')',
             historical: true,
-            source: 'facturas_2026_import'
+            source: 'facturas_' + batchId + '_import'
           });
         });
       });
@@ -3992,24 +4039,24 @@ if ("serviceWorker" in navigator) {
       var chain = Promise.resolve();
       chunks.forEach(function(chunk){
         chain = chain.then(function(){
-          var batch = state.db.batch();
+          var fbBatch = state.db.batch();
           chunk.forEach(function(d){
             var ref = state.db.collection('movements').doc();
-            batch.set(ref, d);
+            fbBatch.set(ref, d);
           });
-          return batch.commit();
+          return fbBatch.commit();
         });
       });
       chain.then(function(){
         var meta = { at: new Date().toISOString(), by: state.userName, count: docs.length };
-        return state.db.doc('meta/historicalImport2026').set(meta).then(function(){ return meta; });
+        return state.db.doc('meta/historicalImport' + batchId).set(meta).then(function(){ return meta; });
       }).then(function(meta){
-        state.histImportDone = meta;
-        state.histImportRunning = false;
+        bs.done = meta;
+        bs.running = false;
         showStatus('Importación completa: ' + docs.length + ' ventas históricas registradas.');
         renderHistImportModal();
       }).catch(function(err){
-        state.histImportRunning = false;
+        bs.running = false;
         showStatus('No se pudo completar la importación. Intenta de nuevo.', true);
         renderHistImportModal();
       });
@@ -4783,21 +4830,25 @@ if ("serviceWorker" in navigator) {
     copyToClipboard(buildGraceSummaryText(), 'Resumen de Grace copiado. Pégalo en WhatsApp.');
   });
 
-  // ---------------- Importar historico (facturas 2026) ----------------
+  // ---------------- Importar historico (facturas por anio) ----------------
+  function loadHistBatchIfNeeded(batchId){
+    var bs = histBatchState(batchId);
+    var needStaging = bs.stagingRaw === undefined && state.db;
+    var needDone = bs.done === null && state.db;
+    return Promise.all([
+      needStaging ? state.db.doc('histImportStaging/facturas' + batchId).get().then(function(doc){
+        bs.stagingRaw = doc.exists ? (doc.data().invoices || null) : null;
+      }).catch(function(){ bs.stagingRaw = null; }) : Promise.resolve(),
+      needDone ? state.db.doc('meta/historicalImport' + batchId).get().then(function(doc){
+        bs.done = doc.exists ? doc.data() : false;
+      }).catch(function(){ bs.done = false; }) : Promise.resolve()
+    ]);
+  }
   document.getElementById('openHistImportBtn').addEventListener('click', function(){
     document.getElementById('histImportModalScrim').classList.add('open');
     wireHistImportBody();
     document.getElementById('histImportBody').innerHTML = 'Cargando…';
-    var needStaging = state.histImportStagingRaw === undefined && state.db;
-    var needDone = state.histImportDone === null && state.db;
-    Promise.all([
-      needStaging ? state.db.doc('histImportStaging/facturas2026').get().then(function(doc){
-        state.histImportStagingRaw = doc.exists ? (doc.data().invoices || null) : null;
-      }).catch(function(){ state.histImportStagingRaw = null; }) : Promise.resolve(),
-      needDone ? state.db.doc('meta/historicalImport2026').get().then(function(doc){
-        state.histImportDone = doc.exists ? doc.data() : false;
-      }).catch(function(){ state.histImportDone = false; }) : Promise.resolve()
-    ]).then(function(){
+    loadHistBatchIfNeeded(state.histImportBatch).then(function(){
       renderHistImportModal();
     });
   });
