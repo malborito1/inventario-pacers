@@ -4928,6 +4928,23 @@ if ("serviceWorker" in navigator) {
       byClient[key].orders += 1;
       byClient[key].revenue += revenue;
     });
+    if(state.includeSupermaxiSales){
+      var smMoves = filterMovementsByPeriod(state.supermaxiMovements, period).filter(function(m){ return m.type === 'venta'; });
+      if(smMoves.length){
+        var smEntry = { label: 'La Favorita (Supermaxi)', qty: 0, orders: 0, revenue: 0 };
+        smMoves.forEach(function(m){
+          var smQty = movementUnits(m);
+          var smProduct = m.productId ? findSupermaxiProduct(m.productId) : null;
+          var smRevenue = smQty * (smProduct ? (smProduct.pvpPerUnit || 0) : 0);
+          smEntry.qty += smQty;
+          smEntry.orders += 1;
+          smEntry.revenue += smRevenue;
+          totalUnits += smQty;
+          totalRevenue += smRevenue;
+        });
+        byClient['__supermaxi__'] = smEntry;
+      }
+    }
     var ranked = Object.keys(byClient).map(function(k){ return byClient[k]; }).sort(function(a,b){ return b.qty - a.qty; });
     return { totalUnits: totalUnits, totalRevenue: totalRevenue, ranked: ranked };
   }
@@ -5039,6 +5056,7 @@ if ("serviceWorker" in navigator) {
     }
     if(view === 'clientes'){
       var cdata = computeClientRankingData(period);
+      html += '<label class="supermaxi-sales-toggle"><input type="checkbox" id="ventasIncludeSupermaxi"' + (state.includeSupermaxiSales?' checked':'') + '> 🏬 Incluir ventas de Supermaxi</label>';
       html += '<div class="ranking-list-wrap"><h3 class="ranking-subhead">Top clientes <span class="ranking-subhead-total num">' + fmtMoney(cdata.totalRevenue) + ' en total</span></h3>' + buildClientRankingList(cdata.ranked) + '</div>';
     } else if(view === 'ventas'){
       var sdata = computeSalesData(period);
