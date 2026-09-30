@@ -4938,6 +4938,10 @@ if ("serviceWorker" in navigator) {
         rows.push({
           qty: movementUnits(m),
           pvp: product ? (product.pvpPerUnit||0) : 0,
+          // m.revenue: monto real facturado a Supermaxi (cuando se corrigió a mano
+          // contra la factura real). Si no existe, se calcula qty × precio de
+          // lista actual del catálogo de Supermaxi, igual que antes.
+          revenue: (m.revenue != null ? m.revenue : null),
           category: product ? product.category : null,
           label: baseLabel + ' (Supermaxi)',
           photoUrl: product ? product.photoUrl : null,
@@ -5058,7 +5062,12 @@ if ("serviceWorker" in navigator) {
           var q = movementUnits(m);
           var smProduct = m.productId ? findSupermaxiProduct(m.productId) : null;
           smQty += q;
-          smRevenue += q * (smProduct ? (smProduct.pvpPerUnit || 0) : 0);
+          // m.revenue: monto real facturado (corregido a mano contra la factura
+          // real de Supermaxi). El precio de catálogo × cantidad es solo un
+          // estimado -- puede diferir un poco del monto real por redondeo del
+          // precio unitario guardado (2 decimales) contra el precio por caja
+          // que de verdad se factura.
+          smRevenue += (m.revenue != null ? m.revenue : (q * (smProduct ? (smProduct.pvpPerUnit || 0) : 0)));
         });
         totalUnits += smQty;
         totalRevenue += smRevenue;
@@ -7528,7 +7537,7 @@ if ("serviceWorker" in navigator) {
         tx.update(productRef, { stock: newStock, lastMovementAt: nowIso, lastMovementBy: state.userName });
       });
     }).then(function(){
-      return state.db.collection('supermaxiMovements').add({
+      var doc = {
         productId: product.id,
         productLabel: product.presentation + ' · ' + product.flavor,
         type: type,
@@ -7538,7 +7547,14 @@ if ("serviceWorker" in navigator) {
         user: state.userName,
         client: client || '',
         note: note || ''
-      });
+      };
+      // Se guarda el precio de catálogo vigente AL MOMENTO de la venta. Así, si
+      // el precio de este producto cambia después, las ventas ya registradas
+      // no cambian de monto retroactivamente en Ranking/Reportes.
+      if(type === 'venta'){
+        doc.revenue = Math.abs(actualDelta) * (product.pvpPerUnit || 0);
+      }
+      return state.db.collection('supermaxiMovements').add(doc);
     }).then(function(){
       var moved = Math.abs(actualDelta);
       var extraNote = (type === 'venta' && moved < qty) ? (' (se ajustó a ' + moved + ' u. porque no había más stock)') : '';
