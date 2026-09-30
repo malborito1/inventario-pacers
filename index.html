@@ -827,6 +827,56 @@ if ("serviceWorker" in navigator) {
     white-space:pre-wrap; max-height:180px; overflow-y:auto; margin:0 0 14px;
   }
   .modal-wide{max-width:640px;}
+  .modal-xwide{max-width:980px;}
+  .btn-histimport{border-color:#8a6d3b; color:#8a6d3b;}
+  .hist-summary{
+    display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px;
+  }
+  .hist-summary .hs-item{
+    background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+    padding:8px 12px; font-size:12.5px; color:var(--text-muted);
+  }
+  .hist-summary .hs-item b{color:var(--text); font-size:14px; display:block;}
+  .hist-done-banner{
+    background:var(--surface-2); border:1px solid var(--success); color:var(--success);
+    border-radius:8px; padding:12px 14px; font-size:13.5px; margin-bottom:14px;
+  }
+  .hist-invoice{
+    border:1px solid var(--border); border-radius:10px; margin-bottom:10px; overflow:hidden;
+  }
+  .hist-invoice.excluded{opacity:.55;}
+  .hist-invoice-head{
+    display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--surface-2);
+    cursor:pointer; flex-wrap:wrap;
+  }
+  .hist-invoice-head input[type=checkbox]{width:18px; height:18px; flex:none;}
+  .hist-invoice-head .hi-name{
+    font-weight:700; font-size:13.5px; border:1px solid transparent; background:transparent;
+    color:var(--text); padding:2px 4px; border-radius:6px; width:200px;
+  }
+  .hist-invoice-head .hi-name:focus{border-color:var(--border); background:var(--surface);}
+  .hist-invoice-head .hi-date{
+    font-size:12.5px; border:1px solid var(--border); border-radius:6px; padding:3px 6px; background:var(--surface);
+  }
+  .hist-invoice-head .hi-file{font-size:11.5px; color:var(--text-muted); flex:1; min-width:120px;}
+  .hist-invoice-head .hi-total{font-size:12.5px; color:var(--text-muted); font-weight:600;}
+  .hist-dup-badge{
+    background:var(--warning); color:#fff; font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px;
+  }
+  .hist-items{padding:8px 12px; display:none;}
+  .hist-invoice.open .hist-items{display:block;}
+  .hist-item-row{
+    display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px dashed var(--border); font-size:12.5px;
+  }
+  .hist-item-row:last-child{border-bottom:none;}
+  .hist-item-row .hi-desc{flex:1.4; color:var(--text-muted);}
+  .hist-item-row .hi-qty{width:50px; text-align:right; font-weight:700;}
+  .hist-item-row select{
+    flex:1; font-size:12px; padding:4px 6px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text);
+  }
+  .hist-item-row.needs-review select, .hist-item-row.needs-review{background:color-mix(in srgb, var(--critical) 10%, transparent);}
+  .hist-item-row .hi-skip{font-size:11px; color:var(--text-muted); white-space:nowrap;}
+  .hist-toggle-all-row{display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;}
 
   /* ---------- Pantalla de acceso (PIN) ---------- */
   .pin-gate{
@@ -1287,6 +1337,7 @@ if ("serviceWorker" in navigator) {
       <button class="btn-history btn-restock-general" id="openRestockBtn" type="button">📦 Reabastecer</button>
       <button class="btn-history" id="openReportBtn" type="button">📊 Reportes</button>
       <button class="btn-history btn-ferias" id="openFeriasBtn" type="button">🎪 Ferias</button>
+      <button class="btn-history btn-histimport" id="openHistImportBtn" type="button">🗂️ Importar histórico</button>
     </div>
 
     <div class="supermaxi-launcher">
@@ -1489,6 +1540,18 @@ if ("serviceWorker" in navigator) {
     </div>
     <div class="modal-actions">
       <button class="cancel-btn" id="reportCloseBtn" type="button">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-scrim" id="histImportModalScrim">
+  <div class="modal modal-xwide">
+    <h3>Importar ventas históricas 2026</h3>
+    <p class="hint">Facturas y notas de venta a distribuidores emitidas antes de este dashboard (carpeta "Facturas Ventas 2026"). Se registran como ventas en el resumen y Ranking, con su fecha real de emisión, <b>sin tocar el stock actual</b>. Revisa cada línea antes de confirmar — esta acción no se puede deshacer desde aquí.</p>
+    <div id="histImportBody">Cargando…</div>
+    <div class="modal-actions">
+      <button class="cancel-btn" id="histImportCloseBtn" type="button">Cerrar</button>
+      <button class="confirm-btn" id="histImportConfirmBtn" type="button">✅ Confirmar importación</button>
     </div>
   </div>
 </div>
@@ -1802,7 +1865,13 @@ if ("serviceWorker" in navigator) {
     currentImportId: null,
     newImportOpen: false,
     newImportName: '',
-    confirmDeleteImportId: null
+    confirmDeleteImportId: null,
+
+    // ---------------- Importar historico (facturas 2026 pre-dashboard) ----------------
+    histImportStagingRaw: undefined, // undefined = aun no se consulto Firestore; null = Firestore no tiene datos cargados; array = datos listos
+    histImportInvoices: null, // se arma la primera vez que se abre el modal, a partir de histImportStagingRaw
+    histImportDone: null,     // {at, by} si ya se corrio, o false si se confirmo que no; null = no se ha revisado aun
+    histImportRunning: false
   };
 
   try { state.userName = localStorage.getItem('pl_inv_user') || ""; } catch(e){}
@@ -3652,6 +3721,297 @@ if ("serviceWorker" in navigator) {
 
   // ---------------- Event delegation ----------------
   function findProduct(id){ return state.products.filter(function(p){ return p.id===id; })[0]; }
+
+  // ==================== Importar historico (facturas 2026) ====================
+  // Datos ya parseados y normalizados fuera de linea (PDF -> texto -> match por
+  // codigo de barras contra el catalogo real) a partir de la carpeta "Facturas
+  // Ventas 2026" que Daniel comparto. Cada item trae category/flavor/presentation
+  // ya resueltos cuando fue posible (needs_review=false), o null + needs_review=true
+  // cuando no se pudo interpretar con certeza y hace falta elegirlo a mano aqui.
+  // Los datos de las 83 facturas historicas (nombres de distribuidores, montos,
+  // fechas) NUNCA se embeben en este archivo publico: viven en el documento
+  // Firestore histImportStaging/facturas2026, cargado una sola vez por un admin
+  // real (ver histImportUploadStaging) y leido en tiempo de ejecucion.
+
+
+  function resolveHistProduct(category, flavor, presentation){
+    if(!category || !flavor || !presentation) return null;
+    var hit = state.products.filter(function(p){
+      return p.category === category && p.flavor === flavor && p.presentation === presentation;
+    })[0];
+    return hit || null;
+  }
+
+  function histAllProductOptionsHtml(selectedId){
+    var byCat = {};
+    state.products.forEach(function(p){
+      byCat[p.category] = byCat[p.category] || [];
+      byCat[p.category].push(p);
+    });
+    var html = '<option value="">— Omitir esta línea —</option>';
+    Object.keys(byCat).forEach(function(cat){
+      html += '<optgroup label="' + esc(CATEGORY_LABEL[cat] || cat) + '">';
+      byCat[cat].forEach(function(p){
+        var label = p.presentation + ' · ' + p.flavor;
+        html += '<option value="' + p.id + '"' + (p.id===selectedId ? ' selected':'') + '>' + esc(label) + '</option>';
+      });
+      html += '</optgroup>';
+    });
+    return html;
+  }
+
+  function initHistImportState(){
+    if(state.histImportInvoices) return;
+    if(!state.histImportStagingRaw) return; // aun no se cargaron los datos desde Firestore
+    state.histImportInvoices = state.histImportStagingRaw.map(function(raw, invIdx){
+      var items = raw.items.map(function(it, itIdx){
+        var matched = it.needs_review ? null : resolveHistProduct(it.category, it.flavor, it.presentation);
+        return {
+          descripcion_original: it.descripcion_original,
+          cantidad: it.cantidad,
+          monto: it.monto,
+          needsReview: !!it.needs_review || !matched,
+          reason: it.reason || (matched ? '' : 'No se encontró ese producto en el catálogo actual'),
+          productId: matched ? matched.id : null, // seleccion actual (auto o elegida a mano)
+          skip: !matched && !!it.needs_review ? false : false // arranca sin omitir; el usuario decide
+        };
+      });
+      return {
+        file: raw.file,
+        format: raw.format,
+        distribuidor: raw.distribuidor_sugerido || raw.file,
+        numero: raw.numero_sugerido || '',
+        fecha: raw.fecha_iso, // 'YYYY-MM-DD'
+        fechaOriginal: raw.fecha_original,
+        valorTotal: raw.valor_total,
+        included: !raw.flagged_posible_duplicado,
+        flagReason: raw.flag_reason || '',
+        open: false,
+        items: items
+      };
+    });
+  }
+
+  function histImportSummary(){
+    var inv = state.histImportInvoices || [];
+    var includedInv = inv.filter(function(x){ return x.included; });
+    var totalItems = 0, pendingReview = 0, totalUnits = 0;
+    includedInv.forEach(function(x){
+      x.items.forEach(function(it){
+        if(it.skip) return;
+        totalItems++;
+        totalUnits += it.cantidad;
+        if(it.needsReview && !it.productId) pendingReview++;
+      });
+    });
+    return { includedCount: includedInv.length, totalCount: inv.length, totalItems: totalItems, totalUnits: totalUnits, pendingReview: pendingReview };
+  }
+
+  function renderHistImportModal(){
+    var box = document.getElementById('histImportBody');
+    if(!box) return;
+    if(state.histImportStagingRaw === undefined){
+      box.innerHTML = 'Cargando…';
+      return;
+    }
+    if(!state.histImportStagingRaw){
+      box.innerHTML = '<p class="hint">Todavía no se cargaron los datos de las facturas históricas a la base de datos. '
+        + 'Selecciona el archivo <code>hist_import_data.json</code> (una sola vez) para continuar.</p>'
+        + '<input type="file" id="histImportUploadInput" accept="application/json">'
+        + '<div class="modal-actions" style="justify-content:flex-start;"><button class="confirm-btn" id="histImportUploadBtn" type="button">⬆️ Cargar datos a la base de datos</button></div>';
+      document.getElementById('histImportConfirmBtn').style.display = 'none';
+      var uploadBtn = document.getElementById('histImportUploadBtn');
+      if(uploadBtn) uploadBtn.addEventListener('click', histImportUploadStaging);
+      return;
+    }
+    document.getElementById('histImportConfirmBtn').style.display = '';
+    if(state.histImportDone){
+      box.innerHTML = '<div class="hist-done-banner">✅ Esta importación ya se realizó el '
+        + esc(new Date(state.histImportDone.at).toLocaleString('es-EC')) + ' por ' + esc(state.histImportDone.by)
+        + '. Para evitar duplicar ventas, no se puede volver a correr desde aquí.</div>';
+      document.getElementById('histImportConfirmBtn').style.display = 'none';
+      return;
+    }
+    initHistImportState();
+    var s = histImportSummary();
+    var html = '<div class="hist-summary">'
+      + '<div class="hs-item"><b>' + s.includedCount + ' / ' + s.totalCount + '</b>facturas incluidas</div>'
+      + '<div class="hs-item"><b>' + s.totalItems + '</b>líneas a registrar</div>'
+      + '<div class="hs-item"><b>' + fmtInt(s.totalUnits) + '</b>unidades totales</div>'
+      + (s.pendingReview>0 ? '<div class="hs-item" style="border-color:var(--critical); color:var(--critical);"><b>' + s.pendingReview + '</b>líneas sin producto asignado</div>' : '')
+      + '</div>';
+    html += '<div class="hist-toggle-all-row">'
+      + '<button class="btn-history" type="button" data-hist-toggle-all="1">Marcar todas</button>'
+      + '<button class="btn-history" type="button" data-hist-toggle-all="0">Desmarcar todas</button>'
+      + '</div>';
+    state.histImportInvoices.forEach(function(inv, idx){
+      html += '<div class="hist-invoice' + (inv.open?' open':'') + (inv.included?'':' excluded') + '" data-hi-idx="' + idx + '">';
+      html += '<div class="hist-invoice-head" data-hi-head="' + idx + '">';
+      html += '<input type="checkbox" data-hi-include="' + idx + '"' + (inv.included?' checked':'') + ' onclick="event.stopPropagation()">';
+      html += '<input class="hi-name" data-hi-name="' + idx + '" value="' + esc(inv.distribuidor) + '" onclick="event.stopPropagation()">';
+      html += '<input class="hi-date" type="date" data-hi-date="' + idx + '" value="' + (inv.fecha||'') + '" onclick="event.stopPropagation()">';
+      html += '<span class="hi-file">' + esc(inv.file) + (inv.numero ? ' · #' + esc(inv.numero) : '') + '</span>';
+      html += '<span class="hi-total">' + (inv.valorTotal!=null ? fmtMoney(inv.valorTotal) : '') + '</span>';
+      if(inv.flagReason) html += '<span class="hist-dup-badge" title="' + esc(inv.flagReason) + '">⚠ revisar</span>';
+      html += '</div>';
+      html += '<div class="hist-items">';
+      inv.items.forEach(function(it, itIdx){
+        html += '<div class="hist-item-row' + (it.needsReview && !it.productId ? ' needs-review' : '') + '">';
+        html += '<span class="hi-desc">' + esc(it.descripcion_original) + (it.reason ? ' <i style="color:var(--critical);">(' + esc(it.reason) + ')</i>' : '') + '</span>';
+        html += '<span class="hi-qty">' + fmtInt(it.cantidad) + ' u.</span>';
+        html += '<select data-hi-item="' + idx + '|' + itIdx + '">' + histAllProductOptionsHtml(it.productId) + '</select>';
+        html += '</div>';
+      });
+      html += '</div>';
+      html += '</div>';
+    });
+    box.innerHTML = html;
+  }
+
+  function wireHistImportBody(){
+    var box = document.getElementById('histImportBody');
+    if(!box || box.__wired) return;
+    box.__wired = true;
+    box.addEventListener('click', function(e){
+      var head = e.target.closest('[data-hi-head]');
+      if(head && !e.target.closest('input')){
+        var idx = parseInt(head.getAttribute('data-hi-head'), 10);
+        state.histImportInvoices[idx].open = !state.histImportInvoices[idx].open;
+        renderHistImportModal();
+        return;
+      }
+      var toggleAll = e.target.closest('[data-hist-toggle-all]');
+      if(toggleAll){
+        var val = toggleAll.getAttribute('data-hist-toggle-all') === '1';
+        state.histImportInvoices.forEach(function(inv){ inv.included = val; });
+        renderHistImportModal();
+      }
+    });
+    box.addEventListener('change', function(e){
+      var chk = e.target.closest('[data-hi-include]');
+      if(chk){
+        var idx = parseInt(chk.getAttribute('data-hi-include'), 10);
+        state.histImportInvoices[idx].included = chk.checked;
+        renderHistImportModal();
+        return;
+      }
+      var nameInput = e.target.closest('[data-hi-name]');
+      if(nameInput){
+        var idx2 = parseInt(nameInput.getAttribute('data-hi-name'), 10);
+        state.histImportInvoices[idx2].distribuidor = nameInput.value;
+        return;
+      }
+      var dateInput = e.target.closest('[data-hi-date]');
+      if(dateInput){
+        var idx3 = parseInt(dateInput.getAttribute('data-hi-date'), 10);
+        state.histImportInvoices[idx3].fecha = dateInput.value;
+        return;
+      }
+      var sel = e.target.closest('[data-hi-item]');
+      if(sel){
+        var parts = sel.getAttribute('data-hi-item').split('|');
+        var invIdx = parseInt(parts[0], 10), itIdx = parseInt(parts[1], 10);
+        var item = state.histImportInvoices[invIdx].items[itIdx];
+        item.productId = sel.value || null;
+        item.skip = !sel.value;
+        renderHistImportModal();
+      }
+    });
+  }
+
+  function histImportUploadStaging(){
+    var input = document.getElementById('histImportUploadInput');
+    var file = input && input.files && input.files[0];
+    if(!file){ showStatus('Elige primero el archivo hist_import_data.json.', true); return; }
+    ensureUser(function(){
+      var reader = new FileReader();
+      reader.onload = function(){
+        var parsed;
+        try { parsed = JSON.parse(reader.result); }
+        catch(e){ showStatus('Ese archivo no es un JSON válido.', true); return; }
+        state.db.doc('histImportStaging/facturas2026').set({
+          invoices: parsed,
+          uploadedAt: new Date().toISOString(),
+          uploadedBy: state.userName
+        }).then(function(){
+          state.histImportStagingRaw = parsed;
+          showStatus('Datos cargados: ' + parsed.length + ' facturas.');
+          renderHistImportModal();
+        }).catch(function(){
+          showStatus('No se pudo guardar en la base de datos. Intenta de nuevo.', true);
+        });
+      };
+      reader.readAsText(file);
+    });
+  }
+
+  function histImportConfirm(){
+    if(state.histImportRunning) return;
+    var s = histImportSummary();
+    if(s.pendingReview > 0){
+      showStatus('Todavía hay ' + s.pendingReview + ' línea(s) sin producto asignado. Elige un producto o "Omitir esta línea" antes de confirmar.', true);
+      return;
+    }
+    if(s.totalItems === 0){
+      showStatus('No hay ninguna línea marcada para importar.', true);
+      return;
+    }
+    if(!window.confirm('Vas a registrar ' + s.totalItems + ' líneas de venta histórica (' + s.includedCount + ' facturas), sin tocar el stock actual. Esto no se puede deshacer desde aquí. ¿Confirmas?')) return;
+    ensureUser(function(){
+      state.histImportRunning = true;
+      renderHistImportModal();
+      var docs = [];
+      state.histImportInvoices.forEach(function(inv){
+        if(!inv.included) return;
+        inv.items.forEach(function(it){
+          if(it.skip || !it.productId) return;
+          var product = findProduct(it.productId);
+          if(!product) return;
+          var atIso = (inv.fecha ? (inv.fecha + 'T12:00:00.000Z') : new Date().toISOString());
+          docs.push({
+            productId: product.id,
+            productLabel: product.presentation + ' · ' + product.flavor,
+            type: 'venta',
+            qty: it.cantidad,
+            at: atIso,
+            user: state.userName,
+            client: (inv.distribuidor || '') + (inv.numero ? (' #' + inv.numero) : ''),
+            note: 'Venta histórica importada (' + inv.file + ')',
+            historical: true,
+            source: 'facturas_2026_import'
+          });
+        });
+      });
+      var CHUNK = 400;
+      var chunks = [];
+      for(var i=0; i<docs.length; i+=CHUNK) chunks.push(docs.slice(i, i+CHUNK));
+      var chain = Promise.resolve();
+      chunks.forEach(function(chunk){
+        chain = chain.then(function(){
+          var batch = state.db.batch();
+          chunk.forEach(function(d){
+            var ref = state.db.collection('movements').doc();
+            batch.set(ref, d);
+          });
+          return batch.commit();
+        });
+      });
+      chain.then(function(){
+        var meta = { at: new Date().toISOString(), by: state.userName, count: docs.length };
+        return state.db.doc('meta/historicalImport2026').set(meta).then(function(){ return meta; });
+      }).then(function(meta){
+        state.histImportDone = meta;
+        state.histImportRunning = false;
+        showStatus('Importación completa: ' + docs.length + ' ventas históricas registradas.');
+        renderHistImportModal();
+      }).catch(function(err){
+        state.histImportRunning = false;
+        showStatus('No se pudo completar la importación. Intenta de nuevo.', true);
+        renderHistImportModal();
+      });
+    });
+  }
+
   function findGraceItem(id){ return state.graceItems.filter(function(g){ return g.id===id; })[0]; }
   function filteredGraceItems(){
     var q = state.search.trim().toLowerCase();
@@ -4418,6 +4778,29 @@ if ("serviceWorker" in navigator) {
   document.getElementById('copyGraceSummaryBtn').addEventListener('click', function(){
     copyToClipboard(buildGraceSummaryText(), 'Resumen de Grace copiado. Pégalo en WhatsApp.');
   });
+
+  // ---------------- Importar historico (facturas 2026) ----------------
+  document.getElementById('openHistImportBtn').addEventListener('click', function(){
+    document.getElementById('histImportModalScrim').classList.add('open');
+    wireHistImportBody();
+    document.getElementById('histImportBody').innerHTML = 'Cargando…';
+    var needStaging = state.histImportStagingRaw === undefined && state.db;
+    var needDone = state.histImportDone === null && state.db;
+    Promise.all([
+      needStaging ? state.db.doc('histImportStaging/facturas2026').get().then(function(doc){
+        state.histImportStagingRaw = doc.exists ? (doc.data().invoices || null) : null;
+      }).catch(function(){ state.histImportStagingRaw = null; }) : Promise.resolve(),
+      needDone ? state.db.doc('meta/historicalImport2026').get().then(function(doc){
+        state.histImportDone = doc.exists ? doc.data() : false;
+      }).catch(function(){ state.histImportDone = false; }) : Promise.resolve()
+    ]).then(function(){
+      renderHistImportModal();
+    });
+  });
+  document.getElementById('histImportCloseBtn').addEventListener('click', function(){
+    document.getElementById('histImportModalScrim').classList.remove('open');
+  });
+  document.getElementById('histImportConfirmBtn').addEventListener('click', histImportConfirm);
 
   // ---------------- Ranking de más vendidos ----------------
   state.rankingPeriod = 'week';
