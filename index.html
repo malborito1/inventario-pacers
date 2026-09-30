@@ -760,6 +760,7 @@ if ("serviceWorker" in navigator) {
   .donut-svg-wrap svg{width:150px; height:150px;}
   .donut-center{
     position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:0 14px; text-align:center;
   }
   .donut-center-num{font-size:22px; font-weight:800; color:var(--text); line-height:1;}
   .donut-center-label{font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; margin-top:2px;}
@@ -5132,6 +5133,21 @@ if ("serviceWorker" in navigator) {
     return '<svg viewBox="0 0 150 150">' + segs + '</svg>';
   }
 
+  // El número al centro de la dona es de ancho variable ($ vendido puede
+  // llegar a tener muchos dígitos, mientras que unidades suele ser más
+  // corto) pero el hueco donde vive es siempre del mismo tamaño. Con un
+  // font-size fijo, un monto largo (p.ej. "$105.208,34") se sale del hueco y
+  // queda montado sobre el anillo de colores. Se achica el texto según su
+  // longitud para que siempre quepa.
+  function donutCenterFontSize(str){
+    var len = (str || '').length;
+    if(len <= 6) return 22;
+    if(len <= 8) return 19;
+    if(len <= 10) return 16;
+    if(len <= 12) return 14;
+    return 12;
+  }
+
   function buildDonutLegend(byCategory, totalUnits, fmtVal){
     fmtVal = fmtVal || function(v){ return fmtInt(v) + ' u'; };
     var cats = [['ENDURANCE','Endurance'], ['HCF','HCF'], ['RECOVERY','Recovery']];
@@ -5214,7 +5230,7 @@ if ("serviceWorker" in navigator) {
         '</div>';
       html += '<div class="ranking-layout">';
       html += '<div class="donut-wrap"><div class="donut-svg-wrap">' + buildDonutSvg(sdata.byCategoryRevenue, sdata.totalRevenue) +
-        '<div class="donut-center"><div class="donut-center-num num">' + fmtMoney(sdata.totalRevenue) + '</div><div class="donut-center-label">vendido</div></div></div>' +
+        '<div class="donut-center"><div class="donut-center-num num" style="font-size:' + donutCenterFontSize(fmtMoney(sdata.totalRevenue)) + 'px">' + fmtMoney(sdata.totalRevenue) + '</div><div class="donut-center-label">vendido</div></div></div>' +
         buildDonutLegend(sdata.byCategoryRevenue, sdata.totalRevenue, function(v){ return fmtMoney(v); }) + '</div>';
       html += '<div class="ranking-list-wrap"><h3 class="ranking-subhead">Top productos por venta</h3>' +
         buildRankingList(sdata.ranked, { valueKey:'revenue', formatValue: function(v){ return fmtMoney(v); }, emptyText:'No hay ventas registradas en este periodo.' }) + '</div>';
@@ -5223,7 +5239,7 @@ if ("serviceWorker" in navigator) {
       var data = computeRankingData(period);
       html += '<div class="ranking-layout">';
       html += '<div class="donut-wrap"><div class="donut-svg-wrap">' + buildDonutSvg(data.byCategory, data.totalUnits) +
-        '<div class="donut-center"><div class="donut-center-num num">' + fmtInt(data.totalUnits) + '</div><div class="donut-center-label">unidades</div></div></div>' +
+        '<div class="donut-center"><div class="donut-center-num num" style="font-size:' + donutCenterFontSize(fmtInt(data.totalUnits)) + 'px">' + fmtInt(data.totalUnits) + '</div><div class="donut-center-label">unidades</div></div></div>' +
         buildDonutLegend(data.byCategory, data.totalUnits) + '</div>';
       html += '<div class="ranking-list-wrap"><h3 class="ranking-subhead">Top sabores</h3>' + buildRankingList(data.ranked) + '</div>';
       html += '</div>';
