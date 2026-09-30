@@ -800,6 +800,35 @@ if ("serviceWorker" in navigator) {
   }
   .ranking-sub{font-size:11px; color:var(--text-muted); font-weight:500; margin-top:1px;}
 
+  /* ---------- Ranking > Años (comparación año a año) ---------- */
+  .years-mode-toggle{
+    display:inline-flex; gap:4px; background:var(--surface-2); padding:4px; border-radius:10px; margin:0 0 16px;
+  }
+  .years-mode-btn{
+    border:none; background:transparent; color:var(--text-muted); font-weight:600; font-size:12.5px;
+    padding:6px 14px; border-radius:7px; cursor:pointer;
+  }
+  .years-mode-btn.active{background:var(--surface); color:var(--accent-strong); box-shadow:var(--shadow);}
+  .years-note{font-size:12px; color:var(--text-muted); margin:-8px 0 18px;}
+  .years-chart{display:flex; flex-direction:column; gap:18px; max-width:620px;}
+  .years-row{display:flex; align-items:center; gap:14px;}
+  .years-row-label{flex:0 0 68px; display:flex; flex-direction:column;}
+  .years-row-year{font-size:15px; font-weight:800; color:var(--text);}
+  .years-row-partial{font-size:10.5px; color:var(--text-muted); font-weight:600;}
+  .years-row-main{flex:1; min-width:0;}
+  .years-bar-track{background:var(--surface-2); border-radius:6px; height:22px; overflow:hidden;}
+  .years-bar-fill{height:100%; border-radius:6px; min-width:6px; background:var(--accent);}
+  .years-row-meta{display:flex; align-items:baseline; gap:8px; margin-top:5px; flex-wrap:wrap;}
+  .years-row-value{font-size:15px; font-weight:800; color:var(--text);}
+  .years-row-units{font-size:11.5px; color:var(--text-muted); font-weight:600;}
+  .years-delta{
+    font-size:11.5px; font-weight:700; padding:2px 8px; border-radius:20px; white-space:nowrap;
+    display:inline-flex; align-items:center; gap:3px;
+  }
+  .years-delta.up{background:var(--success-tint); color:var(--success);}
+  .years-delta.down{background:var(--critical-tint); color:var(--critical);}
+  .years-delta.flat{background:var(--surface-2); color:var(--text-muted);}
+
   /* ---------- Modals ---------- */
   .modal-scrim{
     position:fixed; inset:0; background:rgba(10,15,13,.45); z-index:60; display:none;
@@ -5090,6 +5119,92 @@ if ("serviceWorker" in navigator) {
     return { totalUnits: totalUnits, totalRevenue: totalRevenue, ranked: ranked };
   }
 
+  // Ranking > Años: ventas totales ($ y unidades) agrupadas por año calendario, para
+  // comparar el crecimiento/caída de un año contra otro. Usa siempre TODO el historial
+  // cargado (allMovements(), no el periodo de Ranking) porque comparar años solo tiene
+  // sentido con años completos disponibles.
+  // mode:
+  //  'full' -> año calendario completo tal cual está hoy (el año en curso queda parcial,
+  //            se marca como tal, pero no se recorta).
+  //  'ytd'  -> cada año se recorta al mismo día/mes que hoy ("año a la fecha"), para que
+  //            comparar el año en curso contra años anteriores sea una comparación justa
+  //            (mismo rango de meses en todos los años, no año completo vs. parcial).
+  function computeYearlyData(mode){
+    var today = new Date();
+    var todayMD = (today.getMonth()+1)*100 + today.getDate();
+    function inMode(d){
+      if(mode !== 'ytd') return true;
+      var md = (d.getMonth()+1)*100 + d.getDate();
+      return md <= todayMD;
+    }
+    var byYear = {};
+    function addTo(year, qty, revenue){
+      if(!byYear[year]) byYear[year] = { revenue: 0, units: 0 };
+      byYear[year].revenue += revenue;
+      byYear[year].units += qty;
+    }
+    allMovements().filter(function(m){ return m.type === 'venta' && !m.reversed; }).forEach(function(m){
+      var d = new Date(m.at);
+      if(isNaN(d.getTime()) || !inMode(d)) return;
+      var qty = movementUnits(m);
+      var product = m.productId ? findProduct(m.productId) : null;
+      var revenue = (m.revenue != null ? m.revenue : (qty * (product ? (product.pvpPerUnit||0) : 0)));
+      addTo(d.getFullYear(), qty, revenue);
+    });
+    if(state.includeSupermaxiSales){
+      state.supermaxiMovements.filter(function(m){ return m.type === 'venta' && !m.reversed; }).forEach(function(m){
+        var d = new Date(m.at);
+        if(isNaN(d.getTime()) || !inMode(d)) return;
+        var qty = movementUnits(m);
+        var product = m.productId ? findSupermaxiProduct(m.productId) : null;
+        var revenue = (m.revenue != null ? m.revenue : (qty * (product ? (product.pvpPerUnit||0) : 0)));
+        addTo(d.getFullYear(), qty, revenue);
+      });
+    }
+    var years = Object.keys(byYear).map(function(y){ return parseInt(y,10); }).sort(function(a,b){ return a - b; });
+    var currentYear = today.getFullYear();
+    var list = years.map(function(y, i){
+      var row = byYear[y];
+      var prevRow = i > 0 ? byYear[years[i-1]] : null;
+      var pctChange = (prevRow && prevRow.revenue > 0) ? ((row.revenue - prevRow.revenue) / prevRow.revenue * 100) : null;
+      return { year: y, revenue: row.revenue, units: row.units, isCurrentYear: (y === currentYear), pctChange: pctChange };
+    });
+    return { mode: mode, list: list, todayLabel: today.getDate() + ' ' + MESES_ES[today.getMonth()] };
+  }
+
+  function buildYearsChart(data){
+    if(data.list.length === 0){
+      return '<p class="empty-hint">No hay ventas registradas todavía.</p>';
+    }
+    var maxRevenue = data.list.reduce(function(m,r){ return Math.max(m, r.revenue); }, 1) || 1;
+    var rows = data.list.map(function(r){
+      var pct = Math.max(2, Math.round((r.revenue / maxRevenue) * 100));
+      var deltaHtml = '';
+      if(r.pctChange == null){
+        deltaHtml = '<span class="years-delta flat">Primer año con datos</span>';
+      } else {
+        var up = r.pctChange > 0.05;
+        var down = r.pctChange < -0.05;
+        var cls = up ? 'up' : (down ? 'down' : 'flat');
+        var arrow = up ? '▲' : (down ? '▼' : '●');
+        deltaHtml = '<span class="years-delta ' + cls + '">' + arrow + ' ' + Math.abs(r.pctChange).toFixed(1).replace('.', ',') + '% vs ' + (r.year - 1) + '</span>';
+      }
+      var partialNote = (data.mode === 'full' && r.isCurrentYear) ? ('<span class="years-row-partial">hasta ' + esc(data.todayLabel) + '</span>') : '';
+      return '<div class="years-row">' +
+        '<div class="years-row-label"><span class="years-row-year">' + r.year + '</span>' + partialNote + '</div>' +
+        '<div class="years-row-main">' +
+          '<div class="years-bar-track"><div class="years-bar-fill" style="width:' + pct + '%"></div></div>' +
+          '<div class="years-row-meta">' +
+            '<span class="years-row-value num">' + fmtMoney(r.revenue) + '</span>' +
+            '<span class="years-row-units num">' + fmtInt(r.units) + ' u</span>' +
+            deltaHtml +
+          '</div>' +
+        '</div>' +
+        '</div>';
+    }).join('');
+    return '<div class="years-chart">' + rows + '</div>';
+  }
+
   function clientInitials(name){
     var parts = (name || '').trim().split(/\s+/).filter(Boolean);
     if(parts.length === 0) return '?';
@@ -5198,15 +5313,20 @@ if ("serviceWorker" in navigator) {
       '<button type="button" class="ranking-view-btn' + (view==='productos'?' active':'') + '" data-ranking-view="productos">Productos</button>' +
       '<button type="button" class="ranking-view-btn' + (view==='clientes'?' active':'') + '" data-ranking-view="clientes">Clientes</button>' +
       '<button type="button" class="ranking-view-btn' + (view==='ventas'?' active':'') + '" data-ranking-view="ventas">Ventas</button>' +
+      '<button type="button" class="ranking-view-btn' + (view==='anios'?' active':'') + '" data-ranking-view="anios">Años</button>' +
       '</div>';
-    html += '<div class="field ranking-period-field"><label for="rankingPeriod">Periodo</label><select id="rankingPeriod">' +
-      ['today','week','month','year','custom','all'].map(function(p){ return '<option value="' + p + '"' + (p===period?' selected':'') + '>' + (p==='custom'?'Personalizado':periodLabel(p)) + '</option>'; }).join('') +
-      '</select></div>';
-    if(period === 'custom'){
-      html += '<div class="mini-field-row">' +
-        '<div class="mini-field"><label>Desde</label><input type="date" id="rankingRangeStart" value="' + esc(state.customRangeStart||'') + '" max="' + todayDateStr() + '"></div>' +
-        '<div class="mini-field"><label>Hasta</label><input type="date" id="rankingRangeEnd" value="' + esc(state.customRangeEnd||'') + '" max="' + todayDateStr() + '"></div>' +
-        '</div>';
+    // La vista "Años" compara el historial completo agrupado por año calendario, no un
+    // periodo puntual -- el selector de Periodo (Hoy/Esta semana/etc.) no aplica ahí.
+    if(view !== 'anios'){
+      html += '<div class="field ranking-period-field"><label for="rankingPeriod">Periodo</label><select id="rankingPeriod">' +
+        ['today','week','month','year','custom','all'].map(function(p){ return '<option value="' + p + '"' + (p===period?' selected':'') + '>' + (p==='custom'?'Personalizado':periodLabel(p)) + '</option>'; }).join('') +
+        '</select></div>';
+      if(period === 'custom'){
+        html += '<div class="mini-field-row">' +
+          '<div class="mini-field"><label>Desde</label><input type="date" id="rankingRangeStart" value="' + esc(state.customRangeStart||'') + '" max="' + todayDateStr() + '"></div>' +
+          '<div class="mini-field"><label>Hasta</label><input type="date" id="rankingRangeEnd" value="' + esc(state.customRangeEnd||'') + '" max="' + todayDateStr() + '"></div>' +
+          '</div>';
+      }
     }
     if(state.extMovementsLoading && !state.extMovements){
       html += '<p class="empty-hint">Cargando historial de ventas…</p></div>';
@@ -5242,6 +5362,19 @@ if ("serviceWorker" in navigator) {
       html += '<div class="ranking-list-wrap"><h3 class="ranking-subhead">Top productos por venta</h3>' +
         buildRankingList(sdata.ranked, { valueKey:'revenue', formatValue: function(v){ return fmtMoney(v); }, emptyText:'No hay ventas registradas en este periodo.' }) + '</div>';
       html += '</div>';
+    } else if(view === 'anios'){
+      var yearsMode = state.yearsCompareMode || 'full';
+      var ydata = computeYearlyData(yearsMode);
+      html += '<label class="supermaxi-sales-toggle"><input type="checkbox" id="ventasIncludeSupermaxi"' + (state.includeSupermaxiSales?' checked':'') + '> 🏬 Incluir ventas de Supermaxi</label>';
+      html += '<div class="years-mode-toggle">' +
+        '<button type="button" class="years-mode-btn' + (yearsMode==='full'?' active':'') + '" data-years-mode="full">Año completo</button>' +
+        '<button type="button" class="years-mode-btn' + (yearsMode==='ytd'?' active':'') + '" data-years-mode="ytd">Mismo período</button>' +
+        '</div>';
+      html += yearsMode === 'ytd'
+        ? ('<p class="years-note">Cada año se corta el mismo día (1 ene – ' + esc(ydata.todayLabel) + '), para que el año en curso compare parejo contra los anteriores.</p>')
+        : ('<p class="years-note">Año calendario completo. El año en curso todavía no termina, así que su barra queda marcada como parcial.</p>');
+      html += '<h3 class="ranking-subhead">Ventas por año</h3>';
+      html += buildYearsChart(ydata);
     } else {
       var data = computeRankingData(period);
       html += '<div class="ranking-layout">';
@@ -5253,7 +5386,10 @@ if ("serviceWorker" in navigator) {
     }
     html += '</div>';
     root.innerHTML = html;
-    document.getElementById('rankingPeriod').addEventListener('change', function(e){
+    // La vista "Años" no tiene selector de Periodo (ver más arriba), así que este
+    // elemento puede no existir en el DOM en ese caso.
+    var periodSelect = document.getElementById('rankingPeriod');
+    if(periodSelect) periodSelect.addEventListener('change', function(e){
       state.rankingPeriod = e.target.value;
       if(state.rankingPeriod === 'custom') ensureCustomRangeDefaults();
       render();
@@ -5282,6 +5418,12 @@ if ("serviceWorker" in navigator) {
     Array.prototype.forEach.call(document.querySelectorAll('[data-ranking-view]'), function(btn){
       btn.addEventListener('click', function(){
         state.rankingView = btn.getAttribute('data-ranking-view');
+        render();
+      });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-years-mode]'), function(btn){
+      btn.addEventListener('click', function(){
+        state.yearsCompareMode = btn.getAttribute('data-years-mode');
         render();
       });
     });
