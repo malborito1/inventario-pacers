@@ -4858,6 +4858,10 @@ if ("serviceWorker" in navigator) {
       rows.push({
         qty: movementUnits(m),
         pvp: product ? (product.pvpPerUnit||0) : 0,
+        // m.revenue: monto real facturado (facturas históricas 2026), ya prorrateado
+        // contra el total real de cada factura. Si no existe (ventas normales, sin
+        // factura escaneada), se calcula qty × precio de lista actual, como antes.
+        revenue: (m.revenue != null ? m.revenue : null),
         category: product ? product.category : null,
         label: product ? (product.presentation + ' · ' + product.flavor) : (stripGraceTag(m.productLabel) || 'Producto'),
         photoUrl: product ? product.photoUrl : null,
@@ -4888,7 +4892,7 @@ if ("serviceWorker" in navigator) {
     var byProduct = {};
     rows.forEach(function(r){
       totalUnits += r.qty;
-      var revenue = r.qty * r.pvp;
+      var revenue = (r.revenue != null ? r.revenue : (r.qty * r.pvp));
       totalRevenue += revenue;
       if(r.category && byCategoryRevenue.hasOwnProperty(r.category)) byCategoryRevenue[r.category] += revenue;
       if(!byProduct[r.key]){
@@ -4911,11 +4915,11 @@ if ("serviceWorker" in navigator) {
     var totalUnits = 0, totalRevenue = 0;
     moves.forEach(function(m){
       var qty = movementUnits(m);
-      // Valor estimado al precio de lista actual (mismo criterio que el resto del
-      // dashboard, ej. la pestaña Ventas). Para facturas históricas con descuento
-      // de distribuidor puede diferir un poco del monto real facturado.
+      // m.revenue: monto real facturado (facturas históricas 2026, prorrateado contra
+      // el total real de cada factura). Si no existe, se estima qty × precio de lista
+      // actual, igual que en la pestaña Ventas.
       var product = m.productId ? findProduct(m.productId) : null;
-      var revenue = qty * (product ? (product.pvpPerUnit || 0) : 0);
+      var revenue = (m.revenue != null ? m.revenue : (qty * (product ? (product.pvpPerUnit || 0) : 0)));
       totalUnits += qty;
       totalRevenue += revenue;
       var key = m.client.trim();
