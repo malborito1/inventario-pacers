@@ -4886,15 +4886,32 @@ if ("serviceWorker" in navigator) {
   }
 
   // Cuenta ventas reales (facturas/sesiones de venta), no líneas de producto.
-  // Varias líneas del mismo cliente registradas dentro de una ventana corta
-  // de tiempo (misma factura, o varios productos agregados uno por uno en
-  // el momento de la venta) cuentan como UNA sola venta -- mismo criterio
-  // que ya usa la pestaña Clientes para agrupar en tarjetas. Las ventas sin
-  // nombre de cliente (incl. Supermaxi, que siempre viene con client:'') no
-  // tienen un dato en común para agruparlas, así que cada línea cuenta como
-  // su propia venta, igual que antes.
+  // Agrupa movimientos de venta de UN mismo cliente (o de Supermaxi) en
+  // ventas/facturas reales: varias líneas seguidas dentro de una ventana
+  // corta de tiempo (misma factura, o varios productos agregados uno por
+  // uno al momento de la venta) cuentan como UNA sola venta -- mismo
+  // criterio que ya usa la pestaña Clientes para agrupar en tarjetas.
+  // Devuelve la cantidad de grupos (ventas reales), no la cantidad de líneas.
+  // Se usa tanto para el KPI "N° de ventas" (Ranking > Ventas) como para
+  // "X compras registradas" por cliente (Ranking > Clientes).
+  var SALE_GROUP_WINDOW_MS = 10 * 60 * 1000;
+  function countSaleGroups(moves){
+    if(!moves || moves.length === 0) return 0;
+    var list = moves.slice().sort(function(a,b){ return new Date(a.at) - new Date(b.at); });
+    var count = 0, lastAt = null;
+    list.forEach(function(m){
+      var t = new Date(m.at).getTime();
+      if(lastAt === null || (t - lastAt) > SALE_GROUP_WINDOW_MS) count += 1;
+      lastAt = t;
+    });
+    return count;
+  }
+
+  // Cuenta ventas reales (facturas/sesiones de venta) en todo el periodo, no
+  // líneas de producto. Las ventas sin nombre de cliente (incl. Supermaxi,
+  // que siempre viene con client:'') no tienen un dato en común para
+  // agruparlas entre sí, así que cada línea cuenta como su propia venta.
   function countSalesInvoices(period){
-    var GROUP_WINDOW_MS = 10 * 60 * 1000;
     var moves = movementsInPeriod(period).filter(function(m){ return m.type === 'venta'; });
     if(state.includeSupermaxiSales){
       moves = moves.concat(filterMovementsByPeriod(state.supermaxiMovements, period).filter(function(m){ return m.type === 'venta'; }));
@@ -4907,13 +4924,7 @@ if ("serviceWorker" in navigator) {
       (byClient[key] = byClient[key] || []).push(m);
     });
     Object.keys(byClient).forEach(function(client){
-      var list = byClient[client].slice().sort(function(a,b){ return new Date(a.at) - new Date(b.at); });
-      var lastAt = null;
-      list.forEach(function(m){
-        var t = new Date(m.at).getTime();
-        if(lastAt === null || (t - lastAt) > GROUP_WINDOW_MS) count += 1;
-        lastAt = t;
-      });
+      count += countSaleGroups(byClient[client]);
     });
     return count;
   }
@@ -4944,38 +4955,46 @@ if ("serviceWorker" in navigator) {
     var moves = movementsInPeriod(period).filter(function(m){
       return m.type === 'venta' && m.client && m.client.trim();
     });
+    // Primero se agrupan los movimientos por cliente (para poder contar
+    // ventas/facturas reales con countSaleGroups, no líneas de producto);
+    // unidades e ingresos se siguen sumando por línea, sin cambios.
+    var byClientMoves = {};
+    moves.forEach(function(m){
+      var key = m.client.trim();
+      (byClientMoves[key] = byClientMoves[key] || []).push(m);
+    });
     var byClient = {};
     var totalUnits = 0, totalRevenue = 0;
-    moves.forEach(function(m){
-      var qty = movementUnits(m);
-      // m.revenue: monto real facturado (facturas históricas 2026, prorrateado contra
-      // el total real de cada factura). Si no existe, se estima qty × precio de lista
-      // actual, igual que en la pestaña Ventas.
-      var product = m.productId ? findProduct(m.productId) : null;
-      var revenue = (m.revenue != null ? m.revenue : (qty * (product ? (product.pvpPerUnit || 0) : 0)));
+    Object.keys(byClientMoves).forEach(function(key){
+      var list = byClientMoves[key];
+      var qty = 0, revenue = 0;
+      list.forEach(function(m){
+        var mQty = movementUnits(m);
+        // m.revenue: monto real facturado (facturas históricas 2026, prorrateado contra
+        // el total real de cada factura). Si no existe, se estima qty × precio de lista
+        // actual, igual que en la pestaña Ventas.
+        var product = m.productId ? findProduct(m.productId) : null;
+        var mRevenue = (m.revenue != null ? m.revenue : (mQty * (product ? (product.pvpPerUnit || 0) : 0)));
+        qty += mQty;
+        revenue += mRevenue;
+      });
       totalUnits += qty;
       totalRevenue += revenue;
-      var key = m.client.trim();
-      if(!byClient[key]) byClient[key] = { label: key, qty: 0, orders: 0, revenue: 0 };
-      byClient[key].qty += qty;
-      byClient[key].orders += 1;
-      byClient[key].revenue += revenue;
+      byClient[key] = { label: key, qty: qty, orders: countSaleGroups(list), revenue: revenue };
     });
     if(state.includeSupermaxiSales){
       var smMoves = filterMovementsByPeriod(state.supermaxiMovements, period).filter(function(m){ return m.type === 'venta'; });
       if(smMoves.length){
-        var smEntry = { label: 'La Favorita (Supermaxi)', qty: 0, orders: 0, revenue: 0 };
+        var smQty = 0, smRevenue = 0;
         smMoves.forEach(function(m){
-          var smQty = movementUnits(m);
+          var q = movementUnits(m);
           var smProduct = m.productId ? findSupermaxiProduct(m.productId) : null;
-          var smRevenue = smQty * (smProduct ? (smProduct.pvpPerUnit || 0) : 0);
-          smEntry.qty += smQty;
-          smEntry.orders += 1;
-          smEntry.revenue += smRevenue;
-          totalUnits += smQty;
-          totalRevenue += smRevenue;
+          smQty += q;
+          smRevenue += q * (smProduct ? (smProduct.pvpPerUnit || 0) : 0);
         });
-        byClient['__supermaxi__'] = smEntry;
+        totalUnits += smQty;
+        totalRevenue += smRevenue;
+        byClient['__supermaxi__'] = { label: 'La Favorita (Supermaxi)', qty: smQty, orders: countSaleGroups(smMoves), revenue: smRevenue };
       }
     }
     var ranked = Object.keys(byClient).map(function(k){ return byClient[k]; }).sort(function(a,b){ return b.qty - a.qty; });
