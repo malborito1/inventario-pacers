@@ -4893,7 +4893,11 @@ if ("serviceWorker" in navigator) {
       var qty = movementUnits(m);
       totalUnits += qty;
       var product = m.productId ? findProduct(m.productId) : null;
-      var cat = product ? product.category : null;
+      // m.category: para ventas históricas de un sabor que ya no está (o nunca
+      // estuvo) en el catálogo activo (p.ej. Cola, que no se stockea), el
+      // movimiento guarda su categoría directamente para que siga sumando
+      // bien en el desglose por categoría aunque no haya producto que resolver.
+      var cat = product ? product.category : (m.category || null);
       if(cat && byCategory.hasOwnProperty(cat)) byCategory[cat] += qty;
       var key = m.productId || m.productLabel;
       if(!byProduct[key]){
@@ -4926,7 +4930,10 @@ if ("serviceWorker" in navigator) {
         // contra el total real de cada factura. Si no existe (ventas normales, sin
         // factura escaneada), se calcula qty × precio de lista actual, como antes.
         revenue: (m.revenue != null ? m.revenue : null),
-        category: product ? product.category : null,
+        // product ? ... : (m.category || null): igual que en computeRankingData,
+        // una venta histórica de un sabor sin producto en catálogo (p.ej. Cola)
+        // trae su categoría guardada en el propio movimiento.
+        category: product ? product.category : (m.category || null),
         label: product ? (product.presentation + ' · ' + product.flavor) : (stripGraceTag(m.productLabel) || 'Producto'),
         photoUrl: product ? product.photoUrl : null,
         key: (m.productId || m.productLabel) + '|main'
