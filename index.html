@@ -4885,6 +4885,39 @@ if ("serviceWorker" in navigator) {
     return rows;
   }
 
+  // Cuenta ventas reales (facturas/sesiones de venta), no líneas de producto.
+  // Varias líneas del mismo cliente registradas dentro de una ventana corta
+  // de tiempo (misma factura, o varios productos agregados uno por uno en
+  // el momento de la venta) cuentan como UNA sola venta -- mismo criterio
+  // que ya usa la pestaña Clientes para agrupar en tarjetas. Las ventas sin
+  // nombre de cliente (incl. Supermaxi, que siempre viene con client:'') no
+  // tienen un dato en común para agruparlas, así que cada línea cuenta como
+  // su propia venta, igual que antes.
+  function countSalesInvoices(period){
+    var GROUP_WINDOW_MS = 10 * 60 * 1000;
+    var moves = movementsInPeriod(period).filter(function(m){ return m.type === 'venta'; });
+    if(state.includeSupermaxiSales){
+      moves = moves.concat(filterMovementsByPeriod(state.supermaxiMovements, period).filter(function(m){ return m.type === 'venta'; }));
+    }
+    var byClient = {};
+    var count = 0;
+    moves.forEach(function(m){
+      var key = (m.client || '').trim();
+      if(!key){ count += 1; return; }
+      (byClient[key] = byClient[key] || []).push(m);
+    });
+    Object.keys(byClient).forEach(function(client){
+      var list = byClient[client].slice().sort(function(a,b){ return new Date(a.at) - new Date(b.at); });
+      var lastAt = null;
+      list.forEach(function(m){
+        var t = new Date(m.at).getTime();
+        if(lastAt === null || (t - lastAt) > GROUP_WINDOW_MS) count += 1;
+        lastAt = t;
+      });
+    });
+    return count;
+  }
+
   function computeSalesData(period){
     var rows = collectSalesForPeriod(period);
     var totalUnits = 0, totalRevenue = 0;
@@ -4902,7 +4935,7 @@ if ("serviceWorker" in navigator) {
       byProduct[r.key].revenue += revenue;
     });
     var ranked = Object.keys(byProduct).map(function(k){ return byProduct[k]; }).sort(function(a,b){ return b.revenue - a.revenue; });
-    var salesCount = rows.length;
+    var salesCount = countSalesInvoices(period);
     var avgTicket = salesCount > 0 ? (totalRevenue / salesCount) : 0;
     return { totalUnits: totalUnits, totalRevenue: totalRevenue, byCategoryRevenue: byCategoryRevenue, ranked: ranked, salesCount: salesCount, avgTicket: avgTicket };
   }
