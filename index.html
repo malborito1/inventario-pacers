@@ -3975,8 +3975,8 @@ if ("serviceWorker" in navigator) {
             qty: it.cantidad,
             at: atIso,
             user: state.userName,
-            client: (inv.distribuidor || '') + (inv.numero ? (' #' + inv.numero) : ''),
-            note: 'Venta histórica importada (' + inv.file + ')',
+            client: (inv.distribuidor || '').trim(),
+            note: 'Venta histórica importada' + (inv.numero ? (' · Factura/Nota #' + inv.numero) : '') + ' (' + inv.file + ')',
             historical: true,
             source: 'facturas_2026_import'
           });
