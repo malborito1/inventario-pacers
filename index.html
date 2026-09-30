@@ -4963,7 +4963,9 @@ if ("serviceWorker" in navigator) {
   // que siempre viene con client:'') no tienen un dato en común para
   // agruparlas entre sí, así que cada línea cuenta como su propia venta.
   function countSalesInvoices(period){
-    var moves = movementsInPeriod(period).filter(function(m){ return m.type === 'venta'; });
+    // m.creditNote excluye ajustes de Notas de Credito historicas (restan del
+    // monto del cliente pero no son una venta nueva) del conteo de facturas.
+    var moves = movementsInPeriod(period).filter(function(m){ return m.type === 'venta' && !m.creditNote; });
     if(state.includeSupermaxiSales){
       moves = moves.concat(filterMovementsByPeriod(state.supermaxiMovements, period).filter(function(m){ return m.type === 'venta'; }));
     }
@@ -5031,7 +5033,10 @@ if ("serviceWorker" in navigator) {
       });
       totalUnits += qty;
       totalRevenue += revenue;
-      byClient[key] = { label: key, qty: qty, orders: countSaleGroups(list), revenue: revenue };
+      // Notas de Credito historicas (m.creditNote) restan del total en $ del cliente
+      // pero no cuentan como una compra/factura adicional en "X compras registradas".
+      var ordersList = list.filter(function(m){ return !m.creditNote; });
+      byClient[key] = { label: key, qty: qty, orders: countSaleGroups(ordersList), revenue: revenue };
     });
     if(state.includeSupermaxiSales){
       var smMoves = filterMovementsByPeriod(state.supermaxiMovements, period).filter(function(m){ return m.type === 'venta'; });
