@@ -2272,12 +2272,30 @@ if ("serviceWorker" in navigator) {
     });
   }
 
+  // Una cuenta por cobrar a un distribuidor puede tener varias filas en
+  // pendingPayments (una por producto de la venta), pero en Pagos se ve y se
+  // cuenta como una sola fila agrupada por Cliente+Vencimiento (igual que en
+  // renderPagos). Si el contador no agrupara igual, "31 pendientes" no
+  // coincidiría con las filas que realmente se ven en pantalla (14).
+  function pendingPaymentsGroupedCount(){
+    var allPending = state.payments.filter(function(pg){ return pg.status !== 'paid'; });
+    var simple = allPending.filter(function(pg){ return !pg.dueDate && !pg.isDistribuidor; });
+    var distrib = allPending.filter(function(pg){ return !!pg.dueDate || !!pg.isDistribuidor; });
+    var seen = {};
+    var groupCount = 0;
+    distrib.forEach(function(pg){
+      var key = (pg.name||'') + '|' + (pg.dueDate||'');
+      if(!seen[key]){ seen[key] = true; groupCount++; }
+    });
+    return simple.length + groupCount;
+  }
+
   function renderTabs(){
     var root = document.getElementById('tabRow');
     var counts = {ALL: state.products.length};
     CATEGORIES.forEach(function(c){ counts[c] = state.products.filter(function(p){return p.category===c;}).length; });
     counts.GRACE = state.graceItems.length;
-    counts.PAGOS = state.payments.filter(function(pg){ return pg.status !== 'paid'; }).length;
+    counts.PAGOS = pendingPaymentsGroupedCount();
     counts.CLIENTE = state.movements.filter(function(m){ return m.client && m.client.trim(); }).length;
     counts.RANKING = null;
 
@@ -2667,7 +2685,7 @@ if ("serviceWorker" in navigator) {
       if(pg.dueDate && pg.dueDate <= today){ totalOverdue += (pg.amount||0); } else { totalUpcoming += (pg.amount||0); }
     });
 
-    var html = '<div class="category" data-cat="PAGOS"><div class="category-head"><h2>Pagos pendientes</h2><span class="count">' + (pending.length + distrib.length) + ' pendientes</span></div>';
+    var html = '<div class="category" data-cat="PAGOS"><div class="category-head"><h2>Pagos pendientes</h2><span class="count">' + pendingPaymentsGroupedCount() + ' pendientes</span></div>';
 
     html += '<div class="pagos-totals-row">';
     html += '<div class="pagos-total">Total pendiente: <span class="pagos-total-amt num">' + fmtMoney(total) + '</span></div>';
