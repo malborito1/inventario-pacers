@@ -4226,7 +4226,7 @@ if ("serviceWorker" in navigator) {
         if(mode === 'venta' && dueDate){
           moveDone.then(function(moved){
             var unitPrice = (p.pvpPerUnit||0) * (1 - discountPct/100);
-            return registerDistributorInvoice(client, moved * unitPrice, dueDate, p, discountPct);
+            return registerDistributorInvoice(client, moved * unitPrice, dueDate, p, discountPct, note);
           }).catch(function(){
             showStatus('La venta se registró, pero no se pudo crear la cuenta por cobrar en Pagos. Agrégala ahí manualmente.', true);
           });
@@ -4246,10 +4246,15 @@ if ("serviceWorker" in navigator) {
   // fecha de vencimiento a partir de una venta. Vive en la misma colección
   // que los pagos pendientes "de siempre" (pendingPayments); lo único que la
   // distingue es que trae dueDate.
-  function registerDistributorInvoice(client, amount, dueDate, product, discountPct){
+  // La Nota (p.ej. "#36") se usa como número de factura/pedido para distinguir
+  // varias cuentas por cobrar del mismo cliente en Pagos, sin tocar el nombre
+  // de Cliente que usan Ranking/autocompletado (ese se guarda limpio en el
+  // movimiento, vía applyMovement). Así "Tatto #1", "Setecientos #17", etc.
+  function registerDistributorInvoice(client, amount, dueDate, product, discountPct, note){
     if(!state.db) return Promise.reject(new Error('no-db'));
+    var displayName = client + (note ? (' ' + note) : '');
     return state.db.collection('pendingPayments').add({
-      name: client,
+      name: displayName,
       amount: amount,
       dueDate: dueDate,
       createdAt: new Date().toISOString(),
@@ -4260,7 +4265,7 @@ if ("serviceWorker" in navigator) {
       discountPct: discountPct || 0
     }).then(function(){
       var descNote = (discountPct>0) ? (' (' + discountPct + '% desc.)') : '';
-      showStatus('Cuenta por cobrar registrada en Pagos: ' + fmtMoney(amount) + ' de ' + client + descNote + '.');
+      showStatus('Cuenta por cobrar registrada en Pagos: ' + fmtMoney(amount) + ' de ' + displayName + descNote + '.');
     });
   }
 
