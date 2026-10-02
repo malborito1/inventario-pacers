@@ -1964,6 +1964,38 @@ if ("serviceWorker" in navigator) {
     state.lastDiscountPct = pct;
     state.lastDiscountPctAt = Date.now();
   }
+  // Nota recordada igual que Cliente/Vencimiento/Margen: si al registrar una
+  // venta se escribió una Nota, la siguiente venta (mismo cliente, dentro de
+  // los 20 min) ya la trae precargada en vez de empezar vacía.
+  function activeNoteValue(){
+    if(state.lastNote && state.lastNoteAt && (Date.now() - state.lastNoteAt) < LAST_CLIENT_TTL_MS){
+      return state.lastNote;
+    }
+    return '';
+  }
+  function noteNoteUsed(note){
+    var v = (note||'').trim();
+    if(!v) return;
+    state.lastNote = v;
+    state.lastNoteAt = Date.now();
+  }
+  // Si el campo Cliente cambia a un nombre distinto del que estaba precargado,
+  // es un ingreso nuevo: Nota/Vencimiento/Margen (todo lo "recordado" de la
+  // venta anterior) debe borrarse, tanto en pantalla como en el estado, para
+  // que no se arrastren por error al cliente nuevo.
+  function wireClientChangeClear(clientInputEl, prefillClient, extraFieldIds){
+    if(!clientInputEl) return;
+    clientInputEl.addEventListener('input', function(){
+      if(clientInputEl.value.trim() === prefillClient) return;
+      extraFieldIds.forEach(function(fid){
+        var el = document.getElementById(fid);
+        if(el) el.value = '';
+      });
+      state.lastNote = null; state.lastNoteAt = null;
+      state.lastDueDate = null; state.lastDueDateAt = null;
+      state.lastDiscountPct = null; state.lastDiscountPctAt = null;
+    });
+  }
   function renderClientChip(){
     var chip = document.getElementById('clientChip');
     if(!chip) return;
@@ -2335,7 +2367,7 @@ if ("serviceWorker" in navigator) {
       if(isVenta){
         html += '<div class="mini-field-row">'
           + '<div class="mini-field"><label>Cliente (opcional)</label><input type="text" id="clientInput-' + p.id + '" list="clientNamesList" value="' + esc(activeClientValue()) + '" placeholder="Nombre del comprador" maxlength="60"></div>'
-          + '<div class="mini-field"><label>Notas (opcional)</label><input type="text" id="noteInput-' + p.id + '" placeholder="Ej. evento, pedido especial…" maxlength="120"></div>'
+          + '<div class="mini-field"><label>Notas (opcional)</label><input type="text" id="noteInput-' + p.id + '" value="' + esc(activeNoteValue()) + '" placeholder="Ej. evento, pedido especial…" maxlength="120"></div>'
           + '</div>';
         html += '<div class="mini-field-row">'
           + '<div class="mini-field"><label>Vencimiento de factura (opcional)</label><input type="date" id="dueDateInput-' + p.id + '" value="' + esc(activeDueDateValue()) + '"></div>'
@@ -2477,7 +2509,7 @@ if ("serviceWorker" in navigator) {
       if(isVenta){
         html += '<div class="mini-field-row">'
           + '<div class="mini-field"><label>Cliente (opcional)</label><input type="text" id="gclientInput-' + g.id + '" list="clientNamesList" value="' + esc(activeClientValue()) + '" placeholder="Nombre del comprador" maxlength="60"></div>'
-          + '<div class="mini-field"><label>Notas (opcional)</label><input type="text" id="gnoteInput-' + g.id + '" placeholder="Ej. evento, pedido especial…" maxlength="120"></div>'
+          + '<div class="mini-field"><label>Notas (opcional)</label><input type="text" id="gnoteInput-' + g.id + '" value="' + esc(activeNoteValue()) + '" placeholder="Ej. evento, pedido especial…" maxlength="120"></div>'
           + '</div>';
       }
       html += '<button class="confirm-btn" data-gaction="confirm-move" data-gid="' + g.id + '" data-mode="' + openMode + '">' + (isVenta?'Registrar venta':'Registrar ingreso a Grace') + '</button>';
@@ -2541,6 +2573,11 @@ if ("serviceWorker" in navigator) {
         ev.stopPropagation();
       });
     });
+    if(state.openGraceRow && state.openGraceRow.mode === 'venta'){
+      var ogId = state.openGraceRow.id;
+      wireClientChangeClear(document.getElementById('gclientInput-' + ogId), activeClientValue(),
+        ['gnoteInput-' + ogId]);
+    }
   }
 
   function handleGraceRowAction(action, gid, el){
@@ -2600,6 +2637,7 @@ if ("serviceWorker" in navigator) {
       ensureUser(function(){
         applyGraceMovement(g, mode, qty, client, note);
         if(mode === 'venta' && client) noteClientUsed(client);
+        if(mode === 'venta' && note) noteNoteUsed(note);
         state.openGraceRow = null;
         render();
       });
@@ -4132,6 +4170,11 @@ if ("serviceWorker" in navigator) {
         renderCategories();
       });
     });
+    if(state.openRow && state.openRow.mode === 'venta'){
+      var ocId = state.openRow.id;
+      wireClientChangeClear(document.getElementById('clientInput-' + ocId), activeClientValue(),
+        ['noteInput-' + ocId, 'dueDateInput-' + ocId, 'discountInput-' + ocId]);
+    }
   }
 
   function handleRowAction(action, id, el){
@@ -4191,6 +4234,7 @@ if ("serviceWorker" in navigator) {
           noteDiscountUsed(discountPct);
         }
         if(mode === 'venta' && client) noteClientUsed(client);
+        if(mode === 'venta' && note) noteNoteUsed(note);
         state.openRow = null;
         render();
       });
@@ -7559,7 +7603,7 @@ if ("serviceWorker" in navigator) {
       if(isVenta){
         html += '<div class="mini-field-row">'
           + '<div class="mini-field"><label>Cliente (opcional)</label><input type="text" id="sclientInput-' + p.id + '" list="clientNamesList" value="' + esc(activeClientValue()) + '" placeholder="Nombre del comprador" maxlength="60"></div>'
-          + '<div class="mini-field"><label>Notas (opcional)</label><input type="text" id="snoteInput-' + p.id + '" placeholder="Ej. evento, pedido especial…" maxlength="120"></div>'
+          + '<div class="mini-field"><label>Notas (opcional)</label><input type="text" id="snoteInput-' + p.id + '" value="' + esc(activeNoteValue()) + '" placeholder="Ej. evento, pedido especial…" maxlength="120"></div>'
           + '</div>';
       }
       html += '<button class="confirm-btn" data-saction="confirm-move" data-sid="' + p.id + '" data-mode="' + openMode + '">' + (isVenta?'Registrar venta':'Registrar ingreso') + '</button>';
@@ -7641,6 +7685,11 @@ if ("serviceWorker" in navigator) {
         ev.stopPropagation();
       });
     });
+    if(state.openSupermaxiRow && state.openSupermaxiRow.mode === 'venta'){
+      var osId = state.openSupermaxiRow.id;
+      wireClientChangeClear(document.getElementById('sclientInput-' + osId), activeClientValue(),
+        ['snoteInput-' + osId]);
+    }
   }
 
   function handleSupermaxiRowAction(action, sid, el){
@@ -7686,6 +7735,7 @@ if ("serviceWorker" in navigator) {
       ensureUser(function(){
         applySupermaxiMovement(p, mode, qty, client, note);
         if(mode === 'venta' && client) noteClientUsed(client);
+        if(mode === 'venta' && note) noteNoteUsed(note);
         state.openSupermaxiRow = null;
         render();
       });
