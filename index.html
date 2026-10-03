@@ -1985,7 +1985,13 @@ if ("serviceWorker" in navigator) {
   // que no se arrastren por error al cliente nuevo.
   function wireClientChangeClear(clientInputEl, prefillClient, extraFieldIds){
     if(!clientInputEl) return;
-    clientInputEl.addEventListener('input', function(){
+    // Se evalúa en 'blur' (cuando el campo pierde el foco), no en cada tecla
+    // ('input'): así, si el usuario vuelve a escribir o confirma el MISMO
+    // nombre que ya estaba precargado (común en el cel, donde no siempre se
+    // nota que el campo ya trae el nombre), no se borra la Nota de inmediato
+    // en la primera letra que todavía no coincide — solo se borra si, al salir
+    // del campo, el nombre final realmente quedó distinto.
+    clientInputEl.addEventListener('blur', function(){
       if(clientInputEl.value.trim() === prefillClient) return;
       extraFieldIds.forEach(function(fid){
         var el = document.getElementById(fid);
