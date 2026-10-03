@@ -3332,11 +3332,15 @@ if ("serviceWorker" in navigator) {
     var largo = parseFloat(vc.largo)||0, ancho = parseFloat(vc.ancho)||0, altoInput = parseFloat(vc.alto)||0, factorConv = parseFloat(vc.factor)||5385;
     var altoEfectivo = altoInput>0 ? altoInput : altoCm;
     var pesoVolumetrico = factorConv>0 ? Math.round((largo*ancho*altoEfectivo/factorConv)*100)/100 : 0;
+    var margenProyectado = totalVenta-granTotal;
+    // % sobre la venta proyectada (margen / venta), no sobre el costo.
+    var margenProyectadoPct = totalVenta>0 ? (margenProyectado/totalVenta)*100 : 0;
     return {
       totalCajas:totalCajas, totalKg:totalKg, totalUnidades:totalUnidades, totalMercaderia:totalMercaderia,
       freight:freight, mercaderiaConFlete:mercaderiaConFlete, totalCostosLocales:totalCostosLocales,
       granTotal:granTotal, factor:factor, filas:filas, altoCm:altoCm, altoEfectivo:altoEfectivo, pesoKg:pesoKg, pesoLbs:pesoLbs,
-      pesoVolumetrico:pesoVolumetrico, totalVentaProyectada:totalVenta, margenProyectado: totalVenta-granTotal
+      pesoVolumetrico:pesoVolumetrico, totalVentaProyectada:totalVenta, margenProyectado: margenProyectado,
+      margenProyectadoPct: margenProyectadoPct
     };
   }
 
@@ -3517,7 +3521,7 @@ if ("serviceWorker" in navigator) {
     html += '<div class="imp-kv"><span>Factor de costeo</span><b>x'+ (totals.factor||0).toLocaleString('es-EC',{minimumFractionDigits:2,maximumFractionDigits:2}) +'</b></div>';
     if(totals.totalVentaProyectada>0){
       html += '<div class="imp-kv" style="margin-top:8px;"><span>Venta proyectada</span><b>'+ fmtMoney(totals.totalVentaProyectada) +'</b></div>';
-      html += '<div class="imp-kv"><span>Margen proyectado</span><b style="color:'+(totals.margenProyectado>=0?'var(--success)':'var(--critical)')+';">'+ fmtMoney(totals.margenProyectado) +'</b></div>';
+      html += '<div class="imp-kv"><span>Margen proyectado</span><b style="color:'+(totals.margenProyectado>=0?'var(--success)':'var(--critical)')+';">'+ fmtMoney(totals.margenProyectado) +' <span style="font-weight:600;">('+ (totals.margenProyectadoPct||0).toLocaleString('es-EC',{minimumFractionDigits:1,maximumFractionDigits:1}) +'%)</span></b></div>';
     }
     html += '</div>';
     return html;
@@ -3533,7 +3537,7 @@ if ("serviceWorker" in navigator) {
     html += '<div class="imp-kv"><span>Factor de costeo</span><b>x'+ (totals.factor||0).toLocaleString('es-EC',{minimumFractionDigits:2,maximumFractionDigits:2}) +'</b></div>';
     if(totals.totalVentaProyectada>0){
       html += '<div class="imp-kv"><span>Venta proyectada</span><b>'+ fmtMoney(totals.totalVentaProyectada) +'</b></div>';
-      html += '<div class="imp-kv"><span>Margen proyectado</span><b style="color:'+(totals.margenProyectado>=0?'var(--success)':'var(--critical)')+';">'+ fmtMoney(totals.margenProyectado) +'</b></div>';
+      html += '<div class="imp-kv"><span>Margen proyectado</span><b style="color:'+(totals.margenProyectado>=0?'var(--success)':'var(--critical)')+';">'+ fmtMoney(totals.margenProyectado) +' <span style="font-weight:600;">('+ (totals.margenProyectadoPct||0).toLocaleString('es-EC',{minimumFractionDigits:1,maximumFractionDigits:1}) +'%)</span></b></div>';
     }
     return html;
   }
@@ -3546,6 +3550,7 @@ if ("serviceWorker" in navigator) {
       + '<div class="kpi"><div class="label">Factor de costeo</div><div class="value num">x'+ (totals.factor||0).toLocaleString('es-EC',{minimumFractionDigits:2,maximumFractionDigits:2}) +'</div></div>'
       + '<div class="kpi"><div class="label">Venta proyectada</div><div class="value num">'+ fmtMoney(totals.totalVentaProyectada||0) +'</div></div>'
       + '<div class="kpi'+(totals.margenProyectado>=0?' positive':' alert')+'"><div class="label">Margen proyectado</div><div class="value num">'+ fmtMoney(totals.margenProyectado||0) +'</div></div>'
+      + '<div class="kpi'+(totals.margenProyectado>=0?' positive':' alert')+'"><div class="label">Margen proyectado <span class="sub">(%)</span></div><div class="value num">'+ (totals.margenProyectadoPct||0).toLocaleString('es-EC',{minimumFractionDigits:1,maximumFractionDigits:1}) +'%</div></div>'
       + '</div>';
   }
 
