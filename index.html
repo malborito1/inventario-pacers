@@ -7438,8 +7438,11 @@ if ("serviceWorker" in navigator) {
     var catTotal = byCat.ENDURANCE + byCat.HCF + byCat.RECOVERY;
 
     var html = '<div class="category" data-cat="FERIAS">';
+    // "Volver a la feria" siempre visible (antes solo si estaba activa): una
+    // feria cerrada se abre directo en este reporte desde el listado, y sin
+    // este botón no había forma de llegar al detalle ni a "Eliminar feria".
     html += '<div class="fair-back-row"><button class="fair-back-btn" data-fair-back-list type="button">← Ferias</button>' +
-      (isActive ? '<button class="fair-back-btn" data-fair-back-detail type="button">← Volver a la feria</button>' : '') + '</div>';
+      '<button class="fair-back-btn" data-fair-back-detail type="button">← Volver a la feria</button></div>';
     html += '<div class="fair-header"><div><span class="fair-status-pill ' + (isActive?'active':'closed') + '">' + (isActive?'Activa':'Cerrada') + '</span>' +
       '<h2>' + esc(f.name) + '</h2><div class="fair-date">' + esc(f.dateLabel||'') + '</div></div>' +
       '<div style="display:flex; gap:8px; flex-wrap:wrap;">' +
