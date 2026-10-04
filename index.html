@@ -1268,6 +1268,14 @@ if ("serviceWorker" in navigator) {
   .imp-cost-check{width:18px; height:18px; flex:none; cursor:pointer;}
   .imp-cost-remove{background:none; border:none; color:var(--critical); cursor:pointer; font-size:15px; flex:none; width:22px;}
   .imp-add-row{background:none; border:1px dashed var(--border); color:var(--text-muted); border-radius:8px; padding:6px 10px; cursor:pointer; font-size:12px; margin-top:6px; width:100%;}
+  /* Costos "extra" (ej. desde "Cajas Madre"): verde bajito para distinguirlos
+     de los costos normales de importación, pero suman igual al total. */
+  .imp-cost-extra-label{margin-top:14px; margin-bottom:6px; font-size:11px; text-transform:uppercase; letter-spacing:.06em; font-weight:700; color:var(--success);}
+  .imp-costs-list-extra{background:var(--success-tint); border-radius:10px; padding:8px; margin:0 -4px;}
+  .imp-costs-list-extra:empty{display:none;}
+  .imp-cost-row.extra input{background:var(--surface);}
+  .imp-add-row-extra{border-color:var(--success); color:var(--success);}
+  .imp-kv.imp-subtotal{color:var(--text-muted); font-size:12px;}
   .imp-milestone{display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin-bottom:10px;}
   .imp-milestone label{width:100%; flex:none; font-size:11.5px; color:var(--text-muted); font-weight:600;}
   .imp-milestone input[type=date]{flex:0 0 132px; padding:6px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:12px;}
@@ -3321,7 +3329,12 @@ if ("serviceWorker" in navigator) {
     var freight = parseFloat(imp.freight)||0;
     var mercaderiaConFlete = totalMercaderia + freight;
     var costos = imp.localCosts || [];
-    var totalCostosLocales = costos.reduce(function(s,c){ return s+(parseFloat(c.monto)||0); }, 0);
+    // Los costos marcados como "extra" (ej. desde "Cajas Madre" en adelante:
+    // empaque, etiquetado, etc.) se muestran aparte en la UI, pero suman igual
+    // al total de costos locales / TOTAL a pagar.
+    var totalCostosNormales = costos.reduce(function(s,c){ return c.extra ? s : s+(parseFloat(c.monto)||0); }, 0);
+    var totalCostosExtra = costos.reduce(function(s,c){ return c.extra ? s+(parseFloat(c.monto)||0) : s; }, 0);
+    var totalCostosLocales = totalCostosNormales + totalCostosExtra;
     var granTotal = mercaderiaConFlete + totalCostosLocales;
     var factor = totalMercaderia>0 ? Math.round((granTotal/totalMercaderia)*100)/100 : 0;
     var filas = Math.ceil(totalCajas/IMPORT_BOXES_PER_ROW) || 0;
@@ -3338,6 +3351,7 @@ if ("serviceWorker" in navigator) {
     return {
       totalCajas:totalCajas, totalKg:totalKg, totalUnidades:totalUnidades, totalMercaderia:totalMercaderia,
       freight:freight, mercaderiaConFlete:mercaderiaConFlete, totalCostosLocales:totalCostosLocales,
+      totalCostosNormales:totalCostosNormales, totalCostosExtra:totalCostosExtra,
       granTotal:granTotal, factor:factor, filas:filas, altoCm:altoCm, altoEfectivo:altoEfectivo, pesoKg:pesoKg, pesoLbs:pesoLbs,
       pesoVolumetrico:pesoVolumetrico, totalVentaProyectada:totalVenta, margenProyectado: margenProyectado,
       margenProyectadoPct: margenProyectadoPct
@@ -3492,21 +3506,41 @@ if ("serviceWorker" in navigator) {
     return html + '</div>';
   }
 
+  // Una fila de costo normal (data-cidx apunta siempre al índice real dentro
+  // de imp.localCosts, sin importar en qué sub-lista se está dibujando).
+  function importCostRowHtml(c, idx){
+    return '<div class="imp-cost-row'+(c.extra?' extra':'')+'">'
+      + '<input type="checkbox" class="imp-cost-check" data-cidx="'+idx+'" '+(c.pagado?'checked':'')+' title="Pagado">'
+      + '<input type="text" class="imp-cost-name" data-cidx="'+idx+'" value="'+esc(c.concepto||'')+'" placeholder="Concepto" onfocus="this.select()">'
+      + '<input type="number" step="0.01" class="imp-cost-amount" data-cidx="'+idx+'" value="'+(c.monto||0)+'" onfocus="this.select()">'
+      + '<button type="button" class="imp-cost-remove" data-cidx="'+idx+'" title="Quitar">✕</button>'
+      + '</div>';
+  }
+
   function importCostsCardHtml(imp, totals){
     var costs = imp.localCosts || [];
+    // Los costos "extra" (ej. desde "Cajas Madre": empaque, etiquetado, etc.)
+    // se dibujan en su propia sub-lista con fondo verde, con su propio botón
+    // de agregar y subtotal — pero data-cidx sigue siendo el índice real en
+    // imp.localCosts, así que editar/quitar/agregar funciona igual en ambas.
     var html = '<div class="imp-card"><h4>Costos locales</h4>'
       + '<div class="imp-field" style="margin-bottom:10px;"><label>Carga arancelaria</label><input type="number" step="0.01" id="impCargaArancelaria" value="'+(imp.cargaArancelaria||0)+'" onfocus="this.select()"></div>'
       + '<div class="imp-costs-list">';
     costs.forEach(function(c, idx){
-      html += '<div class="imp-cost-row">'
-        + '<input type="checkbox" class="imp-cost-check" data-cidx="'+idx+'" '+(c.pagado?'checked':'')+' title="Pagado">'
-        + '<input type="text" class="imp-cost-name" data-cidx="'+idx+'" value="'+esc(c.concepto||'')+'" placeholder="Concepto" onfocus="this.select()">'
-        + '<input type="number" step="0.01" class="imp-cost-amount" data-cidx="'+idx+'" value="'+(c.monto||0)+'" onfocus="this.select()">'
-        + '<button type="button" class="imp-cost-remove" data-cidx="'+idx+'" title="Quitar">✕</button>'
-        + '</div>';
+      if(!c.extra) html += importCostRowHtml(c, idx);
     });
     html += '</div><button type="button" class="imp-add-row" id="impAddCostBtn">+ Agregar costo</button>'
-      + '<div class="imp-kv imp-grand"><span>Total costos locales</span><b>'+ fmtMoney(totals.totalCostosLocales) +'</b></div>'
+      + '<div class="imp-kv imp-subtotal"><span>Subtotal costos</span><b>'+ fmtMoney(totals.totalCostosNormales) +'</b></div>';
+
+    html += '<div class="imp-cost-extra-label">Costos extra</div>'
+      + '<div class="imp-costs-list imp-costs-list-extra">';
+    costs.forEach(function(c, idx){
+      if(c.extra) html += importCostRowHtml(c, idx);
+    });
+    html += '</div><button type="button" class="imp-add-row imp-add-row-extra" id="impAddCostExtraBtn">+ Agregar costo extra</button>'
+      + '<div class="imp-kv imp-subtotal"><span>Subtotal extra</span><b>'+ fmtMoney(totals.totalCostosExtra) +'</b></div>';
+
+    html += '<div class="imp-kv imp-grand"><span>Total costos locales</span><b>'+ fmtMoney(totals.totalCostosLocales) +'</b></div>'
       + '</div>';
     return html;
   }
@@ -3799,7 +3833,13 @@ if ("serviceWorker" in navigator) {
     var addCostBtn = document.getElementById('impAddCostBtn');
     if(addCostBtn) addCostBtn.addEventListener('click', function(){
       var costs = (imp.localCosts||[]).slice();
-      costs.push({concepto:'', monto:0, pagado:false});
+      costs.push({concepto:'', monto:0, pagado:false, extra:false});
+      updateImportField(imp.id, {localCosts: costs});
+    });
+    var addCostExtraBtn = document.getElementById('impAddCostExtraBtn');
+    if(addCostExtraBtn) addCostExtraBtn.addEventListener('click', function(){
+      var costs = (imp.localCosts||[]).slice();
+      costs.push({concepto:'', monto:0, pagado:false, extra:true});
       updateImportField(imp.id, {localCosts: costs});
     });
   }
