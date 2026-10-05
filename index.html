@@ -736,6 +736,7 @@ if ("serviceWorker" in navigator) {
   .pago-ship-add{border:none; background:var(--success-tint); color:var(--success); border-radius:8px; padding:7px 11px; font-size:12.5px; font-weight:600; cursor:pointer;}
   .pago-ship-add:hover{background:var(--success); color:#fff;}
   .pago-due{font-size:12px; color:var(--text-muted); flex:0 0 auto; white-space:nowrap;}
+  .pago-due-days{display:block; font-size:11px; font-weight:700; color:var(--critical); margin-top:1px;}
   .pago-vencido-badge{background:var(--critical); color:#fff; font-weight:800; font-size:15px; letter-spacing:.03em; padding:5px 14px; border-radius:8px; flex:0 0 auto;}
 
   /* ---------- Clientes ---------- */
@@ -2102,6 +2103,20 @@ if ("serviceWorker" in navigator) {
     var d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
   }
+  // Días transcurridos desde una fecha 'YYYY-MM-DD' hasta hoy (0 = es hoy).
+  // Se calcula con Date.UTC sobre año/mes/día para que el cambio de horario o la
+  // zona horaria no desfasen el conteo en un día.
+  function daysOverdueText(dateStr){
+    var p = String(dateStr||'').split('-');
+    var t = todayDateStr().split('-');
+    if(p.length !== 3) return '';
+    var a = Date.UTC(parseInt(p[0],10), parseInt(p[1],10)-1, parseInt(p[2],10));
+    var b = Date.UTC(parseInt(t[0],10), parseInt(t[1],10)-1, parseInt(t[2],10));
+    var n = Math.round((b-a)/86400000);
+    if(isNaN(n) || n < 0) return '';
+    if(n === 0) return 'vence hoy';
+    return n + (n === 1 ? ' día' : ' días');
+  }
   function fmtDateOnly(dateStr){
     var parts = String(dateStr||'').split('-');
     if(parts.length !== 3) return '';
@@ -2764,7 +2779,8 @@ if ("serviceWorker" in navigator) {
           + (grp.labels.length ? ('<div class="pago-distrib-products">' + esc(grp.labels.join(' · ')) + '</div>') : '')
           + (grp.shipping > 0 ? ('<div class="pago-distrib-products">Productos: ' + fmtMoney(grp.products) + ' + Envío: ' + fmtMoney(grp.shipping) + '</div>') : '')
           + '</span>'
-          + '<span class="pago-due">' + (grp.dueDate ? ((overdue ? 'Venció ' : 'Vence ') + fmtDateOnly(grp.dueDate)) : 'Sin fecha') + '</span>'
+          + '<span class="pago-due">' + (grp.dueDate ? ((overdue ? 'Venció ' : 'Vence ') + fmtDateOnly(grp.dueDate)) : 'Sin fecha')
+          + (overdue ? '<span class="pago-due-days">' + daysOverdueText(grp.dueDate) + '</span>' : '') + '</span>'
           + '<span class="pago-amt num">' + fmtMoney(grp.amount) + '</span>'
           + (overdue ? '<span class="pago-vencido-badge">VENCIDO</span>' : '<span class="pill ok">Al día</span>')
           + '<button class="pago-ship-toggle" data-key="' + esc(grp.key) + '" type="button" title="Agregar valor de envío">' + (shippingOpen ? 'Cancelar envío' : '+ Envío') + '</button>'
