@@ -733,9 +733,15 @@ if ("serviceWorker" in navigator) {
   .pago-ship-toggle:hover{background:var(--surface-2);}
   .pago-ship-form{display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:0 14px 10px; margin-top:-4px;}
   .pago-ship-value-input{padding:7px 10px; border-radius:8px; border:1px solid var(--border); background:var(--surface); font-size:13px; color:var(--text); width:190px;}
-  .pago-ship-add{border:none; background:var(--success-tint); color:var(--success); border-radius:8px; padding:7px 11px; font-size:12.5px; font-weight:600; cursor:pointer;}
-  .pago-ship-add:hover{background:var(--success); color:#fff;}
+  .pago-ship-add, .pago-abono-add{border:none; background:var(--success-tint); color:var(--success); border-radius:8px; padding:7px 11px; font-size:12.5px; font-weight:600; cursor:pointer;}
+  .pago-ship-add:hover, .pago-abono-add:hover{background:var(--success); color:#fff;}
   .pago-due{font-size:12px; color:var(--text-muted); flex:0 0 auto; white-space:nowrap;}
+  .pago-abono-toggle{border:1px dashed var(--border); background:none; color:var(--success); border-radius:8px; padding:5px 9px; font-size:11.5px; cursor:pointer; font-weight:600;}
+  .pago-abono-toggle:hover{background:var(--success-tint);}
+  .pago-abono-form input{padding:7px 10px; border-radius:8px; border:1px solid var(--border); background:var(--surface); font-size:13px; color:var(--text);}
+  .pago-abono-hint{font-size:12px; color:var(--text-muted);}
+  .pago-abono-line{font-size:11.5px; font-weight:600; color:var(--success); margin-top:2px;}
+  .pago-abono-tag{font-size:10px; font-weight:700; text-transform:uppercase; color:var(--success); background:var(--success-tint); border-radius:6px; padding:1px 6px; margin-left:6px;}
   .pago-due-days{display:block; font-size:11px; font-weight:700; color:var(--critical); margin-top:1px;}
   .pago-vencido-badge{background:var(--critical); color:#fff; font-weight:800; font-size:15px; letter-spacing:.03em; padding:5px 14px; border-radius:8px; flex:0 0 auto;}
 
@@ -1930,6 +1936,7 @@ if ("serviceWorker" in navigator) {
     lastDueDateAt: null, // ms timestamp; auto-expires after LAST_CLIENT_TTL_MS, same as el cliente
     lastDiscountPct: null,
     lastDiscountPctAt: null, // ms timestamp; auto-expira igual que el cliente y la fecha
+    openAbonoRow: null,  // key de la fila de Pagos con el mini-form de abono abierto
     openShippingRow: null, // key ("nombre|vencimiento") de la fila de Pagos con el mini-form de envío abierto
     stockFilter: null,   // null | 'lowstock'
     collapsedGroups: {}, // gkey ("CAT::presentacion") -> bool, persisted in localStorage
@@ -2811,12 +2818,17 @@ if ("serviceWorker" in navigator) {
         var key = (pg.name||'') + '|' + (pg.dueDate||'');
         if(!distribGroupIndex.hasOwnProperty(key)){
           distribGroupIndex[key] = distribGroups.length;
-          distribGroups.push({name: pg.name, dueDate: pg.dueDate, amount: 0, products: 0, shipping: 0, ids: [], labels: [], key: key});
+          distribGroups.push({name: pg.name, dueDate: pg.dueDate, amount: 0, products: 0, shipping: 0, abonos: 0, abonoList: [], ids: [], labels: [], key: key});
         }
         var grp = distribGroups[distribGroupIndex[key]];
         grp.amount += (pg.amount||0);
         grp.ids.push(pg.id);
-        if(pg.origin === 'envio'){
+        if(pg.origin === 'abono'){
+          // Abono parcial: se guarda como un monto negativo dentro de la misma cuenta,
+          // asi el saldo (suma de la cuenta) baja sin tocar la factura original.
+          grp.abonos += -(pg.amount||0);
+          grp.abonoList.push({amount: -(pg.amount||0), date: pg.abonoDate || (pg.createdAt||'').slice(0,10)});
+        } else if(pg.origin === 'envio'){
           grp.shipping += (pg.amount||0);
         } else {
           grp.products += (pg.amount||0);
@@ -2827,19 +2839,30 @@ if ("serviceWorker" in navigator) {
       distribGroups.forEach(function(grp){
         var overdue = !!grp.dueDate && grp.dueDate <= today;
         var shippingOpen = (state.openShippingRow === grp.key);
+        var abonoOpen = (state.openAbonoRow === grp.key);
         html += '<div class="pago-item pago-item-distrib' + (overdue?' overdue':'') + '">'
           + '<span class="pago-name">' + esc(grp.name) + '<span class="pago-distrib-tag">Distribuidor</span>'
           + (grp.labels.length ? ('<div class="pago-distrib-products">' + esc(grp.labels.join(' · ')) + '</div>') : '')
           + (grp.shipping > 0 ? ('<div class="pago-distrib-products">Productos: ' + fmtMoney(grp.products) + ' + Envío: ' + fmtMoney(grp.shipping) + '</div>') : '')
+          + (grp.abonos > 0 ? ('<div class="pago-abono-line">Total factura ' + fmtMoney(grp.products + grp.shipping) + ' · Abonado ' + (grp.abonoList.length === 1 ? (fmtMoney(grp.abonos) + ' el ' + fmtDateOnly(grp.abonoList[0].date)) : (fmtMoney(grp.abonos) + ' (' + grp.abonoList.map(function(a){ return fmtMoney(a.amount) + ' el ' + fmtDateOnly(a.date); }).join(', ') + ')')) + ' · Saldo ' + fmtMoney(grp.amount) + '</div>') : '')
           + '</span>'
           + '<span class="pago-due">' + (grp.dueDate ? ((overdue ? 'Venció ' : 'Vence ') + fmtDateOnly(grp.dueDate)) : 'Sin fecha')
           + (overdue ? '<span class="pago-due-days">' + daysOverdueText(grp.dueDate) + '</span>' : '') + '</span>'
           + '<span class="pago-amt num">' + fmtMoney(grp.amount) + '</span>'
           + (overdue ? '<span class="pago-vencido-badge">VENCIDO</span>' : '<span class="pill ok">Al día</span>')
+          + '<button class="pago-abono-toggle" data-key="' + esc(grp.key) + '" type="button" title="Registrar un abono parcial">' + (abonoOpen ? 'Cancelar abono' : '+ Abono') + '</button>'
           + '<button class="pago-ship-toggle" data-key="' + esc(grp.key) + '" type="button" title="Agregar valor de envío">' + (shippingOpen ? 'Cancelar envío' : '+ Envío') + '</button>'
           + '<button class="pago-paid" data-pid="' + grp.ids.join(',') + '" aria-label="Marcar como pagado" title="Marcar como pagado">✓</button>'
           + '<button class="pago-del" data-pid="' + grp.ids.join(',') + '" aria-label="Eliminar" title="Eliminar">✕</button>'
           + '</div>';
+        if(abonoOpen){
+          html += '<div class="pago-ship-form pago-abono-form">'
+            + '<input type="number" class="pago-abono-value-input" placeholder="Monto del abono" min="0.01" step="0.01">'
+            + '<input type="date" class="pago-abono-date-input" value="' + esc(today) + '" title="Fecha en que se recibió el abono">'
+            + '<button class="pago-abono-add" data-name="' + esc(grp.name) + '" data-duedate="' + esc(grp.dueDate) + '" data-saldo="' + (Math.round(grp.amount*100)/100) + '" type="button">Registrar abono</button>'
+            + '<span class="pago-abono-hint">Saldo actual: ' + fmtMoney(grp.amount) + '</span>'
+            + '</div>';
+        }
         if(shippingOpen){
           html += '<div class="pago-ship-form">'
             + '<input type="number" class="pago-ship-value-input" placeholder="Valor de envío (sin IVA)" min="0" step="0.01">'
@@ -2866,7 +2889,7 @@ if ("serviceWorker" in navigator) {
       } else {
         html += '<div class="pagos-list pagos-list-history">';
         paid.forEach(function(pg){
-          html += '<div class="pago-item pago-item-paid"><span class="pago-name">' + esc(pg.name) + '</span><span class="pago-amt num">' + fmtMoney(pg.amount) + '</span><span class="pago-paid-date">Cobrado ' + fmtDateDMY(pg.paidAt) + '</span><button class="pago-reopen" data-pid="' + pg.id + '" title="Volver a pendiente">↺</button></div>';
+          html += '<div class="pago-item pago-item-paid"><span class="pago-name">' + esc(pg.name) + (pg.origin === 'abono' ? ' <span class="pago-abono-tag">abono parcial</span>' : '') + '</span><span class="pago-amt num">' + fmtMoney(pg.origin === 'abono' ? -(pg.amount||0) : pg.amount) + '</span><span class="pago-paid-date">Cobrado ' + fmtDateDMY(pg.paidAt) + '</span><button class="pago-reopen" data-pid="' + pg.id + '" title="Volver a pendiente">↺</button></div>';
         });
         html += '</div>';
       }
@@ -2912,7 +2935,28 @@ if ("serviceWorker" in navigator) {
       btn.addEventListener('click', function(){
         var key = btn.getAttribute('data-key');
         state.openShippingRow = (state.openShippingRow === key) ? null : key;
+        state.openAbonoRow = null;
         renderPagos();
+      });
+    });
+    root.querySelectorAll('.pago-abono-toggle').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var key = btn.getAttribute('data-key');
+        state.openAbonoRow = (state.openAbonoRow === key) ? null : key;
+        state.openShippingRow = null;
+        renderPagos();
+      });
+    });
+    root.querySelectorAll('.pago-abono-add').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var form = btn.closest('.pago-abono-form');
+        var input = form ? form.querySelector('.pago-abono-value-input') : null;
+        var dateInput = form ? form.querySelector('.pago-abono-date-input') : null;
+        var raw = Math.round((parseFloat(input && input.value) || 0) * 100) / 100;
+        var saldo = parseFloat(btn.getAttribute('data-saldo')) || 0;
+        if(!raw || raw <= 0){ showStatus('Ingresa un monto de abono válido.', true); return; }
+        if(raw >= saldo){ showStatus('El abono (' + fmtMoney(raw) + ') es igual o mayor al saldo (' + fmtMoney(saldo) + '). Si pagó todo, usa el botón ✓ para marcarlo como cobrado.', true); return; }
+        addAbonoToInvoice(btn.getAttribute('data-name'), btn.getAttribute('data-duedate'), raw, dateInput && dateInput.value, btn);
       });
     });
     root.querySelectorAll('.pago-ship-add').forEach(function(btn){
@@ -2988,6 +3032,35 @@ if ("serviceWorker" in navigator) {
     }).then(function(){
       showStatus('Pago devuelto a pendientes.');
     }).catch(function(){ showStatus('No se pudo actualizar.', true); });
+  }
+
+  // Abono parcial a una cuenta por cobrar de distribuidor: se agrega un registro con monto
+  // NEGATIVO (origin:'abono') en la misma cuenta (mismo nombre + vencimiento). Asi el saldo
+  // baja, la factura original queda intacta y se puede ver cuanto y cuando abono.
+  var _addingAbono = false;
+  function addAbonoToInvoice(client, dueDate, abono, dateStr, btnEl){
+    if(!state.db || !client || _addingAbono) return;
+    _addingAbono = true;
+    if(btnEl) btnEl.disabled = true;
+    var doc = {
+      name: client,
+      amount: -abono,
+      createdAt: new Date().toISOString(),
+      addedBy: state.userName,
+      origin: 'abono',
+      isDistribuidor: true,
+      abonoDate: dateStr || todayDateStr()
+    };
+    if(dueDate) doc.dueDate = dueDate;
+    ensureUser(function(){
+      state.db.collection('pendingPayments').add(doc).then(function(){
+        state.openAbonoRow = null;
+        showStatus('Abono registrado: ' + fmtMoney(abono) + ' a la cuenta de ' + client + '.');
+      }).catch(function(){ showStatus('No se pudo registrar el abono.', true); }).then(function(){
+        _addingAbono = false;
+        if(btnEl) btnEl.disabled = false;
+      });
+    });
   }
 
   function addShippingToInvoice(client, dueDate, rawAmount){
