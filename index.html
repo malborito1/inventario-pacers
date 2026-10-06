@@ -859,6 +859,11 @@ if ("serviceWorker" in navigator) {
     align-items:center; justify-content:center; padding:20px;
   }
   .modal-scrim.open{display:flex;}
+  .nc-options{display:flex; flex-direction:column; gap:8px; margin:12px 0;}
+  .nc-btn{font:inherit; font-weight:600; text-align:left; padding:10px 12px; border-radius:10px; border:1px solid var(--border, #cfd8d3); background:var(--surface, #fff); color:var(--text, inherit); cursor:pointer;}
+  .nc-btn:hover{border-color:var(--accent, #2f7d5b);}
+  .nc-btn.nc-sale{background:var(--accent, #2f7d5b); color:#fff; border-color:transparent;}
+
   .modal{
     background:var(--surface); border-radius:14px; padding:22px; width:100%; max-width:360px;
     box-shadow:var(--shadow); border:1px solid var(--border); border-top:1px solid var(--border);
@@ -1492,6 +1497,25 @@ if ("serviceWorker" in navigator) {
     <div class="modal-actions">
       <button class="cancel-btn" id="adjustCancelBtn" type="button">Cancelar</button>
       <button class="confirm-btn" id="adjustSaveBtn" type="button">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-scrim" id="noClientModalScrim">
+  <div class="modal" id="noClientModalBox">
+    <h3>Registraste sin nombre de cliente</h3>
+    <p class="hint" id="noClientHint">¿Es una venta o una salida que no es venta?</p>
+    <div class="nc-options">
+      <button type="button" class="nc-btn nc-sale" data-nc="venta">💵 Es una venta (dejarla sin nombre)</button>
+      <button type="button" class="nc-btn" data-nc="regalo">🎁 Regalo</button>
+      <button type="button" class="nc-btn" data-nc="auspicio">🤝 Auspicio</button>
+      <button type="button" class="nc-btn" data-nc="muestra">🧪 Muestra</button>
+      <button type="button" class="nc-btn" data-nc="reposicion">🏬 Reposición Supermaxi</button>
+      <button type="button" class="nc-btn" data-nc="otro">Otro (no es venta)</button>
+    </div>
+    <p class="hint">Las salidas que no son venta descuentan stock pero no suman dinero al Ranking ni a Reportes. Quedan en el Historial con su motivo.</p>
+    <div class="modal-actions">
+      <button class="cancel-btn" id="noClientCancelBtn" type="button">Volver y poner cliente</button>
     </div>
   </div>
 </div>
@@ -3058,12 +3082,15 @@ if ("serviceWorker" in navigator) {
     root.innerHTML = html;
   }
 
+  // Salidas de stock que NO son venta (no suman dinero al Ranking ni a Reportes).
+  var SALIDA_REASONS = {regalo:'Regalo', auspicio:'Auspicio', muestra:'Muestra', reposicion:'Reposición Supermaxi', otro:'Otro'};
+
   function historyItemHtml(m, confirmId){
     if(confirmId === undefined) confirmId = state.confirmUndoId;
     var pos = (m.deltaStock||0) > 0;
     var sign = m.deltaStock>0 ? '+' : '';
-    var typeLabel = m.type==='venta' ? 'Venta' : (m.type==='reabastecimiento' ? 'Reabastecimiento' : (m.type==='correccion' ? 'Corrección' : 'Ajuste de conteo'));
-    var canUndo = (m.type==='venta' || m.type==='reabastecimiento' || m.type==='ajuste') && !m.reversed && !m.fairId;
+    var typeLabel = m.type==='venta' ? 'Venta' : (m.type==='salida' ? ('Salida sin venta' + (m.reason && SALIDA_REASONS[m.reason] ? (' · ' + SALIDA_REASONS[m.reason]) : '')) : ((m.type==='reabastecimiento' || m.type==='reabastecer') ? 'Reabastecimiento' : (m.type==='correccion' ? 'Corrección' : 'Ajuste de conteo')));
+    var canUndo = (m.type==='venta' || m.type==='salida' || m.type==='reabastecimiento' || m.type==='ajuste') && !m.reversed && !m.fairId;
     var actionsHtml = '';
     if(m.reversed){
       actionsHtml = '<span class="tag-reversed">Revertido</span>';
@@ -4374,25 +4401,40 @@ if ("serviceWorker" in navigator) {
       var discountInput = document.getElementById('discountInput-' + id);
       var discountPct = (mode === 'venta' && discountInput) ? Math.min(100, Math.max(0, parseFloat(discountInput.value) || 0)) : 0;
       if(dueDate && !client){ showStatus('Si pones fecha de vencimiento, ingresa también el nombre del distribuidor en "Cliente".', true); return; }
-      ensureUser(function(){
-        // El descuento queda guardado en la propia venta para que Ranking/Reportes
-        // usen el monto realmente cobrado y no el precio de lista.
-        var moveDone = applyMovement(p, mode, qty, client, note, (mode === 'venta' && discountPct > 0) ? {discountPct: discountPct} : undefined);
-        if(mode === 'venta' && dueDate){
-          moveDone.then(function(moved){
-            var unitPrice = (p.pvpPerUnit||0) * (1 - discountPct/100);
-            return registerDistributorInvoice(client, moved * unitPrice, dueDate, p, discountPct, note);
-          }).catch(function(){
-            showStatus('La venta se registró, pero no se pudo crear la cuenta por cobrar en Pagos. Agrégala ahí manualmente.', true);
-          });
-          noteDueDateUsed(dueDate);
-          noteDiscountUsed(discountPct);
-        }
-        if(mode === 'venta' && client) noteClientUsed(client);
-        if(mode === 'venta' && note) noteNoteUsed(note);
-        state.openRow = null;
-        render();
-      });
+      function runMove(kind){
+        ensureUser(function(){
+          if(kind && kind !== 'venta'){
+            // Salida que NO es venta (regalo, auspicio, muestra, reposición): descuenta
+            // stock pero no cuenta como ingreso en Ranking/Reportes (type 'salida').
+            applyMovement(p, 'salida', qty, '', note, {reason: kind});
+            state.openRow = null;
+            render();
+            return;
+          }
+          // El descuento queda guardado en la propia venta para que Ranking/Reportes
+          // usen el monto realmente cobrado y no el precio de lista.
+          var moveDone = applyMovement(p, mode, qty, client, note, (mode === 'venta' && discountPct > 0) ? {discountPct: discountPct} : undefined);
+          if(mode === 'venta' && dueDate){
+            moveDone.then(function(moved){
+              var unitPrice = (p.pvpPerUnit||0) * (1 - discountPct/100);
+              return registerDistributorInvoice(client, moved * unitPrice, dueDate, p, discountPct, note);
+            }).catch(function(){
+              showStatus('La venta se registró, pero no se pudo crear la cuenta por cobrar en Pagos. Agrégala ahí manualmente.', true);
+            });
+            noteDueDateUsed(dueDate);
+            noteDiscountUsed(discountPct);
+          }
+          if(mode === 'venta' && client) noteClientUsed(client);
+          if(mode === 'venta' && note) noteNoteUsed(note);
+          state.openRow = null;
+          render();
+        });
+      }
+      if(mode === 'venta' && !client && !dueDate){
+        askNoClient(p, qty, function(choice){ runMove(choice); });
+      } else {
+        runMove('venta');
+      }
       return;
     }
   }
@@ -4464,6 +4506,28 @@ if ("serviceWorker" in navigator) {
   document.getElementById('changeUserBtn').addEventListener('click', function(){ openNameModal(null); });
 
   // ---------------- Adjust modal ----------------
+  // Aviso al guardar una venta sin cliente: ¿es venta real o una salida sin venta
+  // (regalo, auspicio, muestra, reposición)? Evita que esas salidas inflen el Ranking.
+  function askNoClient(p, qty, cb){
+    var scrim = document.getElementById('noClientModalScrim');
+    document.getElementById('noClientHint').textContent = fmtInt(qty) + ' u. de "' + p.flavor + ' · ' + p.presentation + '". ¿Es una venta o una salida que no es venta?';
+    scrim.classList.add('open');
+    var btns = scrim.querySelectorAll('[data-nc]');
+    var handlers = [];
+    function cleanup(){
+      scrim.classList.remove('open');
+      btns.forEach(function(b, i){ b.removeEventListener('click', handlers[i]); });
+      document.getElementById('noClientCancelBtn').removeEventListener('click', cancel);
+    }
+    function cancel(){ cleanup(); }
+    btns.forEach(function(b){
+      var h = function(){ var choice = b.getAttribute('data-nc'); cleanup(); cb(choice); };
+      handlers.push(h);
+      b.addEventListener('click', h);
+    });
+    document.getElementById('noClientCancelBtn').addEventListener('click', cancel);
+  }
+
   function openAdjustModal(p, scope){
     var isSupermaxi = scope === 'supermaxi';
     var scrim = document.getElementById('adjustModalScrim');
@@ -4726,7 +4790,7 @@ if ("serviceWorker" in navigator) {
   // reintenta automáticamente si detecta que el valor cambió mientras tanto.
   function applyMovement(product, type, qty, client, note, extra, silent){
     if(!state.db){ showStatus('Sin conexión a datos en vivo. Intenta de nuevo en unos segundos.', true); return Promise.reject(new Error('no-db')); }
-    var delta = type === 'venta' ? -qty : qty;
+    var delta = (type === 'venta' || type === 'salida') ? -qty : qty;
     var nowIso = new Date().toISOString();
     var productRef = state.db.doc('products/' + product.id);
     var actualDelta = 0;
@@ -4756,8 +4820,8 @@ if ("serviceWorker" in navigator) {
     }).then(function(){
       var moved = Math.abs(actualDelta);
       if(!silent){
-        var extraNote = (type === 'venta' && moved < qty) ? (' (se ajustó a ' + moved + ' u. porque no había más stock)') : '';
-        showStatus((type==='venta' ? 'Venta registrada: ' : 'Ingreso registrado: ') + moved + ' u. de ' + product.flavor + '.' + extraNote);
+        var extraNote = ((type === 'venta' || type === 'salida') && moved < qty) ? (' (se ajustó a ' + moved + ' u. porque no había más stock)') : '';
+        showStatus((type==='venta' ? 'Venta registrada: ' : (type==='salida' ? 'Salida sin venta registrada: ' : 'Ingreso registrado: ')) + moved + ' u. de ' + product.flavor + '.' + extraNote);
       }
       return moved;
     }).catch(function(err){
@@ -5037,7 +5101,7 @@ if ("serviceWorker" in navigator) {
 
   function buildMovementsCsv(period){
     var moves = movementsInPeriod(period);
-    var typeLabels = {venta:'Venta', reabastecimiento:'Reabastecimiento', correccion:'Corrección', ajuste:'Ajuste'};
+    var typeLabels = {venta:'Venta', salida:'Salida sin venta', reabastecer:'Reabastecimiento', reabastecimiento:'Reabastecimiento', correccion:'Corrección', ajuste:'Ajuste'};
     var rows = [['Fecha','Tipo','Producto','Cantidad','Cliente','Notas','Usuario']];
     moves.forEach(function(m){
       rows.push([
