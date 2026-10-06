@@ -4801,6 +4801,8 @@ if ("serviceWorker" in navigator) {
     state.db.collection('movements').orderBy('at','desc').get().then(function(snap){
       state.extMovements = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
       state.extMovementsLoading = false;
+      // Si mientras bajaba el historial entro una venta nueva, la ventana en vivo ya la tiene.
+      syncExtMovements();
       callback();
     }).catch(function(){
       state.extMovementsLoading = false;
@@ -4811,6 +4813,34 @@ if ("serviceWorker" in navigator) {
 
   function allMovements(){
     return state.extMovements || state.movements;
+  }
+
+  // state.extMovements (historial completo) se descarga UNA sola vez al abrir la
+  // app. Sin esto, cualquier venta registrada despues de abrir la pagina solo
+  // llegaba a state.movements (los 150 mas recientes, en vivo) y NO al ranking,
+  // reportes ni clientes hasta recargar -- por eso las ventas nuevas a un cliente
+  // (p.ej. Tatoo) "no aparecian" en el Ranking. Aqui se mezcla la ventana en vivo
+  // (state.movements, siempre al dia) con los movimientos mas viejos que ya se
+  // habian descargado. Lo que cae dentro de la ventana en vivo pero ya no viene en
+  // ella (p.ej. una venta borrada al eliminar una feria) se descarta; lo que esta
+  // fuera de la ventana (mas viejo que el movimiento #150) se conserva tal cual.
+  // No hace lecturas nuevas a Firestore.
+  function syncExtMovements(){
+    if(!state.extMovements) return;
+    var live = state.movements || [];
+    var liveIds = {};
+    live.forEach(function(m){ liveIds[m.id] = true; });
+    var windowFull = live.length >= 150;
+    var oldestMs = (windowFull && live.length) ? new Date(live[live.length-1].at).getTime() : null;
+    var older = state.extMovements.filter(function(m){
+      if(liveIds[m.id]) return false;
+      if(oldestMs == null || isNaN(oldestMs)) return false;
+      var t = new Date(m.at).getTime();
+      return !isNaN(t) && t <= oldestMs;
+    });
+    state.extMovements = live.concat(older).sort(function(a,b){
+      return new Date(b.at).getTime() - new Date(a.at).getTime();
+    });
   }
 
   function periodRange(period){
@@ -8149,9 +8179,10 @@ if ("serviceWorker" in navigator) {
 
       db.collection('movements').orderBy('at','desc').limit(150).onSnapshot(function(snap){
         state.movements = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+        syncExtMovements();
         renderHistory();
         renderClientDatalist();
-        if(state.activeTab === 'CLIENTE') render();
+        if(state.activeTab === 'CLIENTE' || state.activeTab === 'RANKING') render();
       }, function(err){ notifyLiveDataError('historial de movimientos', err); });
 
       db.collection('graceStock').orderBy('order').onSnapshot(function(snap){
