@@ -3905,7 +3905,7 @@ if ("serviceWorker" in navigator) {
     else if(state.activeTab === 'PAGOS'){ renderPagos(); }
     else if(state.activeTab === 'CLIENTE'){ renderCliente(); }
     else if(state.activeTab === 'RANKING'){
-      if(!state.extMovements){ ensureExtendedMovements(renderRanking); }
+      if(!state.extMovements && !state.extMovementsFailed){ ensureExtendedMovements(renderRanking); }
       renderRanking();
     }
     else if(state.activeTab === 'FERIAS'){ renderFerias(); }
@@ -4791,10 +4791,18 @@ if ("serviceWorker" in navigator) {
   state.extMovements = null;
   state.extMovementsLoading = false;
 
-  function ensureExtendedMovements(callback){
-    if(!state.db){ callback(); return; }
-    if(state.extMovements){ callback(); return; }
+  // Los callbacks que esperan el historial completo se encolan: antes cada llamada
+  // lanzaba su propia lectura de TODA la coleccion (p.ej. cada render del Ranking
+  // mientras cargaba), multiplicando las lecturas a Firestore.
+  state.extWaiters = [];
+  state.extMovementsFailed = false;
+  function flushExtWaiters(){
+    var w = state.extWaiters; state.extWaiters = [];
+    w.forEach(function(cb){ try{ cb(); }catch(e){ console.error(e); } });
+  }
+  function loadExtMovements(attempt){
     state.extMovementsLoading = true;
+    state.extMovementsFailed = false;
     // Sin limit(): antes se cortaba en las 1000 más recientes, lo cual
     // excluía silenciosamente movimientos historicos antiguos (p.ej. enero-
     // febrero 2025) de Ranking/Reportes una vez que la coleccion supero los
@@ -4805,12 +4813,29 @@ if ("serviceWorker" in navigator) {
       state.extMovementsLoading = false;
       // Si mientras bajaba el historial entro una venta nueva, la ventana en vivo ya la tiene.
       syncExtMovements();
-      callback();
-    }).catch(function(){
+      flushExtWaiters();
+    }).catch(function(err){
+      console.error('historial completo de movimientos:', err);
+      // ANTES: aqui se guardaban los ultimos 150 movimientos como si fueran el
+      // historial completo, en silencio y hasta recargar: el Ranking mostraba muchos
+      // menos clientes y $ sin ningun aviso. AHORA: se reintenta, y si no se logra se
+      // avisa y se deja el historial como "no cargado" (nunca se muestra parcial como completo).
+      if(attempt < 3){
+        setTimeout(function(){ loadExtMovements(attempt + 1); }, 2500 * (attempt + 1));
+        return;
+      }
       state.extMovementsLoading = false;
-      state.extMovements = state.movements.slice();
-      callback();
+      state.extMovementsFailed = true;
+      showStatus('No se pudo cargar el historial completo de ventas. Ranking y Reportes no se muestran hasta lograrlo: usa "Reintentar" en Ranking o recarga la página.', true);
+      flushExtWaiters();
     });
+  }
+  function ensureExtendedMovements(callback){
+    if(!state.db){ callback(); return; }
+    if(state.extMovements){ callback(); return; }
+    if(callback) state.extWaiters.push(callback);
+    if(state.extMovementsLoading) return;
+    loadExtMovements(0);
   }
 
   function allMovements(){
@@ -5042,7 +5067,7 @@ if ("serviceWorker" in navigator) {
   function renderReportPreview(){
     var period = document.getElementById('reportPeriod').value;
     var box = document.getElementById('reportSummaryBox');
-    if(box) box.textContent = buildSummaryText(period);
+    if(box) box.textContent = (state.extMovementsFailed && !state.extMovements ? '⚠ Historial completo no cargado: estas cifras solo incluyen los ultimos movimientos.\n\n' : '') + buildSummaryText(period);
   }
 
   // Muestra/oculta los campos Desde/Hasta del modal de Reportes segun el periodo elegido, y
@@ -5097,6 +5122,7 @@ if ("serviceWorker" in navigator) {
   document.getElementById('copyMovementsCsvBtn').addEventListener('click', function(){
     var period = document.getElementById('reportPeriod').value;
     ensureExtendedMovements(function(){
+      if(!state.extMovements){ showStatus('El historial completo no está cargado; no se copia un CSV incompleto. Recarga la página e inténtalo otra vez.', true); return; }
       copyToClipboard(buildMovementsCsv(period), 'Movimientos copiados como CSV. Pégalo en una hoja de Excel.');
     });
   });
@@ -5563,6 +5589,17 @@ if ("serviceWorker" in navigator) {
     if(state.extMovementsLoading && !state.extMovements){
       html += '<p class="empty-hint">Cargando historial de ventas…</p></div>';
       root.innerHTML = html;
+      return;
+    }
+    if(!state.extMovements && state.extMovementsFailed){
+      html += '<p class="empty-hint">⚠ No se pudo cargar el historial completo de ventas, así que no se muestran cifras parciales (saldrían muy por debajo de las reales). <button type="button" class="confirm-btn" id="rankingRetryHistBtn">Reintentar</button></p></div>';
+      root.innerHTML = html;
+      var retryBtn = document.getElementById('rankingRetryHistBtn');
+      if(retryBtn) retryBtn.addEventListener('click', function(){
+        state.extMovementsFailed = false;
+        ensureExtendedMovements(renderRanking);
+        renderRanking();
+      });
       return;
     }
     if(view === 'clientes'){
