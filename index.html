@@ -4283,6 +4283,8 @@ if ("serviceWorker" in navigator) {
         bs.done = meta;
         bs.running = false;
         showStatus('Importación completa: ' + docs.length + ' ventas históricas registradas.');
+        // Las ventas importadas tienen fecha antigua: quedan fuera de la ventana en vivo, asi que se relee el historial.
+        state.integrity.autoVerifies = 0; verifyHistoryAgainstServer();
         renderHistImportModal();
       }).catch(function(err){
         bs.running = false;
@@ -4839,7 +4841,9 @@ if ("serviceWorker" in navigator) {
       state.extMovementsLoading = false;
       // Si mientras bajaba el historial entro una venta nueva, la ventana en vivo ya la tiene.
       syncExtMovements();
+      noteExtLoaded(state.extMovements.length);
       flushExtWaiters();
+      evaluateIntegrity();
     }).catch(function(err){
       console.error('historial completo de movimientos:', err);
       // ANTES: aqui se guardaban los ultimos 150 movimientos como si fueran el
@@ -8242,50 +8246,111 @@ if ("serviceWorker" in navigator) {
   // sin avisar a nadie. Ahora cualquier falla muestra un aviso visible y
   // queda registrada en la consola para poder diagnosticarla.
   // ---------------- Verificación de datos ----------------
-  // Objetivo: que nunca haya que adivinar si una cifra esta completa. Cada cierto
-  // tiempo compara, coleccion por coleccion, cuantos documentos tiene la app en
-  // memoria contra el conteo REAL del servidor (consulta de agregacion: casi no
-  // consume lecturas). Si no cuadra reintenta, y si el historial de movimientos es
-  // lo que falla lo vuelve a descargar solo. El resultado se ve siempre en el
-  // encabezado (verde = verificado, rojo = no confiar en las cifras) y, si falla,
-  // en un aviso rojo visible en todas las pestañas.
-  state.integrity = { status:'checking', rows:[], checkedAt:null, running:false, listenerErrors:{}, lastError:'' };
-  var INTEGRITY_COLLECTIONS = [
-    {col:'products', label:'Productos', count:function(){ return (state.products||[]).length; }},
-    {col:'movements', label:'Movimientos (historial completo)', count:function(){ return state.extMovements ? state.extMovements.length : null; }},
-    {col:'graceStock', label:'Grace', count:function(){ return (state.graceItems||[]).length; }},
-    {col:'pendingPayments', label:'Pagos', count:function(){ return (state.payments||[]).length; }},
-    {col:'fairs', label:'Ferias', count:function(){ return (state.fairs||[]).length; }},
-    {col:'fairStock', label:'Stock de feria', count:function(){ return (state.fairStock||[]).length; }},
-    {col:'fairCustomItems', label:'Ítems propios de feria', count:function(){ return (state.fairCustomItems||[]).length; }},
-    {col:'fairCashOuts', label:'Salidas de caja', count:function(){ return (state.fairCashOuts||[]).length; }},
-    {col:'fairCosts', label:'Costos de feria', count:function(){ return (state.fairCosts||[]).length; }},
-    {col:'customItemDefaults', label:'Valores por defecto', count:function(){ return Object.keys(state.customItemDefaults||{}).length; }},
-    {col:'fairSales', label:'Ventas de feria', limit:1000, count:function(){ return (state.fairSales||[]).length; }},
-    {col:'supermaxiProducts', label:'Catálogo Supermaxi', count:function(){ return (state.supermaxiProducts||[]).length; }},
-    {col:'supermaxiMovements', label:'Ventas Supermaxi', limit:500, count:function(){ return (state.supermaxiMovements||[]).length; }},
-    {col:'imports', label:'Importaciones', count:function(){ return (state.imports||[]).length; }}
+  // Objetivo: que nunca haya que adivinar si una cifra esta completa. Se vigila:
+  //  1) que cada coleccion en vivo siga conectada (sin errores y no solo en cache);
+  //  2) que ninguna coleccion llegue al limite de documentos que la app descarga
+  //     (ventas de feria 1000, ventas Supermaxi 500): pasado ese limite faltarian datos;
+  //  3) que el historial completo de movimientos (la base de Ranking/Reportes) este
+  //     completo y contenga TODO lo que dice la conexion en vivo;
+  //  4) cada cierto tiempo (y con el boton "Verificar ahora") se vuelve a leer el
+  //     historial completo del servidor y se compara con lo que tiene la app; si hay
+  //     diferencia se corrige en el momento y se informa.
+  // El resultado se ve siempre en el encabezado (verde = verificado, rojo = no confiar
+  // en las cifras) y, si falla, en un aviso rojo visible en todas las pestañas.
+  var INTEGRITY_FULL_EVERY_MS = 3 * 60 * 60 * 1000;   // relectura completa del servidor mientras la pagina esta visible
+  state.integrity = { status:'checking', rows:[], checkedAt:null, running:false, listenerErrors:{}, live:{}, serverAt:null, serverCount:null, lastDiff:null, lastError:'', lastAutoVerifyAt:0 };
+  var INTEGRITY_LIVE = [
+    {col:'products', label:'Productos'},
+    {col:'graceStock', label:'Grace'},
+    {col:'pendingPayments', label:'Pagos'},
+    {col:'fairs', label:'Ferias'},
+    {col:'fairStock', label:'Stock de feria'},
+    {col:'fairCustomItems', label:'Ítems propios de feria'},
+    {col:'fairCashOuts', label:'Salidas de caja'},
+    {col:'fairCosts', label:'Costos de feria'},
+    {col:'customItemDefaults', label:'Valores por defecto'},
+    {col:'fairSales', label:'Ventas de feria', limit:1000},
+    {col:'supermaxiProducts', label:'Catálogo Supermaxi'},
+    {col:'supermaxiMovements', label:'Ventas Supermaxi', limit:500},
+    {col:'imports', label:'Importaciones'}
   ];
 
-  function serverCount(col){
-    var user = firebase.auth().currentUser;
-    if(!user) return Promise.reject(new Error('sin sesión'));
-    return user.getIdToken().then(function(tok){
-      return fetch('https://firestore.googleapis.com/v1/projects/' + FIREBASE_CONFIG.projectId + '/databases/(default)/documents:runAggregationQuery', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json', 'Authorization':'Bearer ' + tok},
-        body: JSON.stringify({structuredAggregationQuery:{structuredQuery:{from:[{collectionId:col}]}, aggregations:[{alias:'n', count:{}}]}})
-      });
-    }).then(function(r){
-      if(!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    }).then(function(j){
-      return parseInt(j[0].result.aggregateFields.n.integerValue, 10);
-    });
+  function noteLive(col, snap){
+    state.integrity.live[col] = { n: snap.size, cached: !!(snap.metadata && snap.metadata.fromCache), at: Date.now() };
+  }
+  // Se llama cuando el historial completo termina de bajar del servidor.
+  function noteExtLoaded(n){
+    var it = state.integrity;
+    it.serverAt = new Date(); it.serverCount = n;
+  }
+
+  function extContainsLiveWindow(){
+    if(!state.extMovements) return false;
+    var ids = {};
+    state.extMovements.forEach(function(m){ ids[m.id] = true; });
+    return (state.movements || []).every(function(m){ return ids[m.id]; });
   }
 
   function integrityTimeText(d){
     return d ? (String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0')) : '';
+  }
+
+  // Evalua el estado con lo que la app ya tiene (no lee nada de Firestore).
+  function evaluateIntegrity(){
+    var it = state.integrity;
+    var rows = [];
+    INTEGRITY_LIVE.forEach(function(c){
+      var info = it.live[c.col];
+      var capped = !!(c.limit && info && info.n >= c.limit);
+      var ok = !!info && !info.cached && !capped;
+      rows.push({label:c.label, text: info ? (info.n + (c.limit ? (' de máx ' + c.limit) : '') + (info.cached ? ' · solo caché' : '')) : 'sin datos', ok:ok});
+    });
+    var liveMov = it.live['movements'];
+    var extOk = !!state.extMovements && extContainsLiveWindow();
+    var movText = state.extMovements ? (state.extMovements.length + ' registros' + (it.serverAt ? (' · leídos del servidor ' + integrityTimeText(it.serverAt)) : '')) : (state.extMovementsFailed ? 'no se pudo cargar' : 'cargando…');
+    rows.unshift({label:'Historial completo de movimientos', text: movText, ok: extOk});
+    it.rows = rows;
+    it.checkedAt = new Date();
+    var loading = !state.extMovements && !state.extMovementsFailed;
+    var bad = rows.some(function(r){ return !r.ok; });
+    it.status = loading ? 'checking' : (bad ? 'bad' : 'ok');
+    // Si el historial no contiene todo lo de la conexion en vivo, se vuelve a descargar solo.
+    // Tope duro: como mucho 3 relecturas automaticas por sesion y 1 cada 5 minutos, para que un
+    // problema persistente nunca se convierta en un bucle que gaste la cuota de lecturas.
+    if(state.extMovements && !extOk && !it.running && (it.autoVerifies||0) < 3 && (Date.now() - it.lastAutoVerifyAt) > 5*60*1000){
+      it.lastAutoVerifyAt = Date.now(); it.autoVerifies = (it.autoVerifies||0) + 1;
+      verifyHistoryAgainstServer();
+    }
+    renderIntegrityChip();
+  }
+
+  // Relee el historial completo del servidor, lo compara con el de la app y lo reemplaza.
+  function verifyHistoryAgainstServer(){
+    var it = state.integrity;
+    if(!state.db || it.running) return;
+    it.running = true; it.lastError = '';
+    state.db.collection('movements').orderBy('at','desc').get().then(function(snap){
+      var fresh = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+      var diff = 0;
+      if(state.extMovements){
+        var oldIds = {}; state.extMovements.forEach(function(m){ oldIds[m.id] = true; });
+        var newIds = {}; fresh.forEach(function(m){ newIds[m.id] = true; if(!oldIds[m.id]) diff++; });
+        state.extMovements.forEach(function(m){ if(!newIds[m.id]) diff++; });
+      }
+      state.extMovements = fresh; state.extMovementsFailed = false;
+      syncExtMovements();
+      it.lastDiff = diff;
+      noteExtLoaded(fresh.length);
+      it.running = false;
+      evaluateIntegrity();
+      if(diff > 0 && state.activeTab === 'RANKING') render();
+      if(diff > 0) showStatus('Verificación de datos: se corrigieron ' + diff + ' diferencias en el historial. Las cifras ya están actualizadas.');
+    }).catch(function(err){
+      console.error('verificación del historial:', err);
+      it.running = false;
+      it.lastError = 'No se pudo releer el historial del servidor (' + (err && err.message ? err.message : 'error') + ').';
+      evaluateIntegrity();
+    });
   }
 
   function renderIntegrityChip(){
@@ -8303,73 +8368,29 @@ if ("serviceWorker" in navigator) {
     } else if(navigator.onLine === false){
       cls = 'warn'; text = 'Sin conexión';
       bannerText = '⚠ Sin conexión a internet: lo que ves puede estar desactualizado hasta que vuelva.';
-    } else if(it.status === 'checking' && !it.checkedAt){
+    } else if(it.status === 'checking'){
       cls = ''; text = 'Verificando datos…';
     } else if(it.status === 'bad'){
       cls = 'bad'; text = '⚠ Datos incompletos';
-      bannerText = '⚠ Los datos no pasaron la verificación (la app tiene menos registros que el servidor). No tomes decisiones con estas cifras: toca el indicador de arriba y usa "Recargar página".';
-    } else if(it.status === 'error'){
-      cls = 'warn'; text = 'No se pudo verificar';
-    } else if(it.status === 'checking'){
-      text = '✓ Datos verificados ' + integrityTimeText(it.checkedAt) + ' · verificando…';
+      bannerText = '⚠ Los datos no pasaron la verificación (detalle en el indicador de arriba). No tomes decisiones con estas cifras hasta que vuelva a ✓: usa "Verificar ahora" o "Recargar página".';
+    } else if(it.lastError){
+      cls = 'warn'; text = '✓ Datos verificados ' + integrityTimeText(it.checkedAt) + ' · relectura pendiente';
     }
     chip.className = 'user-chip data-chip' + (cls ? (' ' + cls) : '');
     label.textContent = text;
     if(banner){ banner.textContent = bannerText; banner.classList.toggle('show', !!bannerText); }
     if(detail){
       var rowsHtml = (it.rows||[]).map(function(r){
-        return '<tr' + (r.ok ? '' : ' class="row-bad"') + '><td>' + esc(r.label) + '</td><td>' + (r.app == null ? '—' : r.app) + ' / ' + r.server + (r.limit ? (' (máx ' + r.limit + ')') : '') + '</td><td>' + (r.ok ? '✓' : '✗') + '</td></tr>';
+        return '<tr' + (r.ok ? '' : ' class="row-bad"') + '><td>' + esc(r.label) + '</td><td>' + esc(r.text) + '</td><td>' + (r.ok ? '✓' : '✗') + '</td></tr>';
       }).join('');
       detail.innerHTML = '<h5>Verificación de datos</h5>'
-        + (it.checkedAt ? '<div style="margin-bottom:6px;">Última verificación: ' + integrityTimeText(it.checkedAt) + '. Compara lo que tiene la app contra el servidor (app / servidor).</div>' : '<div>Aún no hay una verificación completa.</div>')
+        + '<div style="margin-bottom:6px;">Historial leído del servidor: ' + (it.serverAt ? (integrityTimeText(it.serverAt) + (it.lastDiff != null ? (it.lastDiff ? (' · se corrigieron ' + it.lastDiff + ' diferencias') : ' · sin diferencias') : '')) : 'pendiente') + '. Se vuelve a comparar solo cada 3 horas; también con el botón.</div>'
         + (it.lastError ? '<div style="color:var(--warning);margin-bottom:6px;">' + esc(it.lastError) + '</div>' : '')
         + (rowsHtml ? '<table>' + rowsHtml + '</table>' : '')
         + '<div class="btns"><button type="button" id="dataVerifyNowBtn">Verificar ahora</button><button type="button" id="dataReloadBtn">Recargar página</button></div>';
-      var vb = document.getElementById('dataVerifyNowBtn'); if(vb) vb.addEventListener('click', function(e){ e.stopPropagation(); runIntegrityCheck(0); });
+      var vb = document.getElementById('dataVerifyNowBtn'); if(vb) vb.addEventListener('click', function(e){ e.stopPropagation(); verifyHistoryAgainstServer(); });
       var rb = document.getElementById('dataReloadBtn'); if(rb) rb.addEventListener('click', function(e){ e.stopPropagation(); location.reload(); });
     }
-  }
-
-  function runIntegrityCheck(attempt){
-    attempt = attempt || 0;
-    var it = state.integrity;
-    if(!state.db) return;
-    if(attempt === 0){
-      if(it.running) return;
-      it.running = true; it.status = 'checking'; it.lastError = '';
-      renderIntegrityChip();
-    }
-    Promise.all(INTEGRITY_COLLECTIONS.map(function(c){
-      return serverCount(c.col).then(function(n){ return {c:c, n:n}; });
-    })).then(function(res){
-      var rows = res.map(function(x){
-        var mine = x.c.count();
-        var capped = !!(x.c.limit && x.n > x.c.limit);   // hay mas documentos que el limite que descarga la app
-        return {col:x.c.col, label:x.c.label, app:mine, server:x.n, limit:x.c.limit||null, ok:(mine !== null && mine === x.n && !capped)};
-      });
-      var bad = rows.filter(function(r){ return !r.ok; });
-      if(!bad.length || attempt >= 2){
-        it.rows = rows; it.checkedAt = new Date(); it.running = false;
-        it.status = bad.length ? 'bad' : 'ok';
-        renderIntegrityChip();
-        return;
-      }
-      // Reintento: puede ser una escritura recien hecha o una carga a medias.
-      var movBad = bad.some(function(r){ return r.col === 'movements'; });
-      if(movBad && attempt === 1){
-        // Segundo intento fallido con el historial: se vuelve a descargar completo.
-        state.extMovements = null; state.extMovementsFailed = false;
-        ensureExtendedMovements(function(){ runIntegrityCheck(attempt + 1); });
-        if(state.activeTab === 'RANKING') render();
-        return;
-      }
-      setTimeout(function(){ runIntegrityCheck(attempt + 1); }, 4000);
-    }).catch(function(err){
-      console.error('verificación de datos:', err);
-      it.running = false; it.status = 'error';
-      it.lastError = 'No se pudo consultar el servidor para verificar (' + (err && err.message ? err.message : 'error') + ').';
-      renderIntegrityChip();
-    });
   }
 
   function startIntegrityMonitor(){
@@ -8384,18 +8405,24 @@ if ("serviceWorker" in navigator) {
         if(chip.contains(e.target)) return;
         document.getElementById('dataDetail').classList.remove('open');
       });
-      window.addEventListener('online', function(){ renderIntegrityChip(); runIntegrityCheck(0); });
-      window.addEventListener('offline', renderIntegrityChip);
+      window.addEventListener('online', function(){ evaluateIntegrity(); verifyHistoryAgainstServer(); });
+      window.addEventListener('offline', function(){ evaluateIntegrity(); });
       document.addEventListener('visibilitychange', function(){
         if(document.visibilityState !== 'visible') return;
+        evaluateIntegrity();
         var it = state.integrity;
-        if(!it.checkedAt || (Date.now() - it.checkedAt.getTime()) > 2*60*1000) runIntegrityCheck(0);
+        if(!it.serverAt || (Date.now() - it.serverAt.getTime()) > INTEGRITY_FULL_EVERY_MS) verifyHistoryAgainstServer();
       });
+      // Revision local cada minuto (no lee nada de Firestore); relectura completa cada 3 h.
       setInterval(function(){
-        if(document.visibilityState === 'visible') runIntegrityCheck(0);
-      }, 5*60*1000);
+        if(document.visibilityState !== 'visible') return;
+        evaluateIntegrity();
+        var it = state.integrity;
+        if(it.serverAt && (Date.now() - it.serverAt.getTime()) > INTEGRITY_FULL_EVERY_MS) verifyHistoryAgainstServer();
+      }, 60*1000);
     }
-    setTimeout(function(){ runIntegrityCheck(0); }, 6000);
+    setTimeout(evaluateIntegrity, 4000);
+    setTimeout(evaluateIntegrity, 12000);
   }
 
   function notifyLiveDataError(label, err){
@@ -8419,6 +8446,7 @@ if ("serviceWorker" in navigator) {
       startIntegrityMonitor();
 
       db.collection('products').orderBy('order').onSnapshot(function(snap){
+        noteLive('products', snap);
         state.products = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         render();
       }, function(err){
@@ -8426,6 +8454,7 @@ if ("serviceWorker" in navigator) {
       });
 
       db.collection('movements').orderBy('at','desc').limit(150).onSnapshot(function(snap){
+        noteLive('movements', snap);
         state.movements = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         syncExtMovements();
         renderHistory();
@@ -8434,42 +8463,50 @@ if ("serviceWorker" in navigator) {
       }, function(err){ notifyLiveDataError('historial de movimientos', err); });
 
       db.collection('graceStock').orderBy('order').onSnapshot(function(snap){
+        noteLive('graceStock', snap);
         state.graceItems = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         render();
       }, function(err){ notifyLiveDataError('stock de Grace', err); });
 
       db.collection('pendingPayments').orderBy('createdAt','desc').onSnapshot(function(snap){
+        noteLive('pendingPayments', snap);
         state.payments = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         renderPagoNamesDatalist();
         render();
       }, function(err){ notifyLiveDataError('pagos pendientes', err); });
 
       db.collection('fairs').orderBy('createdAt','desc').onSnapshot(function(snap){
+        noteLive('fairs', snap);
         state.fairs = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         render();
       }, function(err){ notifyLiveDataError('ferias', err); });
 
       db.collection('fairStock').onSnapshot(function(snap){
+        noteLive('fairStock', snap);
         state.fairStock = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         render();
       }, function(err){ notifyLiveDataError('stock de feria', err); });
 
       db.collection('fairCustomItems').onSnapshot(function(snap){
+        noteLive('fairCustomItems', snap);
         state.fairCustomItems = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         render();
       }, function(err){ notifyLiveDataError('ítems propios de feria', err); });
 
       db.collection('fairCashOuts').onSnapshot(function(snap){
+        noteLive('fairCashOuts', snap);
         state.fairCashOuts = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         render();
       }, function(err){ notifyLiveDataError('salidas de caja de feria', err); });
 
       db.collection('fairCosts').onSnapshot(function(snap){
+        noteLive('fairCosts', snap);
         state.fairCosts = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         render();
       }, function(err){ notifyLiveDataError('costos de feria', err); });
 
       db.collection('customItemDefaults').onSnapshot(function(snap){
+        noteLive('customItemDefaults', snap);
         var map = {};
         snap.docs.forEach(function(d){
           var data = d.data();
@@ -8480,22 +8517,26 @@ if ("serviceWorker" in navigator) {
       }, function(err){ notifyLiveDataError('valores por defecto de ítems propios', err); });
 
       db.collection('fairSales').orderBy('createdAt','desc').limit(1000).onSnapshot(function(snap){
+        noteLive('fairSales', snap);
         state.fairSales = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         render();
       }, function(err){ notifyLiveDataError('ventas de feria', err); });
 
       db.collection('supermaxiProducts').orderBy('order').onSnapshot(function(snap){
+        noteLive('supermaxiProducts', snap);
         state.supermaxiProducts = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         render();
       }, function(err){ notifyLiveDataError('catálogo de Supermaxi', err); });
 
       db.collection('supermaxiMovements').orderBy('at','desc').limit(500).onSnapshot(function(snap){
+        noteLive('supermaxiMovements', snap);
         state.supermaxiMovements = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         renderSupermaxiHistory();
         if(state.activeTab === 'SUPERMAXI') render();
       }, function(err){ notifyLiveDataError('historial de Supermaxi', err); });
 
       db.collection('imports').orderBy('createdAt','desc').onSnapshot(function(snap){
+        noteLive('imports', snap);
         state.imports = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         if(!state.currentImportId && state.imports.length){ state.currentImportId = state.imports[0].id; }
         if(state.activeTab === 'IMPORTACIONES') render();
