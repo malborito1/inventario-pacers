@@ -8325,7 +8325,10 @@ if ("serviceWorker" in navigator) {
   // El resultado se ve siempre en el encabezado (verde = verificado, rojo = no confiar
   // en las cifras) y, si falla, en un aviso rojo visible en todas las pestañas.
   var INTEGRITY_FULL_EVERY_MS = 3 * 60 * 60 * 1000;   // relectura completa del servidor mientras la pagina esta visible
-  state.integrity = { status:'checking', rows:[], checkedAt:null, running:false, listenerErrors:{}, live:{}, serverAt:null, serverCount:null, lastDiff:null, lastError:'', lastAutoVerifyAt:0 };
+  state.integrity = { status:'checking', rows:[], checkedAt:null, running:false, listenerErrors:{}, live:{}, serverAt:null, serverCount:null, lastDiff:null, lastError:'', lastAutoVerifyAt:0, startedAt: Date.now() };
+  // Margen de arranque: durante los primeros segundos las colecciones en vivo todavia estan
+  // llegando, asi que "incompleto" en ese lapso no es un problema real (no se alarma ni se relee).
+  var INTEGRITY_GRACE_MS = 25*1000;
   var INTEGRITY_LIVE = [
     {col:'products', label:'Productos'},
     {col:'graceStock', label:'Grace'},
@@ -8380,11 +8383,12 @@ if ("serviceWorker" in navigator) {
     it.checkedAt = new Date();
     var loading = !state.extMovements && !state.extMovementsFailed;
     var bad = rows.some(function(r){ return !r.ok; });
-    it.status = loading ? 'checking' : (bad ? 'bad' : 'ok');
+    var inGrace = (Date.now() - (it.startedAt||0)) < INTEGRITY_GRACE_MS;
+    it.status = (loading || (bad && inGrace)) ? 'checking' : (bad ? 'bad' : 'ok');
     // Si el historial no contiene todo lo de la conexion en vivo, se vuelve a descargar solo.
     // Tope duro: como mucho 3 relecturas automaticas por sesion y 1 cada 5 minutos, para que un
     // problema persistente nunca se convierta en un bucle que gaste la cuota de lecturas.
-    if(state.extMovements && !extOk && !it.running && (it.autoVerifies||0) < 3 && (Date.now() - it.lastAutoVerifyAt) > 5*60*1000){
+    if(state.extMovements && !extOk && !inGrace && !it.running && (it.autoVerifies||0) < 3 && (Date.now() - it.lastAutoVerifyAt) > 5*60*1000){
       it.lastAutoVerifyAt = Date.now(); it.autoVerifies = (it.autoVerifies||0) + 1;
       verifyHistoryAgainstServer();
     }
@@ -8490,6 +8494,7 @@ if ("serviceWorker" in navigator) {
     }
     setTimeout(evaluateIntegrity, 4000);
     setTimeout(evaluateIntegrity, 12000);
+    setTimeout(evaluateIntegrity, INTEGRITY_GRACE_MS + 1500);
   }
 
   function notifyLiveDataError(label, err){
