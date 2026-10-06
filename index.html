@@ -4830,18 +4830,26 @@ if ("serviceWorker" in navigator) {
   function syncExtMovements(){
     if(!state.extMovements) return;
     var live = state.movements || [];
+    // Si la ventana en vivo aun no llego (o esta vacia), NO se toca el historial:
+    // el historial completo puede terminar de bajar antes que el listener en vivo,
+    // y descartar "lo que no esta en live" lo dejaria vacio.
+    if(!live.length) return;
     var liveIds = {};
     live.forEach(function(m){ liveIds[m.id] = true; });
     var windowFull = live.length >= 150;
-    var oldestMs = (windowFull && live.length) ? new Date(live[live.length-1].at).getTime() : null;
-    var older = state.extMovements.filter(function(m){
-      if(liveIds[m.id]) return false;
-      if(oldestMs == null || isNaN(oldestMs)) return false;
+    var oldestMs = windowFull ? new Date(live[live.length-1].at).getTime() : NaN;
+    var notLive = state.extMovements.filter(function(m){ return !liveIds[m.id]; });
+    var kept = notLive.filter(function(m){
+      if(!windowFull || isNaN(oldestMs)) return true;   // sin limite conocido: conservar todo
       var t = new Date(m.at).getTime();
-      return !isNaN(t) && t <= oldestMs;
+      if(isNaN(t)) return true;                         // fecha rara: conservar, nunca descartar
+      return t <= oldestMs;                             // mas nuevo que la ventana y ausente en ella = borrado
     });
-    state.extMovements = live.concat(older).sort(function(a,b){
-      return new Date(b.at).getTime() - new Date(a.at).getTime();
+    // Seguro extra: si esto descartaria muchos movimientos de golpe, algo no cuadra
+    // (no son borrados normales): se conserva todo el historial.
+    if(notLive.length - kept.length > 25) kept = notLive;
+    state.extMovements = live.concat(kept).sort(function(a,b){
+      return (new Date(b.at).getTime() || 0) - (new Date(a.at).getTime() || 0);
     });
   }
 
