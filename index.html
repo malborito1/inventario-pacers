@@ -5367,6 +5367,29 @@ if ("serviceWorker" in navigator) {
       }
       byProduct[key].qty += qty;
     });
+    // Supermaxi vive en su propia coleccion (movimientos y catalogo aparte). Si la casilla
+    // "Incluir ventas de Supermaxi" esta marcada, sus unidades se SUMAN al mismo producto
+    // (misma presentacion y sabor) en una sola fila, para que el ranking muestre el total
+    // real vendido y no solo lo del inventario principal.
+    if(state.includeSupermaxiSales){
+      var labelIndex = {};
+      Object.keys(byProduct).forEach(function(k){ labelIndex[byProduct[k].label] = k; });
+      filterMovementsByPeriod(state.supermaxiMovements, period).filter(function(m){ return m.type === 'venta' && !m.reversed; }).forEach(function(m){
+        var q = movementUnits(m);
+        totalUnits += q;
+        var smProduct = m.productId ? findSupermaxiProduct(m.productId) : null;
+        var smLabel = smProduct ? (smProduct.presentation + ' · ' + smProduct.flavor) : (m.productLabel || 'Producto');
+        var smCat = smProduct ? smProduct.category : (m.category || null);
+        if(smCat && byCategory.hasOwnProperty(smCat)) byCategory[smCat] += q;
+        var existingKey = labelIndex[smLabel];
+        if(existingKey === undefined){
+          existingKey = 'sm|' + smLabel;
+          byProduct[existingKey] = { label: smLabel, qty: 0, category: smCat, photoUrl: smProduct ? smProduct.photoUrl : null };
+          labelIndex[smLabel] = existingKey;
+        }
+        byProduct[existingKey].qty += q;
+      });
+    }
     var ranked = Object.keys(byProduct).map(function(k){ return byProduct[k]; }).sort(function(a,b){ return b.qty - a.qty; });
     return { totalUnits: totalUnits, byCategory: byCategory, ranked: ranked };
   }
@@ -5816,6 +5839,7 @@ if ("serviceWorker" in navigator) {
       html += buildYearsChart(ydata);
     } else {
       var data = computeRankingData(period);
+      html += '<label class="supermaxi-sales-toggle"><input type="checkbox" id="ventasIncludeSupermaxi"' + (state.includeSupermaxiSales?' checked':'') + '> 🏬 Incluir ventas de Supermaxi</label>';
       html += '<div class="ranking-layout">';
       html += '<div class="donut-wrap"><div class="donut-svg-wrap">' + buildDonutSvg(data.byCategory, data.totalUnits) +
         '<div class="donut-center"><div class="donut-center-num num" style="font-size:' + donutCenterFontSize(fmtInt(data.totalUnits)) + 'px">' + fmtInt(data.totalUnits) + '</div><div class="donut-center-label">unidades</div></div></div>' +
