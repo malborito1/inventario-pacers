@@ -752,7 +752,10 @@ if ("serviceWorker" in navigator) {
   .data-detail h5{margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted);}
   .data-detail table{width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums;}
   .data-detail td{padding:3px 0; border-bottom:1px solid var(--border);}
-  .data-detail td:nth-child(n+2){text-align:right; padding-left:8px; white-space:nowrap;}
+  .data-detail table{table-layout:fixed;}
+  .data-detail td:nth-child(1){width:46%; padding-right:6px;}
+  .data-detail td:nth-child(2){text-align:right; padding-left:6px;}
+  .data-detail td:nth-child(3){width:20px; text-align:right;}
   .data-detail .row-bad td{color:var(--critical); font-weight:700;}
   .data-detail .btns{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
   .data-detail .btns button{border:1px solid var(--border); background:var(--surface-2); color:var(--text); border-radius:8px; padding:6px 10px; font-size:12px; font-weight:600; cursor:pointer;}
@@ -8307,7 +8310,7 @@ if ("serviceWorker" in navigator) {
     });
     var liveMov = it.live['movements'];
     var extOk = !!state.extMovements && extContainsLiveWindow();
-    var movText = state.extMovements ? (state.extMovements.length + ' registros' + (it.serverAt ? (' · leídos del servidor ' + integrityTimeText(it.serverAt)) : '')) : (state.extMovementsFailed ? 'no se pudo cargar' : 'cargando…');
+    var movText = state.extMovements ? (state.extMovements.length + ' registros' + (it.serverAt ? (' · servidor ' + integrityTimeText(it.serverAt)) : '')) : (state.extMovementsFailed ? 'no se pudo cargar' : 'cargando…');
     rows.unshift({label:'Historial completo de movimientos', text: movText, ok: extOk});
     it.rows = rows;
     it.checkedAt = new Date();
