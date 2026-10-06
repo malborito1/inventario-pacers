@@ -739,6 +739,26 @@ if ("serviceWorker" in navigator) {
   .pago-due-days{display:block; font-size:11px; font-weight:700; color:var(--critical); margin-top:1px;}
   .pago-vencido-badge{background:var(--critical); color:#fff; font-weight:800; font-size:15px; letter-spacing:.03em; padding:5px 14px; border-radius:8px; flex:0 0 auto;}
 
+
+  /* ---------- Verificación de datos ---------- */
+  .data-chip{cursor:pointer; position:relative; user-select:none;}
+  .data-chip .dot{background:var(--text-muted);}
+  .data-chip.ok .dot{background:var(--success);}
+  .data-chip.warn .dot{background:var(--warning);}
+  .data-chip.bad .dot{background:var(--critical);}
+  .data-chip.bad{border-color:var(--critical); color:var(--critical); font-weight:700;}
+  .data-detail{display:none; position:absolute; top:calc(100% + 8px); right:0; z-index:60; width:min(340px, 88vw); background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); padding:12px 14px; font-size:12.5px; font-weight:500; text-align:left; cursor:default;}
+  .data-detail.open{display:block;}
+  .data-detail h5{margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted);}
+  .data-detail table{width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums;}
+  .data-detail td{padding:3px 0; border-bottom:1px solid var(--border);}
+  .data-detail td:nth-child(n+2){text-align:right; padding-left:8px; white-space:nowrap;}
+  .data-detail .row-bad td{color:var(--critical); font-weight:700;}
+  .data-detail .btns{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
+  .data-detail .btns button{border:1px solid var(--border); background:var(--surface-2); color:var(--text); border-radius:8px; padding:6px 10px; font-size:12px; font-weight:600; cursor:pointer;}
+  .data-banner{display:none; background:var(--critical-tint); color:var(--critical); border:1px solid var(--critical); border-radius:10px; padding:10px 14px; margin:10px 0; font-weight:700; font-size:13.5px;}
+  .data-banner.show{display:block;}
+
   /* ---------- Clientes ---------- */
   .cliente-list{display:flex; flex-direction:column; gap:6px;}
   .cliente-item{
@@ -1368,6 +1388,11 @@ if ("serviceWorker" in navigator) {
         <span id="clientLabel"></span>
         <button id="clearClientBtn" type="button">✕</button>
       </div>
+      <div class="user-chip data-chip" id="dataChip" role="button" tabindex="0" title="Verificación de datos">
+        <span class="dot"></span>
+        <span id="dataChipLabel">Verificando datos…</span>
+        <div class="data-detail" id="dataDetail"></div>
+      </div>
       <button class="theme-toggle" id="themeToggleBtn" type="button" title="Cambiar modo claro/oscuro" aria-label="Cambiar modo claro/oscuro">🌙</button>
     </div>
 
@@ -1385,6 +1410,7 @@ if ("serviceWorker" in navigator) {
     <div class="kpis" id="kpiRow"></div>
     <datalist id="clientNamesList"></datalist>
     <datalist id="pagoNamesList"></datalist>
+    <div class="data-banner" id="dataBanner"></div>
     <div class="conn-banner" id="connBanner">Conectando con el almacenamiento de datos en vivo… si este mensaje no desaparece, vuelve a abrir el enlace del panel.</div>
 
     <div class="controls">
@@ -8215,8 +8241,167 @@ if ("serviceWorker" in navigator) {
   // se quedaba mostrando los últimos datos recibidos como si fueran actuales,
   // sin avisar a nadie. Ahora cualquier falla muestra un aviso visible y
   // queda registrada en la consola para poder diagnosticarla.
+  // ---------------- Verificación de datos ----------------
+  // Objetivo: que nunca haya que adivinar si una cifra esta completa. Cada cierto
+  // tiempo compara, coleccion por coleccion, cuantos documentos tiene la app en
+  // memoria contra el conteo REAL del servidor (consulta de agregacion: casi no
+  // consume lecturas). Si no cuadra reintenta, y si el historial de movimientos es
+  // lo que falla lo vuelve a descargar solo. El resultado se ve siempre en el
+  // encabezado (verde = verificado, rojo = no confiar en las cifras) y, si falla,
+  // en un aviso rojo visible en todas las pestañas.
+  state.integrity = { status:'checking', rows:[], checkedAt:null, running:false, listenerErrors:{}, lastError:'' };
+  var INTEGRITY_COLLECTIONS = [
+    {col:'products', label:'Productos', count:function(){ return (state.products||[]).length; }},
+    {col:'movements', label:'Movimientos (historial completo)', count:function(){ return state.extMovements ? state.extMovements.length : null; }},
+    {col:'graceStock', label:'Grace', count:function(){ return (state.graceItems||[]).length; }},
+    {col:'pendingPayments', label:'Pagos', count:function(){ return (state.payments||[]).length; }},
+    {col:'fairs', label:'Ferias', count:function(){ return (state.fairs||[]).length; }},
+    {col:'fairStock', label:'Stock de feria', count:function(){ return (state.fairStock||[]).length; }},
+    {col:'fairCustomItems', label:'Ítems propios de feria', count:function(){ return (state.fairCustomItems||[]).length; }},
+    {col:'fairCashOuts', label:'Salidas de caja', count:function(){ return (state.fairCashOuts||[]).length; }},
+    {col:'fairCosts', label:'Costos de feria', count:function(){ return (state.fairCosts||[]).length; }},
+    {col:'customItemDefaults', label:'Valores por defecto', count:function(){ return Object.keys(state.customItemDefaults||{}).length; }},
+    {col:'fairSales', label:'Ventas de feria', limit:1000, count:function(){ return (state.fairSales||[]).length; }},
+    {col:'supermaxiProducts', label:'Catálogo Supermaxi', count:function(){ return (state.supermaxiProducts||[]).length; }},
+    {col:'supermaxiMovements', label:'Ventas Supermaxi', limit:500, count:function(){ return (state.supermaxiMovements||[]).length; }},
+    {col:'imports', label:'Importaciones', count:function(){ return (state.imports||[]).length; }}
+  ];
+
+  function serverCount(col){
+    var user = firebase.auth().currentUser;
+    if(!user) return Promise.reject(new Error('sin sesión'));
+    return user.getIdToken().then(function(tok){
+      return fetch('https://firestore.googleapis.com/v1/projects/' + FIREBASE_CONFIG.projectId + '/databases/(default)/documents:runAggregationQuery', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json', 'Authorization':'Bearer ' + tok},
+        body: JSON.stringify({structuredAggregationQuery:{structuredQuery:{from:[{collectionId:col}]}, aggregations:[{alias:'n', count:{}}]}})
+      });
+    }).then(function(r){
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(j){
+      return parseInt(j[0].result.aggregateFields.n.integerValue, 10);
+    });
+  }
+
+  function integrityTimeText(d){
+    return d ? (String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0')) : '';
+  }
+
+  function renderIntegrityChip(){
+    var it = state.integrity;
+    var chip = document.getElementById('dataChip');
+    var label = document.getElementById('dataChipLabel');
+    var banner = document.getElementById('dataBanner');
+    var detail = document.getElementById('dataDetail');
+    if(!chip || !label) return;
+    var errLabels = Object.keys(it.listenerErrors);
+    var cls = 'ok', text = '✓ Datos verificados ' + integrityTimeText(it.checkedAt), bannerText = '';
+    if(errLabels.length){
+      cls = 'bad'; text = '⚠ Conexión en vivo perdida';
+      bannerText = '⚠ Se perdió la conexión en vivo con: ' + errLabels.join(', ') + '. Las cifras pueden estar desactualizadas: recarga la página antes de usarlas.';
+    } else if(navigator.onLine === false){
+      cls = 'warn'; text = 'Sin conexión';
+      bannerText = '⚠ Sin conexión a internet: lo que ves puede estar desactualizado hasta que vuelva.';
+    } else if(it.status === 'checking' && !it.checkedAt){
+      cls = ''; text = 'Verificando datos…';
+    } else if(it.status === 'bad'){
+      cls = 'bad'; text = '⚠ Datos incompletos';
+      bannerText = '⚠ Los datos no pasaron la verificación (la app tiene menos registros que el servidor). No tomes decisiones con estas cifras: toca el indicador de arriba y usa "Recargar página".';
+    } else if(it.status === 'error'){
+      cls = 'warn'; text = 'No se pudo verificar';
+    } else if(it.status === 'checking'){
+      text = '✓ Datos verificados ' + integrityTimeText(it.checkedAt) + ' · verificando…';
+    }
+    chip.className = 'user-chip data-chip' + (cls ? (' ' + cls) : '');
+    label.textContent = text;
+    if(banner){ banner.textContent = bannerText; banner.classList.toggle('show', !!bannerText); }
+    if(detail){
+      var rowsHtml = (it.rows||[]).map(function(r){
+        return '<tr' + (r.ok ? '' : ' class="row-bad"') + '><td>' + esc(r.label) + '</td><td>' + (r.app == null ? '—' : r.app) + ' / ' + r.server + (r.limit ? (' (máx ' + r.limit + ')') : '') + '</td><td>' + (r.ok ? '✓' : '✗') + '</td></tr>';
+      }).join('');
+      detail.innerHTML = '<h5>Verificación de datos</h5>'
+        + (it.checkedAt ? '<div style="margin-bottom:6px;">Última verificación: ' + integrityTimeText(it.checkedAt) + '. Compara lo que tiene la app contra el servidor (app / servidor).</div>' : '<div>Aún no hay una verificación completa.</div>')
+        + (it.lastError ? '<div style="color:var(--warning);margin-bottom:6px;">' + esc(it.lastError) + '</div>' : '')
+        + (rowsHtml ? '<table>' + rowsHtml + '</table>' : '')
+        + '<div class="btns"><button type="button" id="dataVerifyNowBtn">Verificar ahora</button><button type="button" id="dataReloadBtn">Recargar página</button></div>';
+      var vb = document.getElementById('dataVerifyNowBtn'); if(vb) vb.addEventListener('click', function(e){ e.stopPropagation(); runIntegrityCheck(0); });
+      var rb = document.getElementById('dataReloadBtn'); if(rb) rb.addEventListener('click', function(e){ e.stopPropagation(); location.reload(); });
+    }
+  }
+
+  function runIntegrityCheck(attempt){
+    attempt = attempt || 0;
+    var it = state.integrity;
+    if(!state.db) return;
+    if(attempt === 0){
+      if(it.running) return;
+      it.running = true; it.status = 'checking'; it.lastError = '';
+      renderIntegrityChip();
+    }
+    Promise.all(INTEGRITY_COLLECTIONS.map(function(c){
+      return serverCount(c.col).then(function(n){ return {c:c, n:n}; });
+    })).then(function(res){
+      var rows = res.map(function(x){
+        var mine = x.c.count();
+        var capped = !!(x.c.limit && x.n > x.c.limit);   // hay mas documentos que el limite que descarga la app
+        return {col:x.c.col, label:x.c.label, app:mine, server:x.n, limit:x.c.limit||null, ok:(mine !== null && mine === x.n && !capped)};
+      });
+      var bad = rows.filter(function(r){ return !r.ok; });
+      if(!bad.length || attempt >= 2){
+        it.rows = rows; it.checkedAt = new Date(); it.running = false;
+        it.status = bad.length ? 'bad' : 'ok';
+        renderIntegrityChip();
+        return;
+      }
+      // Reintento: puede ser una escritura recien hecha o una carga a medias.
+      var movBad = bad.some(function(r){ return r.col === 'movements'; });
+      if(movBad && attempt === 1){
+        // Segundo intento fallido con el historial: se vuelve a descargar completo.
+        state.extMovements = null; state.extMovementsFailed = false;
+        ensureExtendedMovements(function(){ runIntegrityCheck(attempt + 1); });
+        if(state.activeTab === 'RANKING') render();
+        return;
+      }
+      setTimeout(function(){ runIntegrityCheck(attempt + 1); }, 4000);
+    }).catch(function(err){
+      console.error('verificación de datos:', err);
+      it.running = false; it.status = 'error';
+      it.lastError = 'No se pudo consultar el servidor para verificar (' + (err && err.message ? err.message : 'error') + ').';
+      renderIntegrityChip();
+    });
+  }
+
+  function startIntegrityMonitor(){
+    var chip = document.getElementById('dataChip');
+    if(chip && !chip.getAttribute('data-wired')){
+      chip.setAttribute('data-wired', '1');
+      chip.addEventListener('click', function(e){
+        if(e.target.closest && e.target.closest('.data-detail')) return;
+        document.getElementById('dataDetail').classList.toggle('open');
+      });
+      document.addEventListener('click', function(e){
+        if(chip.contains(e.target)) return;
+        document.getElementById('dataDetail').classList.remove('open');
+      });
+      window.addEventListener('online', function(){ renderIntegrityChip(); runIntegrityCheck(0); });
+      window.addEventListener('offline', renderIntegrityChip);
+      document.addEventListener('visibilitychange', function(){
+        if(document.visibilityState !== 'visible') return;
+        var it = state.integrity;
+        if(!it.checkedAt || (Date.now() - it.checkedAt.getTime()) > 2*60*1000) runIntegrityCheck(0);
+      });
+      setInterval(function(){
+        if(document.visibilityState === 'visible') runIntegrityCheck(0);
+      }, 5*60*1000);
+    }
+    setTimeout(function(){ runIntegrityCheck(0); }, 6000);
+  }
+
   function notifyLiveDataError(label, err){
     console.error(label + ' onSnapshot error:', err);
+    state.integrity.listenerErrors[label] = true;
+    renderIntegrityChip();
     showStatus('Se perdió la conexión en vivo con "' + label + '". Los datos que ves pueden estar desactualizados; recarga la página.', true);
   }
 
@@ -8231,6 +8416,7 @@ if ("serviceWorker" in navigator) {
       // tener que abrir primero Ranking/Reportes, que es lo único que antes
       // disparaba esta carga.
       ensureExtendedMovements(renderClientDatalist);
+      startIntegrityMonitor();
 
       db.collection('products').orderBy('order').onSnapshot(function(snap){
         state.products = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
