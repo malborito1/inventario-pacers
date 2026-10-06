@@ -1270,6 +1270,11 @@ if ("serviceWorker" in navigator) {
   .imp-status-transito_ecu{background:var(--fair-tint); color:var(--fair-color);}
   .imp-status-activa{background:var(--warning-tint); color:var(--warning);}
   .imp-status-recibida{background:var(--success-tint); color:var(--success);}
+  .imp-lock-banner{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:10px 14px; margin-bottom:14px; border-radius:12px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:13px;}
+  .imp-lock-banner.imp-lock-open{border-color:var(--warning); background:var(--warning-tint);}
+  .imp-lock-el:disabled, select.imp-lock-el:disabled{opacity:1; color:inherit; -webkit-text-fill-color:currentColor; cursor:default;}
+  button.imp-lock-el:disabled{opacity:.4; cursor:not-allowed;}
+  input.imp-lock-el:read-only, textarea.imp-lock-el:read-only{cursor:default;}
   .imp-status-cerrada{background:var(--surface-2); color:var(--text-muted);}
   .imp-empty{padding:60px 20px; text-align:center; color:var(--text-muted);}
   .imp-kpis{grid-template-columns:repeat(auto-fit, minmax(150px,1fr));}
@@ -1984,6 +1989,8 @@ if ("serviceWorker" in navigator) {
     newImportOpen: false,
     newImportName: '',
     confirmDeleteImportId: null,
+    unlockedImportId: null,       // importacion CERRADA que se desbloqueo a proposito para editarla (solo en esta sesion, no se guarda)
+    confirmUnlockImportId: null,
     openCostNotes: {}, // "<importId>_<costIdx>" -> true, mientras el campo de nota de ese costo está desplegado (solo UI, no se guarda)
 
     // ---------------- Importar historico (facturas pre-dashboard, por anio) ----------------
@@ -3530,8 +3537,22 @@ if ("serviceWorker" in navigator) {
     }).catch(function(){ showStatus('No se pudo crear la importación.', true); });
   }
 
+  // Una importacion con estado "Cerrada" queda en solo lectura (se ve igual, pero no se puede
+  // escribir en ella por error). Para editarla hay que desbloquearla a proposito y confirmar.
+  // El desbloqueo vive solo en memoria: al recargar, salir de Importaciones o cambiar de
+  // importacion vuelve a quedar bloqueada.
+  function isImportLocked(id){
+    var imp = state.imports.filter(function(i){ return i.id === id; })[0];
+    return !!imp && imp.status === 'cerrada' && state.unlockedImportId !== id;
+  }
+
   function updateImportField(id, patch){
     if(!state.db) return;
+    if(isImportLocked(id)){
+      showStatus('Esta importación está cerrada y en solo lectura. Usa "Editar de todos modos" para desbloquearla.', true);
+      render();
+      return;
+    }
     state.db.collection('imports').doc(id).update(patch).catch(function(){
       showStatus('No se pudo guardar el cambio. Intenta de nuevo.', true);
     });
@@ -3539,6 +3560,7 @@ if ("serviceWorker" in navigator) {
 
   function deleteImportNow(id){
     if(!state.db || !id) return;
+    if(isImportLocked(id)){ showStatus('Esta importación está cerrada. Desbloquéala primero para eliminarla.', true); return; }
     state.db.collection('imports').doc(id).delete().then(function(){
       if(state.currentImportId===id) state.currentImportId = null;
       state.confirmDeleteImportId = null;
@@ -3783,6 +3805,26 @@ if ("serviceWorker" in navigator) {
     }
     html += '</div>';
 
+    var impIsClosed = !!imp && imp.status === 'cerrada';
+    var impLockedNow = !!imp && isImportLocked(imp.id);
+    if(impIsClosed){
+      if(impLockedNow){
+        html += '<div class="imp-lock-banner"><span>🔒 <b>Importación cerrada</b>: solo lectura. Se ve igual, pero no se puede modificar.</span>'
+          + '<button class="btn-history" id="impUnlockBtn" type="button">Editar de todos modos…</button></div>';
+        if(state.confirmUnlockImportId === imp.id){
+          html += '<div class="imp-card" style="margin-bottom:14px; border-color:var(--warning);"><b>¿Seguro que quieres editar esta importación cerrada?</b>'
+            + '<div class="hint" style="margin-top:4px;">Los cambios modifican datos de una importación que ya habías cerrado. Al salir de Importaciones o recargar, vuelve a quedar bloqueada.</div>'
+            + '<div style="margin-top:10px; display:flex; gap:8px;">'
+            + '<button class="confirm-btn" id="impUnlockConfirmBtn" type="button">Sí, desbloquear para editar</button>'
+            + '<button class="cancel-btn" id="impUnlockCancelBtn" type="button">No, dejarla como está</button>'
+            + '</div></div>';
+        }
+      } else {
+        html += '<div class="imp-lock-banner imp-lock-open"><span>🔓 <b>Editando una importación cerrada.</b> Cada cambio se guarda en los datos reales.</span>'
+          + '<button class="btn-history" id="impRelockBtn" type="button">Volver a bloquear</button></div>';
+      }
+    }
+
     if(state.newImportOpen){
       html += '<div class="imp-card" style="margin-bottom:14px;"><h4>Nueva importación</h4><div class="imp-new-form">'
         + '<input type="text" id="impNewNameInput" placeholder="Ej. Supermaxi#2" value="'+esc(state.newImportName||'')+'" maxlength="60">'
@@ -3829,15 +3871,50 @@ if ("serviceWorker" in navigator) {
     html += '</div>';
 
     root.innerHTML = html;
+    if(impLockedNow) applyImportLock(root);
     if(totalsSlot) totalsSlot.innerHTML = importTotalsCompactHtml(totals);
     attachImportToolbarEvents();
     attachImportEvents(imp);
     window.scrollTo(window.scrollX, __impScrollY);
   }
 
+  // Deja todo el contenido de la importacion a la vista pero sin poder tocarlo: los campos de
+  // texto/numero/fecha pasan a solo lectura (se ven igual) y selectores, casillas y botones se
+  // desactivan. Quedan activos: cambiar de importacion, crear una nueva, ver las notas de los
+  // costos y los botones de desbloqueo.
+  var IMP_LOCK_KEEP_IDS = ['impSelect','impNewBtn','impNewConfirmBtn','impNewCancelBtn','impNewNameInput','impUnlockBtn','impUnlockConfirmBtn','impUnlockCancelBtn','impRelockBtn'];
+  function applyImportLock(root){
+    Array.prototype.forEach.call(root.querySelectorAll('input, select, textarea, button'), function(el){
+      if(el.id && IMP_LOCK_KEEP_IDS.indexOf(el.id) !== -1) return;
+      if(el.classList.contains('imp-cost-note-btn')) return;
+      var tag = el.tagName.toLowerCase();
+      var type = (el.getAttribute('type') || '').toLowerCase();
+      el.classList.add('imp-lock-el');
+      if(tag === 'textarea' || (tag === 'input' && (type === '' || type === 'text' || type === 'number' || type === 'date' || type === 'search'))){
+        el.readOnly = true;
+        el.tabIndex = -1;
+      } else {
+        el.disabled = true;
+      }
+    });
+  }
+
   function attachImportToolbarEvents(){
+    var unlockBtn = document.getElementById('impUnlockBtn');
+    if(unlockBtn) unlockBtn.addEventListener('click', function(){ var i = currentImport(); if(!i) return; state.confirmUnlockImportId = i.id; render(); });
+    var unlockCancel = document.getElementById('impUnlockCancelBtn');
+    if(unlockCancel) unlockCancel.addEventListener('click', function(){ state.confirmUnlockImportId = null; render(); });
+    var unlockConfirm = document.getElementById('impUnlockConfirmBtn');
+    if(unlockConfirm) unlockConfirm.addEventListener('click', function(){
+      var i = currentImport(); if(!i) return;
+      state.unlockedImportId = i.id; state.confirmUnlockImportId = null;
+      showStatus('Importación desbloqueada para editar. Vuelve a bloquearla cuando termines.');
+      render();
+    });
+    var relockBtn = document.getElementById('impRelockBtn');
+    if(relockBtn) relockBtn.addEventListener('click', function(){ state.unlockedImportId = null; state.confirmUnlockImportId = null; render(); });
     var sel = document.getElementById('impSelect');
-    if(sel) sel.addEventListener('change', function(){ state.currentImportId = sel.value || null; render(); });
+    if(sel) sel.addEventListener('change', function(){ state.currentImportId = sel.value || null; state.unlockedImportId = null; state.confirmUnlockImportId = null; render(); });
     var newBtn = document.getElementById('impNewBtn');
     if(newBtn) newBtn.addEventListener('click', function(){
       state.newImportOpen = true; state.newImportName = '';
@@ -3858,7 +3935,9 @@ if ("serviceWorker" in navigator) {
     var statusSel = document.getElementById('impStatusSelect');
     if(statusSel) statusSel.addEventListener('change', function(){
       var imp = currentImport(); if(!imp) return;
+      var wasUnlocked = (state.unlockedImportId === imp.id);
       updateImportField(imp.id, {status: statusSel.value});
+      if(statusSel.value === 'cerrada' && wasUnlocked){ state.unlockedImportId = null; state.confirmUnlockImportId = null; }
     });
     var clienteInput = document.getElementById('impClienteInput');
     if(clienteInput) clienteInput.addEventListener('change', function(){
@@ -4027,6 +4106,7 @@ if ("serviceWorker" in navigator) {
   }
 
   function render(){
+    if(state.activeTab !== 'IMPORTACIONES'){ state.unlockedImportId = null; state.confirmUnlockImportId = null; }
     renderKpis();
     renderTabs();
     renderClientChip();
