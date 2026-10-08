@@ -1327,8 +1327,11 @@ if ("serviceWorker" in navigator) {
   .imp-milestone label{width:100%; flex:none; font-size:11.5px; color:var(--text-muted); font-weight:600;}
   .imp-milestone input[type=date]{flex:0 0 132px; padding:6px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:12px;}
   .imp-milestone input[type=text]{flex:1 1 140px; min-width:120px; padding:6px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:12px;}
-  .imp-milestone-link{flex:none; padding:5px 10px; border-radius:7px; border:1px solid var(--accent); background:var(--accent-tint,var(--surface-2)); color:var(--accent); font-size:12px; font-weight:600; text-decoration:none; white-space:nowrap;}
-  .imp-milestone-link:hover{text-decoration:underline;}
+  .imp-milestone-linkbox{flex:1 1 140px; min-width:120px; display:flex; align-items:center; gap:6px; padding:5px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); font-size:12px;}
+  .imp-milestone-linktext{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .imp-milestone-linktext a{color:var(--accent); font-weight:600; text-decoration:underline;}
+  .imp-milestone-edit{flex:none; border:0; background:transparent; cursor:pointer; font-size:12px; padding:0 2px; opacity:.7;}
+  .imp-milestone-edit:hover{opacity:1;}
   .imp-kv{display:flex; justify-content:space-between; font-size:12.5px; padding:3px 0; gap:10px;}
   .imp-kv b{font-variant-numeric:tabular-nums; text-align:right;}
   .imp-kv.imp-grand{border-top:1px solid var(--border); margin-top:6px; padding-top:8px; font-size:14px;}
@@ -1993,6 +1996,7 @@ if ("serviceWorker" in navigator) {
     confirmDeleteImportId: null,
     unlockedImportId: null,       // importacion CERRADA que se desbloqueo a proposito para editarla (solo en esta sesion, no se guarda)
     confirmUnlockImportId: null,
+    editMilestoneNote: null, // "<importId>_<idx>" mientras se edita una nota de fecha que contiene enlace (solo UI)
     openCostNotes: {}, // "<importId>_<costIdx>" -> true, mientras el campo de nota de ese costo está desplegado (solo UI, no se guarda)
 
     // ---------------- Importar historico (facturas pre-dashboard, por anio) ----------------
@@ -3670,26 +3674,42 @@ if ("serviceWorker" in navigator) {
       + '</div>';
   }
 
-  // Si la nota de una fecha contiene un enlace (http, https o www), se muestra un
-  // boton para abrirlo en una pestana aparte sin salir del dashboard.
-  function noteLinkHtml(note){
-    var mm = String(note||'').match(/(https?:\/\/[^\s]+|www\.[^\s]+)/i);
-    if(!mm) return '';
-    var url = mm[1].replace(/[),.;]+$/, '');
-    if(/^www\./i.test(url)) url = 'https://' + url;
-    return '<a class="imp-milestone-link" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" title="Abrir enlace en una pestaña nueva">🔗 Abrir enlace</a>';
+  // Si la nota de una fecha trae un enlace (http, https o www), se muestra el texto
+  // con el enlace clicable (abre en pestaña nueva) en lugar del campo de texto.
+  // El lapiz permite volver al campo para editarlo.
+  var NOTE_URL_RE = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+  function noteHasUrl(note){ NOTE_URL_RE.lastIndex = 0; return NOTE_URL_RE.test(String(note||'')); }
+  function noteLinkifiedHtml(note){
+    var text = String(note||''), out = '', last = 0, mm;
+    NOTE_URL_RE.lastIndex = 0;
+    while((mm = NOTE_URL_RE.exec(text)) !== null){
+      var raw = mm[0], url = raw.replace(/[),.;]+$/, ''), tail = raw.slice(url.length);
+      var href = /^www\./i.test(url) ? 'https://' + url : url;
+      out += esc(text.slice(last, mm.index))
+        + '<a href="'+esc(href)+'" target="_blank" rel="noopener noreferrer" title="Abrir enlace en una pestaña nueva">'+esc(url)+'</a>'
+        + esc(tail);
+      last = mm.index + raw.length;
+    }
+    return out + esc(text.slice(last));
   }
 
   function importDatesCardHtml(imp){
     var ms = (imp.milestones && imp.milestones.length) ? imp.milestones : IMPORT_MILESTONES_TEMPLATE;
     var html = '<div class="imp-card"><h4>Fechas del envío</h4>';
     ms.forEach(function(m, idx){
+      var key = imp.id + '_' + idx;
       html += '<div class="imp-milestone">'
         + '<label>'+esc(m.label)+'</label>'
-        + '<input type="date" data-midx="'+idx+'" class="imp-milestone-date" value="'+esc(m.date||'')+'">'
-        + '<input type="text" data-midx="'+idx+'" class="imp-milestone-note" placeholder="Nota / guía / enlace" value="'+esc(m.note||'')+'" maxlength="500">'
-        + noteLinkHtml(m.note)
-        + '</div>';
+        + '<input type="date" data-midx="'+idx+'" class="imp-milestone-date" value="'+esc(m.date||'')+'">';
+      if(noteHasUrl(m.note) && state.editMilestoneNote !== key){
+        html += '<div class="imp-milestone-linkbox">'
+          + '<span class="imp-milestone-linktext">'+noteLinkifiedHtml(m.note)+'</span>'
+          + '<button type="button" class="imp-milestone-edit" data-midx="'+idx+'" title="Editar nota">✏️</button>'
+          + '</div>';
+      } else {
+        html += '<input type="text" data-midx="'+idx+'" class="imp-milestone-note" placeholder="Nota / guía / enlace" value="'+esc(m.note||'')+'" maxlength="500">';
+      }
+      html += '</div>';
     });
     return html + '</div>';
   }
@@ -4048,7 +4068,19 @@ if ("serviceWorker" in navigator) {
         updateImportField(imp.id, {milestones: ms});
       });
     });
+    document.querySelectorAll('.imp-milestone-edit').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var idx = parseInt(btn.getAttribute('data-midx'),10);
+        state.editMilestoneNote = imp.id + '_' + idx;
+        render();
+        var inp = document.querySelector('.imp-milestone-note[data-midx="'+idx+'"]');
+        if(inp){ inp.focus(); }
+      });
+    });
     document.querySelectorAll('.imp-milestone-note').forEach(function(el){
+      el.addEventListener('blur', function(){
+        if(state.editMilestoneNote){ state.editMilestoneNote = null; setTimeout(render, 0); }
+      });
       el.addEventListener('change', function(){
         var idx = parseInt(el.getAttribute('data-midx'),10);
         var ms = (imp.milestones||[]).slice();
