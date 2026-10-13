@@ -30,6 +30,7 @@ if ("serviceWorker" in navigator) {
     --accent-strong:#075f52;
     --accent-tint:#e2f2ee;
     --success:#1e8e5a;
+    --on-solid:#ffffff;
     --success-tint:#e3f4ea;
     --warning:#a87f00;
     --warning-tint:#fdf3c8;
@@ -86,6 +87,7 @@ if ("serviceWorker" in navigator) {
       --accent-strong:#7dd3f0;
       --accent-tint:#122a38;
       --success:#3fbe7c;
+      --on-solid:#0b1220;
       --success-tint:#153524;
       --warning:#e8c33e;
       --warning-tint:#3a3005;
@@ -139,6 +141,7 @@ if ("serviceWorker" in navigator) {
     --accent:#38b6e0;
     --accent-strong:#7dd3f0;
     --accent-tint:#122a38;
+    --on-solid:#0b1220;
     --success:#3fbe7c;
     --success-tint:#153524;
     --warning:#e8c33e;
@@ -851,13 +854,19 @@ if ("serviceWorker" in navigator) {
   .years-row-meta{display:flex; align-items:baseline; gap:8px; margin-top:5px; flex-wrap:wrap;}
   .years-row-value{font-size:15px; font-weight:800; color:var(--text);}
   .years-row-units{font-size:11.5px; color:var(--text-muted); font-weight:600;}
+  .years-delta-wrap{margin-left:auto; display:flex; flex-direction:column; align-items:flex-end; gap:3px;}
   .years-delta{
-    font-size:11.5px; font-weight:700; padding:2px 8px; border-radius:20px; white-space:nowrap;
-    display:inline-flex; align-items:center; gap:3px;
+    font-size:17px; font-weight:800; padding:4px 14px; border-radius:20px; white-space:nowrap; line-height:1.2;
+    display:inline-flex; align-items:center; gap:6px;
   }
-  .years-delta.up{background:var(--success-tint); color:var(--success);}
-  .years-delta.down{background:var(--critical-tint); color:var(--critical);}
-  .years-delta.flat{background:var(--surface-2); color:var(--text-muted);}
+  .years-delta-arrow{font-size:15px;}
+  .years-delta.up{background:var(--success); color:var(--on-solid);}
+  .years-delta.down{background:var(--critical); color:var(--on-solid);}
+  .years-delta.flat{background:var(--surface-2); color:var(--text-muted); font-size:13px; font-weight:700; padding:3px 10px;}
+  .years-delta-sub{font-size:12px; font-weight:700; white-space:nowrap;}
+  .years-delta-sub.up{color:var(--success);}
+  .years-delta-sub.down{color:var(--critical);}
+  .years-delta-sub.flat{color:var(--text-muted);}
 
   /* ---------- Modals ---------- */
   .modal-scrim{
@@ -5743,7 +5752,8 @@ if ("serviceWorker" in navigator) {
       var row = byYear[y];
       var prevRow = i > 0 ? byYear[years[i-1]] : null;
       var pctChange = (prevRow && prevRow.revenue > 0) ? ((row.revenue - prevRow.revenue) / prevRow.revenue * 100) : null;
-      return { year: y, revenue: row.revenue, units: row.units, isCurrentYear: (y === currentYear), pctChange: pctChange };
+      var revDiff = prevRow ? (row.revenue - prevRow.revenue) : 0;
+      return { year: y, revenue: row.revenue, units: row.units, isCurrentYear: (y === currentYear), pctChange: pctChange, revDiff: revDiff };
     });
     return { mode: mode, list: list, todayLabel: today.getDate() + ' ' + MESES_ES[today.getMonth()] };
   }
@@ -5757,13 +5767,19 @@ if ("serviceWorker" in navigator) {
       var pct = Math.max(2, Math.round((r.revenue / maxRevenue) * 100));
       var deltaHtml = '';
       if(r.pctChange == null){
-        deltaHtml = '<span class="years-delta flat">Primer año con datos</span>';
+        deltaHtml = '<span class="years-delta-wrap"><span class="years-delta flat">Primer año con datos</span></span>';
       } else {
-        var up = r.pctChange > 0.05;
-        var down = r.pctChange < -0.05;
+        var up = r.pctChange >= 1;
+        var down = r.pctChange <= -1;
         var cls = up ? 'up' : (down ? 'down' : 'flat');
-        var arrow = up ? '▲' : (down ? '▼' : '●');
-        deltaHtml = '<span class="years-delta ' + cls + '">' + arrow + ' ' + Math.abs(r.pctChange).toFixed(1).replace('.', ',') + '% vs ' + (r.year - 1) + '</span>';
+        var arrow = up ? '▲' : (down ? '▼' : '=');
+        var pctTxt = Math.abs(r.pctChange).toFixed(1).replace('.', ',') + '%';
+        var diffTxt = (r.revDiff >= 0 ? '+' : '-') + fmtMoney(Math.abs(r.revDiff)) + ' vs ' + (r.year - 1);
+        var mainTxt = (up || down) ? ('<span class="years-delta-arrow">' + arrow + '</span> ' + pctTxt) : ('= Sin cambio (' + pctTxt + ')');
+        deltaHtml = '<span class="years-delta-wrap">' +
+          '<span class="years-delta ' + cls + '">' + mainTxt + '</span>' +
+          '<span class="years-delta-sub ' + cls + ' num">' + diffTxt + '</span>' +
+          '</span>';
       }
       var partialNote = (data.mode === 'full' && r.isCurrentYear) ? ('<span class="years-row-partial">hasta ' + esc(data.todayLabel) + '</span>') : '';
       return '<div class="years-row">' +
