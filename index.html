@@ -745,6 +745,12 @@ if ("serviceWorker" in navigator) {
   .pago-abono-toggle{border:1px dashed var(--border); background:none; color:var(--success); border-radius:8px; padding:5px 9px; font-size:11.5px; cursor:pointer; font-weight:600;}
   .pago-abono-toggle:hover{background:var(--success-tint);}
   .pago-abono-form input{padding:7px 10px; border-radius:8px; border:1px solid var(--border); background:var(--surface); font-size:13px; color:var(--text);}
+  .pago-kind-toggle{display:inline-flex; border:1px solid var(--border); border-radius:8px; overflow:hidden;}
+  .pago-kind-btn{border:none; background:var(--surface); color:var(--text-muted); padding:6px 11px; font-size:12px; font-weight:600; cursor:pointer;}
+  .pago-kind-btn.active{background:var(--success); color:var(--on-solid);}
+  .pago-kind-btn:disabled{opacity:.45; cursor:not-allowed;}
+  .pago-ret-field{display:flex; flex-direction:column; gap:2px; font-size:10.5px; font-weight:600; color:var(--text-muted);}
+  .pago-ret-field input{width:104px;}
   .pago-abono-hint{font-size:12px; color:var(--text-muted);}
   .pago-abono-line{font-size:11.5px; font-weight:600; color:var(--success); margin-top:2px;}
   .pago-abono-tag{font-size:10px; font-weight:700; text-transform:uppercase; color:var(--success); background:var(--success-tint); border-radius:6px; padding:1px 6px; margin-left:6px;}
@@ -1959,6 +1965,7 @@ if ("serviceWorker" in navigator) {
     lastDiscountPct: null,
     lastDiscountPctAt: null, // ms timestamp; auto-expira igual que el cliente y la fecha
     openAbonoRow: null,  // key de la fila de Pagos con el mini-form de abono abierto
+    abonoFormKind: 'abono', // 'abono' | 'retencion': que se esta registrando en el mini-form abierto
     openShippingRow: null, // key ("nombre|vencimiento") de la fila de Pagos con el mini-form de envío abierto
     stockFilter: null,   // null | 'lowstock'
     collapsedGroups: {}, // gkey ("CAT::presentacion") -> bool, persisted in localStorage
@@ -2843,7 +2850,7 @@ if ("serviceWorker" in navigator) {
         var key = (pg.name||'') + '|' + (pg.dueDate||'');
         if(!distribGroupIndex.hasOwnProperty(key)){
           distribGroupIndex[key] = distribGroups.length;
-          distribGroups.push({name: pg.name, dueDate: pg.dueDate, amount: 0, products: 0, shipping: 0, abonos: 0, abonoList: [], ids: [], labels: [], key: key});
+          distribGroups.push({name: pg.name, dueDate: pg.dueDate, amount: 0, products: 0, shipping: 0, abonos: 0, abonoList: [], retencion: 0, retDate: '', ids: [], labels: [], key: key});
         }
         var grp = distribGroups[distribGroupIndex[key]];
         grp.amount += (pg.amount||0);
@@ -2853,6 +2860,10 @@ if ("serviceWorker" in navigator) {
           // asi el saldo (suma de la cuenta) baja sin tocar la factura original.
           grp.abonos += -(pg.amount||0);
           grp.abonoList.push({amount: -(pg.amount||0), date: pg.abonoDate || (pg.createdAt||'').slice(0,10)});
+        } else if(pg.origin === 'retencion'){
+          // Retencion (renta + IVA): tambien se guarda como monto negativo en la misma cuenta.
+          grp.retencion += -(pg.amount||0);
+          grp.retDate = pg.abonoDate || (pg.createdAt||'').slice(0,10);
         } else if(pg.origin === 'envio'){
           grp.shipping += (pg.amount||0);
         } else {
@@ -2869,24 +2880,49 @@ if ("serviceWorker" in navigator) {
           + '<span class="pago-name">' + esc(grp.name) + '<span class="pago-distrib-tag">Distribuidor</span>'
           + (grp.labels.length ? ('<div class="pago-distrib-products">' + esc(grp.labels.join(' · ')) + '</div>') : '')
           + (grp.shipping > 0 ? ('<div class="pago-distrib-products">Productos: ' + fmtMoney(grp.products) + ' + Envío: ' + fmtMoney(grp.shipping) + '</div>') : '')
-          + (grp.abonos > 0 ? ('<div class="pago-abono-line">Total factura ' + fmtMoney(grp.products + grp.shipping) + ' · Abonado ' + (grp.abonoList.length === 1 ? (fmtMoney(grp.abonos) + ' el ' + fmtDateOnly(grp.abonoList[0].date)) : (fmtMoney(grp.abonos) + ' (' + grp.abonoList.map(function(a){ return fmtMoney(a.amount) + ' el ' + fmtDateOnly(a.date); }).join(', ') + ')')) + ' · Saldo ' + fmtMoney(grp.amount) + '</div>') : '')
+          + ((grp.abonos > 0 || grp.retencion > 0) ? ('<div class="pago-abono-line">Total factura ' + fmtMoney(grp.products + grp.shipping)
+              + (grp.retencion > 0 ? (' · Retención ' + fmtMoney(grp.retencion) + (grp.retDate ? (' el ' + fmtDateOnly(grp.retDate)) : '')) : '')
+              + (grp.abonos > 0 ? (' · Abonado ' + (grp.abonoList.length === 1 ? (fmtMoney(grp.abonos) + ' el ' + fmtDateOnly(grp.abonoList[0].date)) : (fmtMoney(grp.abonos) + ' (' + grp.abonoList.map(function(a){ return fmtMoney(a.amount) + ' el ' + fmtDateOnly(a.date); }).join(', ') + ')'))) : '')
+              + ' · Saldo ' + fmtMoney(grp.amount) + '</div>') : '')
           + '</span>'
           + '<span class="pago-due">' + (grp.dueDate ? ((overdue ? 'Venció ' : 'Vence ') + fmtDateOnly(grp.dueDate)) : 'Sin fecha')
           + (overdue ? '<span class="pago-due-days">' + daysOverdueText(grp.dueDate) + '</span>' : '') + '</span>'
           + '<span class="pago-amt num">' + fmtMoney(grp.amount) + '</span>'
           + (overdue ? '<span class="pago-vencido-badge">VENCIDO</span>' : '<span class="pill ok">Al día</span>')
-          + '<button class="pago-abono-toggle" data-key="' + esc(grp.key) + '" type="button" title="Registrar un abono parcial">' + (abonoOpen ? 'Cancelar abono' : '+ Abono') + '</button>'
+          + '<button class="pago-abono-toggle" data-key="' + esc(grp.key) + '" type="button" title="Registrar un abono parcial o una retención">' + (abonoOpen ? 'Cancelar' : '+ Abono / Retención') + '</button>'
           + '<button class="pago-ship-toggle" data-key="' + esc(grp.key) + '" type="button" title="Agregar valor de envío">' + (shippingOpen ? 'Cancelar envío' : '+ Envío') + '</button>'
           + '<button class="pago-paid" data-pid="' + grp.ids.join(',') + '" aria-label="Marcar como pagado" title="Marcar como pagado">✓</button>'
           + '<button class="pago-del" data-pid="' + grp.ids.join(',') + '" aria-label="Eliminar" title="Eliminar">✕</button>'
           + '</div>';
         if(abonoOpen){
-          html += '<div class="pago-ship-form pago-abono-form">'
-            + '<input type="number" class="pago-abono-value-input" placeholder="Monto del abono" min="0.01" step="0.01">'
-            + '<input type="date" class="pago-abono-date-input" value="' + esc(today) + '" title="Fecha en que se recibió el abono">'
-            + '<button class="pago-abono-add" data-name="' + esc(grp.name) + '" data-duedate="' + esc(grp.dueDate) + '" data-saldo="' + (Math.round(grp.amount*100)/100) + '" type="button">Registrar abono</button>'
-            + '<span class="pago-abono-hint">Saldo actual: ' + fmtMoney(grp.amount) + '</span>'
-            + '</div>';
+          var kind = (state.abonoFormKind === 'retencion' && !(grp.retencion > 0)) ? 'retencion' : 'abono';
+          var saldoR = Math.round(grp.amount*100)/100;
+          var kindToggle = '<span class="pago-kind-toggle">'
+            + '<button type="button" class="pago-kind-btn' + (kind==='abono'?' active':'') + '" data-kind="abono">Abono</button>'
+            + '<button type="button" class="pago-kind-btn' + (kind==='retencion'?' active':'') + '"' + (grp.retencion > 0 ? ' disabled title="Esta cuenta ya tiene una retención registrada"' : '') + ' data-kind="retencion">Retención</button>'
+            + '</span>';
+          if(kind === 'retencion'){
+            var invTotal = Math.round((grp.products + grp.shipping)*100)/100;
+            var pcts = retentionPctsFor(grp.name);
+            var calc = computeRetention(invTotal, pcts.renta, pcts.iva);
+            html += '<div class="pago-ship-form pago-abono-form pago-ret-form" data-total="' + invTotal + '">'
+              + kindToggle
+              + '<label class="pago-ret-field">% base sin IVA<input type="number" class="pago-ret-pct-renta" value="' + pcts.renta + '" min="0" max="100" step="0.01"></label>'
+              + '<label class="pago-ret-field">% del IVA<input type="number" class="pago-ret-pct-iva" value="' + pcts.iva + '" min="0" max="100" step="0.01"></label>'
+              + '<label class="pago-ret-field">Monto retención<input type="number" class="pago-abono-value-input pago-ret-amount" value="' + calc.total.toFixed(2) + '" min="0.01" step="0.01"></label>'
+              + '<input type="date" class="pago-abono-date-input" value="' + esc(today) + '" title="Fecha de la retención">'
+              + '<button class="pago-abono-add pago-ret-add" data-name="' + esc(grp.name) + '" data-duedate="' + esc(grp.dueDate) + '" data-saldo="' + saldoR + '" type="button">Registrar retención</button>'
+              + '<span class="pago-abono-hint pago-ret-hint">' + retentionHintText(calc, pcts) + '</span>'
+              + '</div>';
+          } else {
+            html += '<div class="pago-ship-form pago-abono-form">'
+              + kindToggle
+              + '<input type="number" class="pago-abono-value-input" placeholder="Monto del abono" min="0.01" step="0.01">'
+              + '<input type="date" class="pago-abono-date-input" value="' + esc(today) + '" title="Fecha en que se recibió el abono">'
+              + '<button class="pago-abono-add" data-name="' + esc(grp.name) + '" data-duedate="' + esc(grp.dueDate) + '" data-saldo="' + saldoR + '" type="button">Registrar abono</button>'
+              + '<span class="pago-abono-hint">Saldo actual: ' + fmtMoney(grp.amount) + '</span>'
+              + '</div>';
+          }
         }
         if(shippingOpen){
           html += '<div class="pago-ship-form">'
@@ -2914,7 +2950,7 @@ if ("serviceWorker" in navigator) {
       } else {
         html += '<div class="pagos-list pagos-list-history">';
         paid.forEach(function(pg){
-          html += '<div class="pago-item pago-item-paid"><span class="pago-name">' + esc(pg.name) + (pg.origin === 'abono' ? ' <span class="pago-abono-tag">abono parcial</span>' : '') + '</span><span class="pago-amt num">' + fmtMoney(pg.origin === 'abono' ? -(pg.amount||0) : pg.amount) + '</span><span class="pago-paid-date">Cobrado ' + fmtDateDMY(pg.paidAt) + '</span><button class="pago-reopen" data-pid="' + pg.id + '" title="Volver a pendiente">↺</button></div>';
+          html += '<div class="pago-item pago-item-paid"><span class="pago-name">' + esc(pg.name) + (pg.origin === 'abono' ? ' <span class="pago-abono-tag">abono parcial</span>' : (pg.origin === 'retencion' ? ' <span class="pago-abono-tag">retención</span>' : '')) + '</span><span class="pago-amt num">' + fmtMoney((pg.origin === 'abono' || pg.origin === 'retencion') ? -(pg.amount||0) : pg.amount) + '</span><span class="pago-paid-date">Cobrado ' + fmtDateDMY(pg.paidAt) + '</span><button class="pago-reopen" data-pid="' + pg.id + '" title="Volver a pendiente">↺</button></div>';
         });
         html += '</div>';
       }
@@ -2968,20 +3004,60 @@ if ("serviceWorker" in navigator) {
       btn.addEventListener('click', function(){
         var key = btn.getAttribute('data-key');
         state.openAbonoRow = (state.openAbonoRow === key) ? null : key;
+        state.abonoFormKind = 'abono';
         state.openShippingRow = null;
         renderPagos();
       });
+    });
+    root.querySelectorAll('.pago-kind-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        if(btn.disabled) return;
+        state.abonoFormKind = btn.getAttribute('data-kind');
+        renderPagos();
+      });
+    });
+    root.querySelectorAll('.pago-ret-form').forEach(function(form){
+      var total = parseFloat(form.getAttribute('data-total')) || 0;
+      var pr = form.querySelector('.pago-ret-pct-renta');
+      var pi = form.querySelector('.pago-ret-pct-iva');
+      var amt = form.querySelector('.pago-ret-amount');
+      var hint = form.querySelector('.pago-ret-hint');
+      function recalc(){
+        var c = computeRetention(total, parseFloat(pr.value)||0, parseFloat(pi.value)||0);
+        amt.value = c.total.toFixed(2);
+        amt.removeAttribute('data-manual');
+        if(hint) hint.textContent = retentionHintText(c, {renta: parseFloat(pr.value)||0, iva: parseFloat(pi.value)||0});
+      }
+      pr.addEventListener('input', recalc);
+      pi.addEventListener('input', recalc);
+      amt.addEventListener('input', function(){ amt.setAttribute('data-manual', '1'); });
     });
     root.querySelectorAll('.pago-abono-add').forEach(function(btn){
       btn.addEventListener('click', function(){
         var form = btn.closest('.pago-abono-form');
         var input = form ? form.querySelector('.pago-abono-value-input') : null;
         var dateInput = form ? form.querySelector('.pago-abono-date-input') : null;
+        var isRet = !!(form && form.classList.contains('pago-ret-form'));
+        var label = isRet ? 'retención' : 'abono';
         var raw = Math.round((parseFloat(input && input.value) || 0) * 100) / 100;
         var saldo = parseFloat(btn.getAttribute('data-saldo')) || 0;
-        if(!raw || raw <= 0){ showStatus('Ingresa un monto de abono válido.', true); return; }
-        if(raw >= saldo){ showStatus('El abono (' + fmtMoney(raw) + ') es igual o mayor al saldo (' + fmtMoney(saldo) + '). Si pagó todo, usa el botón ✓ para marcarlo como cobrado.', true); return; }
-        addAbonoToInvoice(btn.getAttribute('data-name'), btn.getAttribute('data-duedate'), raw, dateInput && dateInput.value, btn);
+        if(!raw || raw <= 0){ showStatus('Ingresa un monto de ' + label + ' válido.', true); return; }
+        if(raw >= saldo){ showStatus('La ' + label + ' (' + fmtMoney(raw) + ') es igual o mayor al saldo (' + fmtMoney(saldo) + '). Si pagó todo, usa el botón ✓ para marcarlo como cobrado.', true); return; }
+        if(isRet){
+          var total = parseFloat(form.getAttribute('data-total')) || 0;
+          var prv = parseFloat(form.querySelector('.pago-ret-pct-renta').value) || 0;
+          var piv = parseFloat(form.querySelector('.pago-ret-pct-iva').value) || 0;
+          var c = computeRetention(total, prv, piv);
+          var matches = Math.abs(c.total - raw) < 0.011;
+          addAbonoToInvoice(btn.getAttribute('data-name'), btn.getAttribute('data-duedate'), raw, dateInput && dateInput.value, btn, {
+            kind: 'retencion',
+            pctRenta: matches ? prv : null,
+            pctIva: matches ? piv : null,
+            base: c.base, iva: c.iva
+          });
+        } else {
+          addAbonoToInvoice(btn.getAttribute('data-name'), btn.getAttribute('data-duedate'), raw, dateInput && dateInput.value, btn);
+        }
       });
     });
     root.querySelectorAll('.pago-ship-add').forEach(function(btn){
@@ -3063,7 +3139,30 @@ if ("serviceWorker" in navigator) {
   // NEGATIVO (origin:'abono') en la misma cuenta (mismo nombre + vencimiento). Asi el saldo
   // baja, la factura original queda intacta y se puede ver cuanto y cuando abono.
   var _addingAbono = false;
-  function addAbonoToInvoice(client, dueDate, abono, dateStr, btnEl){
+  // Retencion en la fuente (Ecuador): 2% sobre la base imponible (total sin IVA) + 30% sobre el
+  // IVA de la factura. Los montos de las cuentas ya incluyen el IVA 15%, asi que
+  // base = total / 1,15 e IVA = total - base. Los porcentajes son editables y se recuerdan
+  // por cliente (se leen de la ultima retencion registrada para ese cliente).
+  var RET_DEFAULT_RENTA = 2, RET_DEFAULT_IVA = 30;
+  function computeRetention(invoiceTotal, pctRenta, pctIva){
+    var base = (invoiceTotal||0) / (1 + IVA_RATE);
+    var iva = (invoiceTotal||0) - base;
+    var total = Math.round(((base * (pctRenta||0) / 100) + (iva * (pctIva||0) / 100)) * 100) / 100;
+    return {base: Math.round(base*100)/100, iva: Math.round(iva*100)/100, total: total};
+  }
+  function retentionPctsFor(client){
+    var found = null;
+    (state.payments||[]).forEach(function(pg){
+      if(pg.origin !== 'retencion' || pg.name !== client || pg.retPctRenta == null || pg.retPctIva == null) return;
+      if(!found || (pg.createdAt||'') > (found.createdAt||'')) found = pg;
+    });
+    return found ? {renta: found.retPctRenta, iva: found.retPctIva, remembered: true} : {renta: RET_DEFAULT_RENTA, iva: RET_DEFAULT_IVA, remembered: false};
+  }
+  function retentionHintText(c, pcts){
+    return 'Base sin IVA ' + fmtMoney(c.base) + ' · IVA ' + fmtMoney(c.iva) + ' · ' + (pcts.remembered ? 'Porcentajes de este cliente' : 'Porcentajes estándar') + '. Puedes corregir el monto.';
+  }
+
+  function addAbonoToInvoice(client, dueDate, abono, dateStr, btnEl, extra){
     if(!state.db || !client || _addingAbono) return;
     _addingAbono = true;
     if(btnEl) btnEl.disabled = true;
@@ -3072,16 +3171,23 @@ if ("serviceWorker" in navigator) {
       amount: -abono,
       createdAt: new Date().toISOString(),
       addedBy: state.userName,
-      origin: 'abono',
+      origin: (extra && extra.kind === 'retencion') ? 'retencion' : 'abono',
       isDistribuidor: true,
       abonoDate: dateStr || todayDateStr()
     };
+    if(extra && extra.kind === 'retencion'){
+      doc.retPctRenta = extra.pctRenta;
+      doc.retPctIva = extra.pctIva;
+      doc.retBase = extra.base;
+      doc.retIva = extra.iva;
+    }
+    var isRetDoc = !!(extra && extra.kind === 'retencion');
     if(dueDate) doc.dueDate = dueDate;
     ensureUser(function(){
       state.db.collection('pendingPayments').add(doc).then(function(){
         state.openAbonoRow = null;
-        showStatus('Abono registrado: ' + fmtMoney(abono) + ' a la cuenta de ' + client + '.');
-      }).catch(function(){ showStatus('No se pudo registrar el abono.', true); }).then(function(){
+        showStatus((isRetDoc ? 'Retención registrada: ' : 'Abono registrado: ') + fmtMoney(abono) + ' a la cuenta de ' + client + '.');
+      }).catch(function(){ showStatus('No se pudo registrar ' + (isRetDoc ? 'la retención.' : 'el abono.'), true); }).then(function(){
         _addingAbono = false;
         if(btnEl) btnEl.disabled = false;
       });
