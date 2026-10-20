@@ -752,7 +752,12 @@ if ("serviceWorker" in navigator) {
   .pago-ret-field{display:flex; flex-direction:column; gap:2px; font-size:10.5px; font-weight:600; color:var(--text-muted);}
   .pago-ret-field input{width:104px;}
   .pago-abono-hint{font-size:12px; color:var(--text-muted);}
-  .pago-abono-line{font-size:11.5px; font-weight:600; color:var(--success); margin-top:2px;}
+  .pago-abono-line{font-size:11.5px; font-weight:600; color:var(--text-muted); margin-top:2px;}
+  .pago-abono-line .pago-seg{font-weight:700;}
+  .pago-seg-total{color:var(--link);}
+  .pago-seg-ret{color:var(--warning);}
+  .pago-seg-abono{color:var(--fair-color);}
+  .pago-seg-saldo{color:var(--success);}
   .pago-abono-tag{font-size:10px; font-weight:700; text-transform:uppercase; color:var(--success); background:var(--success-tint); border-radius:6px; padding:1px 6px; margin-left:6px;}
   .pago-due-days{display:block; font-size:11px; font-weight:700; color:var(--critical); margin-top:1px;}
   .pago-vencido-badge{background:var(--critical); color:#fff; font-weight:800; font-size:15px; letter-spacing:.03em; padding:5px 14px; border-radius:8px; flex:0 0 auto;}
@@ -2880,10 +2885,11 @@ if ("serviceWorker" in navigator) {
           + '<span class="pago-name">' + esc(grp.name) + '<span class="pago-distrib-tag">Distribuidor</span>'
           + (grp.labels.length ? ('<div class="pago-distrib-products">' + esc(grp.labels.join(' · ')) + '</div>') : '')
           + (grp.shipping > 0 ? ('<div class="pago-distrib-products">Productos: ' + fmtMoney(grp.products) + ' + Envío: ' + fmtMoney(grp.shipping) + '</div>') : '')
-          + ((grp.abonos > 0 || grp.retencion > 0) ? ('<div class="pago-abono-line">Total factura ' + fmtMoney(grp.products + grp.shipping)
-              + (grp.retencion > 0 ? (' · Retención ' + fmtMoney(grp.retencion) + (grp.retDate ? (' el ' + fmtDateOnly(grp.retDate)) : '')) : '')
-              + (grp.abonos > 0 ? (' · Abonado ' + (grp.abonoList.length === 1 ? (fmtMoney(grp.abonos) + ' el ' + fmtDateOnly(grp.abonoList[0].date)) : (fmtMoney(grp.abonos) + ' (' + grp.abonoList.map(function(a){ return fmtMoney(a.amount) + ' el ' + fmtDateOnly(a.date); }).join(', ') + ')'))) : '')
-              + ' · Saldo ' + fmtMoney(grp.amount) + '</div>') : '')
+          + ((grp.abonos > 0 || grp.retencion > 0) ? ('<div class="pago-abono-line">'
+              + '<span class="pago-seg pago-seg-total">Total factura ' + fmtMoney(grp.products + grp.shipping) + '</span>'
+              + (grp.retencion > 0 ? (' · <span class="pago-seg pago-seg-ret">Retención ' + fmtMoney(grp.retencion) + (grp.retDate ? (' el ' + fmtDateOnly(grp.retDate)) : '') + '</span>') : '')
+              + (grp.abonos > 0 ? (' · <span class="pago-seg pago-seg-abono">Abonado ' + (grp.abonoList.length === 1 ? (fmtMoney(grp.abonos) + ' el ' + fmtDateOnly(grp.abonoList[0].date)) : (fmtMoney(grp.abonos) + ' (' + grp.abonoList.map(function(a){ return fmtMoney(a.amount) + ' el ' + fmtDateOnly(a.date); }).join(', ') + ')')) + '</span>') : '')
+              + ' · <span class="pago-seg pago-seg-saldo">Saldo ' + fmtMoney(grp.amount) + '</span></div>') : '')
           + '</span>'
           + '<span class="pago-due">' + (grp.dueDate ? ((overdue ? 'Venció ' : 'Vence ') + fmtDateOnly(grp.dueDate)) : 'Sin fecha')
           + (overdue ? '<span class="pago-due-days">' + daysOverdueText(grp.dueDate) + '</span>' : '') + '</span>'
