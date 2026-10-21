@@ -1210,6 +1210,15 @@ if ("serviceWorker" in navigator) {
   .new-fair-pick-row .nm{font-size:13px; min-width:0;}
   .new-fair-pick-row .nm .pres{color:var(--text-muted); font-size:11.5px;}
   .new-fair-pick-row input{width:100%; min-width:0; padding:6px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-family:inherit;}
+  .imp-manual-line{margin-top:14px; padding-top:12px; border-top:1px dashed var(--border);}
+  .imp-manual-title{font-weight:800; color:var(--text); font-size:13.5px;}
+  .imp-manual-hint{color:var(--text-muted); font-size:12px; margin:2px 0 10px;}
+  .imp-manual-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px;}
+  .imp-manual-grid label{display:flex; flex-direction:column; gap:4px; font-size:11.5px; font-weight:700; color:var(--text-muted);}
+  .imp-manual-grid input,.imp-manual-grid select{padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); font-size:14px; font-weight:500; min-width:0;}
+  .imp-manual-actions{display:flex; align-items:center; gap:12px; margin:12px 0 4px; flex-wrap:wrap;}
+  .imp-manual-msg.err{color:var(--critical); font-size:12.5px; font-weight:600;}
+
   .imp-addline-search{width:100%; margin-bottom:10px; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-family:inherit;}
   .new-fair-custom-row{display:grid; grid-template-columns:36px 1.3fr 80px 80px 80px 32px; gap:8px; align-items:center; margin-bottom:8px; min-width:0;}
   .new-fair-custom-row input{width:100%; min-width:0; padding:6px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-family:inherit;}
@@ -1839,7 +1848,6 @@ if ("serviceWorker" in navigator) {
       have[l.linea + '|' + l.presentacion + '|' + l.sabor] = true;
     });
     return (state.products || []).filter(function(p){
-      if(p.presentation === 'BULK') return false;
       if(IMPORT_LINE_EXCLUDED_IDS.indexOf(p.id) !== -1) return false;
       return !have[p.category + '|' + p.presentation + '|' + p.flavor];
     });
@@ -1891,6 +1899,57 @@ if ("serviceWorker" in navigator) {
     products.push(newLine);
     updateImportField(imp.id, {products: products});
     showStatus('"' + p.flavor + '" agregado a la importación.');
+  }
+
+  // Linea manual: para registrar en una importacion (sobre todo una pasada) un producto que ya
+  // no existe en el inventario actual (p.ej. Cola Sachets, o los bulks de Mandarina y Raspberry).
+  function addManualImportLine(imp, data){
+    if(!imp) return {ok:false, msg:'No hay importación seleccionada.'};
+    var sabor = String(data.sabor||'').trim();
+    if(!sabor) return {ok:false, msg:'Escribe el sabor.'};
+    if(!data.linea || !data.presentacion) return {ok:false, msg:'Elige la línea y la presentación.'};
+    var norm = function(x){ return String(x||'').trim().toLowerCase(); };
+    var dup = (imp.products||[]).some(function(l){
+      return l.linea === data.linea && norm(l.presentacion) === norm(data.presentacion) && norm(l.sabor) === norm(sabor);
+    });
+    if(dup) return {ok:false, msg:'Esa línea ya está en la importación.'};
+    var products = (imp.products || []).slice();
+    products.push({
+      linea: data.linea,
+      presentacion: data.presentacion,
+      sabor: sabor,
+      unidadesPorCaja: parseFloat(data.unidadesPorCaja) || 1,
+      gramosPorCaja: parseFloat(data.gramosPorCaja) || 0,
+      precioPorCaja: parseFloat(data.precioPorCaja) || 0,
+      cajas: 0,
+      precioVenta: 0,
+      manual: true
+    });
+    updateImportField(imp.id, {products: products});
+    showStatus('"' + sabor + '" agregado a la importación.');
+    return {ok:true};
+  }
+
+  function importManualLineFormHtml(){
+    var flavors = {};
+    (state.products||[]).forEach(function(p){ if(p.flavor) flavors[p.flavor] = true; });
+    ['Cola','Mandarin','Raspberry'].forEach(function(f){ flavors[f] = true; });
+    var dl = Object.keys(flavors).sort().map(function(f){ return '<option value="'+esc(f)+'">'; }).join('');
+    var presOpts = PRESENTATION_OPTIONS.map(function(o){ return '<option value="'+esc(o)+'">'+esc(o)+'</option>'; }).join('');
+    return '<div class="imp-manual-line">'
+      + '<div class="imp-manual-title">¿No lo encuentras? Agrégalo a mano</div>'
+      + '<div class="imp-manual-hint">Sirve para productos que ya no están en el inventario (por ejemplo Cola Sachets o los bulks de Mandarina y Raspberry).</div>'
+      + '<div class="imp-manual-grid">'
+      +   '<label>Línea<select id="impManualLinea"><option value="ENDURANCE">Endurance</option><option value="HCF">High Carb</option><option value="RECOVERY">Recovery</option></select></label>'
+      +   '<label>Presentación<select id="impManualPres">'+presOpts+'</select></label>'
+      +   '<label>Sabor<input type="text" id="impManualSabor" list="impManualFlavors" placeholder="Ej. Cola" maxlength="60" autocomplete="off"><datalist id="impManualFlavors">'+dl+'</datalist></label>'
+      +   '<label>Unidades por caja<input type="number" min="1" step="1" id="impManualUnits" value="1"></label>'
+      +   '<label>Gramos por caja<input type="number" min="0" step="1" id="impManualGramos" placeholder="0"></label>'
+      +   '<label>$ por caja<input type="number" min="0" step="0.01" id="impManualPrecio" placeholder="0.00"></label>'
+      + '</div>'
+      + '<div class="imp-manual-actions"><button class="btn-history" id="impManualAddBtn" type="button">Agregar a la importación</button>'
+      + '<span class="imp-manual-msg" id="impManualMsg"></span></div>'
+      + '</div>';
   }
 
   var IMPORT_COSTS_TEMPLATE = ['Gastos en origen','Flete internacional','Gastos locales','Agenciamiento aduanal','Collect fee + gastos origen','Comisión agente','Impuestos SENAE','Transporte a bodega','Honorario agente aduana'].map(function(name){ return {concepto:name, monto:0, pagado:false}; });
@@ -4056,6 +4115,7 @@ if ("serviceWorker" in navigator) {
       html += '<div class="imp-card" style="margin-bottom:14px;"><h4>Agregar producto a esta importación</h4>'
         + '<input type="text" id="impAddLineSearch" class="imp-addline-search" placeholder="Buscar por sabor, línea o presentación" value="'+esc(state.addImportLineQuery||'')+'">'
         + '<div class="new-fair-picker" id="impAddLinePicker">' + importAddLinePickerRowsHtml(imp, state.addImportLineQuery||'') + '</div>'
+        + importManualLineFormHtml()
         + '<button class="cancel-btn" id="impAddLineCancelBtn" type="button">Cerrar</button>'
         + '</div>';
     }
@@ -4188,6 +4248,39 @@ if ("serviceWorker" in navigator) {
       if(picker){ picker.innerHTML = importAddLinePickerRowsHtml(currentImport(), state.addImportLineQuery); attachImportAddLinePickEvents(); }
     });
     attachImportAddLinePickEvents();
+    attachImportManualLineEvents();
+  }
+
+  function attachImportManualLineEvents(){
+    var addBtn = document.getElementById('impManualAddBtn');
+    if(!addBtn) return;
+    var linea = document.getElementById('impManualLinea');
+    var pres = document.getElementById('impManualPres');
+    var units = document.getElementById('impManualUnits');
+    var gramos = document.getElementById('impManualGramos');
+    var precio = document.getElementById('impManualPrecio');
+    var msg = document.getElementById('impManualMsg');
+    function applyDefaults(){
+      var def = IMPORT_GROUP_DEFAULTS[linea.value + '|' + pres.value] || {};
+      gramos.value = def.gramosPorCaja || '';
+      precio.value = def.precioPorCaja || '';
+      var sib = (state.products||[]).find(function(p){ return p.category === linea.value && p.presentation === pres.value && p.unitsPerBox; });
+      units.value = sib ? sib.unitsPerBox : 1;
+    }
+    linea.addEventListener('change', applyDefaults);
+    pres.addEventListener('change', applyDefaults);
+    applyDefaults();
+    addBtn.addEventListener('click', function(){
+      var imp = currentImport(); if(!imp) return;
+      var r = addManualImportLine(imp, {
+        linea: linea.value, presentacion: pres.value,
+        sabor: document.getElementById('impManualSabor').value,
+        unidadesPorCaja: units.value, gramosPorCaja: gramos.value, precioPorCaja: precio.value
+      });
+      if(!r.ok){ if(msg){ msg.textContent = r.msg; msg.className = 'imp-manual-msg err'; } return; }
+      state.addImportLineOpen = false;
+      render();
+    });
   }
 
   function attachImportAddLinePickEvents(){
