@@ -1221,6 +1221,16 @@ if ("serviceWorker" in navigator) {
   .move-assign{margin-top:8px; padding:10px; border:1px solid var(--border); border-radius:10px; background:var(--surface);}
   .move-assign .modal-actions{margin-top:6px;}
 
+  /* ---- Aviso llamativo (bloquea una accion y explica por que) ---- */
+  .attn-modal{max-width:380px; text-align:center; border:2px solid var(--critical); border-top:8px solid var(--critical); padding:24px 22px 20px; animation:attnPop .22s ease-out;}
+  @keyframes attnPop{from{transform:scale(.92); opacity:0;} to{transform:scale(1); opacity:1;}}
+  .attn-icon{font-size:46px; line-height:1; margin-bottom:6px;}
+  .attn-modal h3{color:var(--critical); font-size:22px; margin:0 0 8px;}
+  .attn-msg{font-size:16px; line-height:1.45; color:var(--text); margin:0 0 6px; font-weight:600;}
+  .attn-hint{font-size:13.5px; color:var(--text-muted); margin:0 0 16px;}
+  .attn-btn{width:100%; padding:13px; border:none; border-radius:10px; background:var(--critical); color:#fff; font-size:16px; font-weight:800; cursor:pointer; font-family:inherit;}
+  .confirm-btn.is-incomplete{opacity:.55;}
+
   .cierre-mismatch-warn{color:var(--critical) !important; background:var(--critical-tint) !important;}
   .cierre-prop-card{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; box-shadow:var(--shadow);}
   .cierre-prop-bar{display:flex; height:16px; border-radius:8px; overflow:hidden; background:var(--surface-2); margin-bottom:14px;}
@@ -1717,6 +1727,10 @@ if ("serviceWorker" in navigator) {
 
 <div class="modal-scrim" id="fairSaleModalScrim">
   <div class="modal" id="fairSaleModalBody"></div>
+</div>
+
+<div class="modal-scrim" id="attentionScrim" style="z-index:95;">
+  <div class="modal attn-modal" id="attentionBody" role="alertdialog" aria-live="assertive"></div>
 </div>
 
 <div class="modal-scrim" id="fairPayScrim">
@@ -2454,6 +2468,26 @@ if ("serviceWorker" in navigator) {
     el.className = 'status-bar show' + (isErr?' err':'');
     clearTimeout(showStatus._t);
     showStatus._t = setTimeout(function(){ el.className='status-bar'; }, 3200);
+  }
+
+  // Aviso grande y llamativo para cuando algo impide registrar una venta (en vez del mensaje
+  // pequeno que desaparece solo): explica que falta y se cierra con "Entendido".
+  function showAttention(title, msg, hint){
+    var scrim = document.getElementById('attentionScrim');
+    var body = document.getElementById('attentionBody');
+    if(!scrim || !body){ showStatus(msg, true); return; }
+    body.innerHTML = '<div class="attn-icon">⚠️</div><h3>' + esc(title) + '</h3>'
+      + '<p class="attn-msg">' + esc(msg) + '</p>'
+      + (hint ? ('<p class="attn-hint">' + esc(hint) + '</p>') : '<div style="height:10px;"></div>')
+      + '<button type="button" class="attn-btn" id="attentionOkBtn">Entendido</button>';
+    scrim.classList.add('open');
+    function close(){ scrim.classList.remove('open'); document.removeEventListener('keydown', onKey, true); }
+    function onKey(ev){ if(ev.key === 'Escape' || ev.key === 'Enter'){ ev.preventDefault(); ev.stopPropagation(); close(); } }
+    document.addEventListener('keydown', onKey, true);
+    var ok = document.getElementById('attentionOkBtn');
+    ok.addEventListener('click', close);
+    scrim.onclick = function(ev){ if(ev.target === scrim) close(); };
+    setTimeout(function(){ ok.focus(); }, 30);
   }
 
   // ---------------- Rendering ----------------
@@ -6662,7 +6696,7 @@ if ("serviceWorker" in navigator) {
     document.getElementById('fpCancelBtn').addEventListener('click', closeFairPayModal);
     document.getElementById('fpConfirmBtn').addEventListener('click', function(){
       var res = payResolve(p.pay, p.total);
-      if(!res.ok){ showStatus(res.msg, true); return; }
+      if(!res.ok){ showAttention('Revisa el método de pago', res.msg, 'Toca uno de los métodos de pago, o "Dividido" si pagó con varios, y vuelve a registrar.'); return; }
       var cb = p.onDone;
       closeFairPayModal();
       cb(res.payments);
@@ -7841,24 +7875,24 @@ if ("serviceWorker" in navigator) {
     if(!isStock && !c){ closeFairSaleModal(); return; }
     var remaining = isStock ? fairRemaining(s) : fairCustomRemaining(c);
     var qty = m.qty || 0;
-    if(qty <= 0){ showStatus('Ingresa una cantidad válida.', true); return; }
-    if(qty > remaining){ showStatus('Solo quedan ' + remaining + ' u. de esto en la feria.', true); return; }
+    if(qty <= 0){ showAttention('Cantidad no válida', 'Ingresa una cantidad válida.'); return; }
+    if(qty > remaining){ showAttention('No alcanza el stock', 'Solo quedan ' + remaining + ' u. de esto en la feria.', 'Baja la cantidad para poder registrar la venta.'); return; }
     var priceInput = document.getElementById('fsPriceInput');
     var priceRaw = priceInput ? priceInput.value.trim() : '';
     if(priceRaw === ''){
-      showStatus('Falta el valor de la venta. Ingresa un precio, así sea 0, para confirmar.', true);
+      showAttention('Falta el valor de la venta', 'Ingresa un precio, así sea 0, para confirmar.');
       return;
     }
     var price = parseFloat(priceRaw);
     if(isNaN(price) || price < 0){
-      showStatus('Ingresa un valor de precio válido.', true);
+      showAttention('Precio no válido', 'Ingresa un valor de precio válido.');
       return;
     }
     var client = (m.client||'').trim();
     var note = (m.notes||'').trim();
     var giftFlask = isStock && !!m.giftFlask;
     var payRes = payResolve(m.pay, price * qty);
-    if(!payRes.ok){ showStatus(payRes.msg, true); return; }
+    if(!payRes.ok){ showAttention('Revisa el método de pago', payRes.msg, 'Toca uno de los métodos de pago, o "Dividido" si pagó con varios, y vuelve a registrar.'); return; }
     var payments = payRes.payments;
     ensureUser(function(){
       if(isStock){
@@ -8214,7 +8248,7 @@ if ("serviceWorker" in navigator) {
     if(action === 'cancel-pay'){ state.assignPaySaleId = null; state.assignPay = null; renderFairHistory(); return; }
     if(action === 'save-pay'){
       var res = payResolve(state.assignPay, s.total || 0);
-      if(!res.ok){ showStatus(res.msg, true); return; }
+      if(!res.ok){ showAttention('Revisa el método de pago', res.msg); return; }
       if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
       state.db.doc('fairSales/' + sid).update({ payments: res.payments }).then(function(){
         s.payments = res.payments;
@@ -8326,7 +8360,7 @@ if ("serviceWorker" in navigator) {
     html += '<div class="pay-picker" id="payPickerKit">' + payPickerInnerHtml(kp.pay) + '</div>';
     html += '<div class="kit-footer"><button class="kit-undo-btn" id="kitUndoBtn" type="button" ' + (total===0?'disabled':'') + '>Deshacer último</button>' +
       '<div class="modal-actions" style="margin:0;"><button class="cancel-btn" id="kitCancelBtn" type="button">Cancelar</button>' +
-      '<button class="confirm-btn" id="kitConfirmBtn" type="button" ' + (total!==kd.max?'disabled':'') + '>Confirmar venta ($' + kd.price.toFixed(2) + ')</button></div></div>';
+      '<button class="confirm-btn' + (total!==kd.max?' is-incomplete':'') + '" id="kitConfirmBtn" type="button">Confirmar venta ($' + kd.price.toFixed(2) + ')</button></div></div>';
     document.getElementById('kitPopupBody').innerHTML = html;
     attachKitPopupEvents();
   }
@@ -8419,10 +8453,16 @@ if ("serviceWorker" in navigator) {
     var kp = state.kitPopup;
     if(!kp || kp.submitting) return;
     var kd = KIT_DEFS[kp.kitKey];
-    if(kp.picks.length !== kd.max){ kp.err = 'Selecciona exactamente ' + kd.max + ' unidades.'; renderKitPopup(); return; }
+    if(kp.picks.length !== kd.max){
+      var faltan = kd.max - kp.picks.length;
+      showAttention('Falta completar el kit',
+        'Elegiste ' + kp.picks.length + ' de ' + kd.max + ' sabores. ' + (faltan > 0 ? ('Falta' + (faltan === 1 ? '' : 'n') + ' ' + faltan + ' más.') : ('Sobra' + (faltan === -1 ? '' : 'n') + ' ' + (-faltan) + '.')),
+        'El ' + kd.label + ' lleva exactamente ' + kd.max + ' unidades. Toca los sabores que faltan y vuelve a confirmar.');
+      return;
+    }
     if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
     var kitPayRes = payResolve(kp.pay, kd.price);
-    if(!kitPayRes.ok){ showStatus(kitPayRes.msg, true); return; }
+    if(!kitPayRes.ok){ showAttention('Revisa el método de pago', kitPayRes.msg, 'Toca uno de los métodos de pago, o "Dividido" si pagó con varios, y vuelve a confirmar.'); return; }
     // Bloqueo contra doble clic: antes el botón seguía habilitado durante todo
     // el viaje de ida y vuelta a la red, así que un doble toque en una conexión
     // lenta podía registrar el mismo kit dos veces.
