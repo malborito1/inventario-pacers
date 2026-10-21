@@ -1189,6 +1189,11 @@ if ("serviceWorker" in navigator) {
   .pay-chip{display:flex; align-items:center; gap:7px; padding:7px 9px; min-height:42px; border-radius:10px; border:1.5px solid var(--border); background:var(--surface); color:var(--text); font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; text-align:left;}
   .pay-chip:hover{border-color:var(--pay-color, var(--fair-color));}
   .pay-chip.sel{border-color:var(--pay-color, var(--fair-color)); box-shadow:0 0 0 3px color-mix(in srgb, var(--pay-color, var(--fair-color)) 28%, transparent); background:color-mix(in srgb, var(--pay-color, var(--fair-color)) 10%, var(--surface));}
+  .pay-chip-logo{justify-content:center;}
+  .pay-chip-logo .pay-logo-chip{height:30px; padding:4px 9px; width:100%; justify-content:center; box-sizing:border-box;}
+  .pay-chip-logo .pay-logo-chip img{max-width:92px;}
+  .pay-sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap;}
+  .pay-chip{position:relative;}
   .pay-chip-split{justify-content:center; border-style:dashed; color:var(--text-muted); font-weight:700;}
   .pay-logo-chip{background:#fff; border-radius:6px; height:24px; padding:3px 6px; display:inline-flex; align-items:center; flex:0 0 auto; box-shadow:inset 0 0 0 1px rgba(0,0,0,.06);}
   .pay-logo-chip img{height:100%; width:auto; max-width:56px; display:block; object-fit:contain;}
@@ -6546,7 +6551,7 @@ if ("serviceWorker" in navigator) {
     var html = '<div class="pay-label">¿Con qué pagó el cliente? <span class="pay-req">obligatorio</span></div>';
     if(!pay.split){
       html += '<div class="pay-chips">' + PAY_METHODS.map(function(m){
-        return '<button type="button" class="pay-chip' + (pay.method === m.key ? ' sel' : '') + '" data-pay-method="' + m.key + '" style="--pay-color:' + m.color + ';">' + payLogoHtml(m) + '<span>' + esc(m.label) + '</span></button>';
+        return '<button type="button" class="pay-chip' + (pay.method === m.key ? ' sel' : '') + (m.iconStyle ? '' : ' pay-chip-logo') + '" data-pay-method="' + m.key + '" title="' + esc(m.label) + '" aria-label="' + esc(m.label) + '" style="--pay-color:' + m.color + ';">' + payLogoHtml(m) + (m.iconStyle ? ('<span>' + esc(m.label) + '</span>') : '<span class="pay-sr">' + esc(m.label) + '</span>') + '</button>';
       }).join('') + '<button type="button" class="pay-chip pay-chip-split" data-pay-split="1">✂ Dividido</button></div>';
     } else {
       html += '<div class="pay-split-box"><div class="pay-split-top"><b>Pago dividido</b><button type="button" class="pay-split-off" data-pay-split="0">Quitar división</button></div>'
