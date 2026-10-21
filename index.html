@@ -32,6 +32,8 @@ if ("serviceWorker" in navigator) {
     --success:#1e8e5a;
     --on-solid:#ffffff;
     --link:#1565c0;
+    --sky:#0b7fb0;
+    --sky-tint:#e0f3fb;
     --success-tint:#e3f4ea;
     --warning:#a87f00;
     --warning-tint:#fdf3c8;
@@ -90,6 +92,8 @@ if ("serviceWorker" in navigator) {
       --success:#3fbe7c;
       --on-solid:#0b1220;
       --link:#38b6e0;
+      --sky:#4cc3ee;
+      --sky-tint:#12303f;
       --success-tint:#153524;
       --warning:#e8c33e;
       --warning-tint:#3a3005;
@@ -143,6 +147,8 @@ if ("serviceWorker" in navigator) {
     --accent:#38b6e0;
     --accent-strong:#7dd3f0;
     --accent-tint:#122a38;
+    --sky:#4cc3ee;
+    --sky-tint:#12303f;
     --link:#38b6e0;
     --on-solid:#0b1220;
     --success:#3fbe7c;
@@ -1349,6 +1355,10 @@ if ("serviceWorker" in navigator) {
   .imp-milestone{display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin-bottom:10px;}
   .imp-milestone label{width:100%; flex:none; font-size:11.5px; color:var(--text-muted); font-weight:600;}
   .imp-milestone input[type=date]{flex:0 0 132px; padding:6px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:12px;}
+  .imp-date-wrap{position:relative; flex:0 0 auto; display:inline-flex;}
+  .imp-date-text{display:inline-block; min-width:104px; text-align:center; padding:6px 12px; border-radius:20px; background:var(--sky-tint); color:var(--sky); border:1px solid var(--sky); font-size:13.5px; font-weight:800; white-space:nowrap;}
+  .imp-date-text.empty{background:var(--surface); color:var(--text-muted); border:1px dashed var(--border); font-weight:600; font-size:12px;}
+  .imp-milestone .imp-date-wrap input[type=date]{position:absolute; inset:0; width:100%; height:100%; opacity:0; padding:0; border:0; margin:0; flex:none; cursor:pointer;}
   .imp-milestone input[type=text]{flex:1 1 140px; min-width:120px; padding:6px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:12px;}
   .imp-milestone-linkbox{flex:1 1 140px; min-width:120px; display:flex; align-items:center; gap:6px; padding:5px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); font-size:12px;}
   .imp-milestone-linktext{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
@@ -3817,6 +3827,15 @@ if ("serviceWorker" in navigator) {
     return out + esc(text.slice(last));
   }
 
+  // Fecha corta con el mes en texto: '2026-10-20' -> '20 Oct 2026'.
+  function fmtDateShort(dateStr){
+    var parts = String(dateStr||'').split('-');
+    if(parts.length !== 3) return '';
+    var mIdx = parseInt(parts[1],10)-1, dd = parseInt(parts[2],10);
+    if(isNaN(mIdx) || isNaN(dd) || !MESES_ES[mIdx]) return '';
+    return dd + ' ' + MESES_ES[mIdx] + ' ' + parts[0];
+  }
+
   function importDatesCardHtml(imp){
     var ms = (imp.milestones && imp.milestones.length) ? imp.milestones : IMPORT_MILESTONES_TEMPLATE;
     var html = '<div class="imp-card"><h4>Fechas del envío</h4>';
@@ -3824,7 +3843,10 @@ if ("serviceWorker" in navigator) {
       var key = imp.id + '_' + idx;
       html += '<div class="imp-milestone">'
         + '<label>'+esc(m.label)+'</label>'
-        + '<input type="date" data-midx="'+idx+'" class="imp-milestone-date" value="'+esc(m.date||'')+'">';
+        + '<span class="imp-date-wrap">'
+        +   '<span class="imp-date-text' + (m.date ? '' : ' empty') + '">' + (m.date ? esc(fmtDateShort(m.date)) : '📅 Elegir fecha') + '</span>'
+        +   '<input type="date" data-midx="'+idx+'" class="imp-milestone-date" value="'+esc(m.date||'')+'" title="Cambiar fecha">'
+        + '</span>';
       if(noteHasUrl(m.note) && state.editMilestoneNote !== key){
         html += '<div class="imp-milestone-linkbox">'
           + '<span class="imp-milestone-linktext">'+noteLinkifiedHtml(m.note)+'</span>'
@@ -4185,7 +4207,17 @@ if ("serviceWorker" in navigator) {
       updateImportField(imp.id, {freight: freightVal, freightPending: false});
     });
     document.querySelectorAll('.imp-milestone-date').forEach(function(el){
+      el.addEventListener('click', function(){
+        if(el.readOnly || el.disabled) return;
+        try{ if(el.showPicker) el.showPicker(); }catch(e){}
+      });
       el.addEventListener('change', function(){
+        var txt = el.parentNode && el.parentNode.querySelector('.imp-date-text');
+        if(txt){
+          var shown = el.value ? fmtDateShort(el.value) : '';
+          txt.textContent = shown || '📅 Elegir fecha';
+          if(shown) txt.classList.remove('empty'); else txt.classList.add('empty');
+        }
         var idx = parseInt(el.getAttribute('data-midx'),10);
         var ms = (imp.milestones||[]).slice();
         ms[idx] = Object.assign({}, ms[idx], {date: el.value});
