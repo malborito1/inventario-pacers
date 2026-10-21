@@ -1313,6 +1313,12 @@ if ("serviceWorker" in navigator) {
   @media (max-width:1100px){ .imp-layout{flex-direction:column;} .imp-side{flex:1 1 auto; width:100%;} }
   .imp-card{background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); padding:10px 14px;}
   .imp-card h4{margin:0 0 7px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); font-weight:700;}
+  .imp-card-head{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:7px; flex-wrap:wrap;}
+  .imp-card-head h4{margin:0;}
+  .imp-days-total{padding:4px 12px; border-radius:20px; font-size:13px; font-weight:800; white-space:nowrap; background:var(--sky-tint); color:var(--sky); border:1px solid var(--sky);}
+  .imp-days-total.running{border-style:dashed;}
+  .imp-days-total.warn{background:var(--surface); color:var(--warning); border-color:var(--warning);}
+  .imp-days-total.hidden{display:none;}
   .imp-side-row{display:flex; gap:12px;}
   .imp-side-row > .imp-card{flex:1; min-width:0;}
   .imp-linegroup-head{display:flex; align-items:center; gap:10px; padding:7px 14px; border-radius:8px; margin:6px 0 2px;}
@@ -3827,6 +3833,30 @@ if ("serviceWorker" in navigator) {
     return out + esc(text.slice(last));
   }
 
+  // Dias entre dos fechas 'YYYY-MM-DD' (Date.UTC para que el horario no desfase el conteo).
+  function daysBetweenDates(a, b){
+    var p = String(a||'').split('-'), q = String(b||'').split('-');
+    if(p.length !== 3 || q.length !== 3) return null;
+    var x = Date.UTC(parseInt(p[0],10), parseInt(p[1],10)-1, parseInt(p[2],10));
+    var y = Date.UTC(parseInt(q[0],10), parseInt(q[1],10)-1, parseInt(q[2],10));
+    var n = Math.round((y-x)/86400000);
+    return isNaN(n) ? null : n;
+  }
+  // Total del envio: de la primera fecha (poner la orden) a la ultima (llega a bodega).
+  // Devuelve {text, cls}. Si falta la fecha final, cuenta los dias transcurridos hasta hoy.
+  function importTotalDays(startStr, endStr){
+    if(!startStr) return {text:'', cls:'hidden'};
+    var unit = function(n){ return n + (n === 1 ? ' día' : ' días'); };
+    if(endStr){
+      var n = daysBetweenDates(startStr, endStr);
+      if(n === null || n < 0) return {text:'Revisar fechas', cls:'warn'};
+      return {text:'⏱ ' + unit(n) + ' en total', cls:'done'};
+    }
+    var t = daysBetweenDates(startStr, todayDateStr());
+    if(t === null || t < 0) return {text:'', cls:'hidden'};
+    return {text:'⏱ ' + unit(t) + ' y contando', cls:'running'};
+  }
+
   // Fecha corta con el mes en texto: '2026-10-20' -> '20 Oct 2026'.
   function fmtDateShort(dateStr){
     var parts = String(dateStr||'').split('-');
@@ -3838,7 +3868,9 @@ if ("serviceWorker" in navigator) {
 
   function importDatesCardHtml(imp){
     var ms = (imp.milestones && imp.milestones.length) ? imp.milestones : IMPORT_MILESTONES_TEMPLATE;
-    var html = '<div class="imp-card"><h4>Fechas del envío</h4>';
+    var tot = importTotalDays(ms.length ? ms[0].date : '', ms.length > 1 ? ms[ms.length-1].date : '');
+    var html = '<div class="imp-card"><div class="imp-card-head"><h4>Fechas del envío</h4>'
+      + '<span class="imp-days-total ' + tot.cls + '" id="impDaysTotal">' + esc(tot.text) + '</span></div>';
     ms.forEach(function(m, idx){
       var key = imp.id + '_' + idx;
       html += '<div class="imp-milestone">'
@@ -4212,6 +4244,12 @@ if ("serviceWorker" in navigator) {
         try{ if(el.showPicker) el.showPicker(); }catch(e){}
       });
       el.addEventListener('change', function(){
+        var allDates = document.querySelectorAll('.imp-milestone-date');
+        var totEl = document.getElementById('impDaysTotal');
+        if(totEl && allDates.length){
+          var live = importTotalDays(allDates[0].value, allDates.length > 1 ? allDates[allDates.length-1].value : '');
+          totEl.textContent = live.text; totEl.className = 'imp-days-total ' + live.cls;
+        }
         var txt = el.parentNode && el.parentNode.querySelector('.imp-date-text');
         if(txt){
           var shown = el.value ? fmtDateShort(el.value) : '';
