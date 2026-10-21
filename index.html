@@ -1293,6 +1293,10 @@ if ("serviceWorker" in navigator) {
 
   .imp-toolbar{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px;}
   .imp-select{padding:9px 12px; border-radius:10px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-weight:600; font-size:13px;}
+  .imp-select-abierta{color:var(--success); border-color:var(--success);}
+  .imp-select-cerrada{color:var(--critical); border-color:var(--critical);}
+  .imp-select option.imp-opt-abierta{color:var(--success); background:var(--surface); font-weight:700;}
+  .imp-select option.imp-opt-cerrada{color:var(--critical); background:var(--surface); font-weight:700;}
   .imp-status-pill{font-size:11px; font-weight:700; padding:4px 10px; border-radius:999px; text-transform:uppercase; letter-spacing:.04em;}
   .imp-status-creada{background:var(--surface-2); color:var(--text-muted);}
   .imp-status-transito_puerto{background:var(--warning-tint); color:var(--warning);}
@@ -3995,10 +3999,14 @@ if ("serviceWorker" in navigator) {
     var imp = currentImport();
 
     var html = '<div class="imp-toolbar">';
-    html += '<select class="imp-select" id="impSelect">';
+    // Cerradas en rojo y abiertas en verde, tanto en la lista desplegable como en el selector ya elegido
+    // (el circulo de color va en el texto para que se vea igual en cualquier navegador).
+    html += '<select class="imp-select imp-select-' + ((imp && imp.status === 'cerrada') ? 'cerrada' : 'abierta') + '" id="impSelect">';
     if(!imps.length){ html += '<option value="">Sin importaciones aún</option>'; }
     imps.forEach(function(i){
-      html += '<option value="'+i.id+'"'+(i.id===state.currentImportId?' selected':'')+'>'+esc(i.name)+'</option>';
+      var closed = (i.status === 'cerrada');
+      html += '<option class="imp-opt-' + (closed ? 'cerrada' : 'abierta') + '" value="'+i.id+'"'+(i.id===state.currentImportId?' selected':'')+'>'
+        + (closed ? '🔴 ' : '🟢 ') + esc(i.name) + (closed ? ' (cerrada)' : '') + '</option>';
     });
     html += '</select>';
     html += '<button class="btn-history" id="impNewBtn" type="button">+ Nueva importación</button>';
