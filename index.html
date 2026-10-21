@@ -1181,6 +1181,41 @@ if ("serviceWorker" in navigator) {
   }
   .cierre-total-card .label{font-size:12.5px; text-transform:uppercase; letter-spacing:.05em; opacity:.85;}
   .cierre-total-card .value{font-family:'IBM Plex Mono', monospace; font-size:28px; font-weight:600; font-variant-numeric:tabular-nums;}
+  /* ---- Metodo de pago por venta de feria ---- */
+  .pay-picker{margin:4px 0 14px;}
+  .pay-label{font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.05em;}
+  .pay-req{font-weight:700; color:var(--critical); text-transform:none; letter-spacing:0; margin-left:4px; font-size:11px;}
+  .pay-chips{display:grid; grid-template-columns:repeat(auto-fill,minmax(118px,1fr)); gap:7px;}
+  .pay-chip{display:flex; align-items:center; gap:7px; padding:7px 9px; min-height:42px; border-radius:10px; border:1.5px solid var(--border); background:var(--surface); color:var(--text); font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; text-align:left;}
+  .pay-chip:hover{border-color:var(--pay-color, var(--fair-color));}
+  .pay-chip.sel{border-color:var(--pay-color, var(--fair-color)); box-shadow:0 0 0 3px color-mix(in srgb, var(--pay-color, var(--fair-color)) 28%, transparent); background:color-mix(in srgb, var(--pay-color, var(--fair-color)) 10%, var(--surface));}
+  .pay-chip-split{justify-content:center; border-style:dashed; color:var(--text-muted); font-weight:700;}
+  .pay-logo-chip{background:#fff; border-radius:6px; height:24px; padding:3px 6px; display:inline-flex; align-items:center; flex:0 0 auto; box-shadow:inset 0 0 0 1px rgba(0,0,0,.06);}
+  .pay-logo-chip img{height:100%; width:auto; max-width:56px; display:block; object-fit:contain;}
+  .pay-logo-icon{height:24px; width:24px; border-radius:6px; flex:0 0 auto; display:block; object-fit:contain;}
+  .pay-split-box{border:1.5px dashed var(--border); border-radius:10px; padding:10px 11px; background:var(--surface-2, var(--surface));}
+  .pay-split-top{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; font-size:13px;}
+  .pay-split-off{background:none; border:none; color:var(--link, var(--fair-color)); font-weight:700; font-size:12px; cursor:pointer; text-decoration:underline; font-family:inherit; padding:2px 0;}
+  .pay-split-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:4px 0;}
+  .pay-split-name{display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; min-width:0;}
+  .pay-split-row input{width:110px; padding:7px 9px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); font-size:14px; text-align:right; font-family:'IBM Plex Mono', monospace; box-sizing:border-box;}
+  .pay-split-row input:focus{outline:none; border-color:var(--pay-color, var(--fair-color));}
+  .pay-split-sum{margin-top:8px; font-size:12.5px; font-weight:700; color:var(--critical);}
+  .pay-split-sum.ok{color:var(--success);}
+  .cierre-expected{margin-top:7px; font-size:12px; color:var(--text-muted); line-height:1.4;}
+  .cierre-expected b{color:var(--text);}
+  .cierre-expected .cx-use{margin-left:6px; background:none; border:1px solid var(--border); border-radius:12px; padding:1px 9px; font-size:11.5px; font-weight:700; color:var(--link, var(--fair-color)); cursor:pointer; font-family:inherit;}
+  .cierre-expected .cx-ok{color:var(--success); font-weight:700;}
+  .cierre-expected .cx-bad{color:var(--critical); font-weight:700;}
+  .cierre-exp-note{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:12px;}
+  .cierre-exp-note button{background:none; border:1px solid currentColor; border-radius:14px; padding:3px 11px; font-size:12px; font-weight:700; cursor:pointer; color:inherit; font-family:inherit;}
+  .move-pay{margin-top:3px; font-size:12px; color:var(--text-muted);}
+  .move-pay b{color:var(--text);}
+  .move-pay-btn{background:none; border:none; padding:0; margin-left:6px; color:var(--link, var(--fair-color)); font-weight:700; font-size:12px; text-decoration:underline; cursor:pointer; font-family:inherit;}
+  .move-pay-warn{color:var(--critical); font-weight:700;}
+  .move-assign{margin-top:8px; padding:10px; border:1px solid var(--border); border-radius:10px; background:var(--surface);}
+  .move-assign .modal-actions{margin-top:6px;}
+
   .cierre-mismatch-warn{color:var(--critical) !important; background:var(--critical-tint) !important;}
   .cierre-prop-card{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; box-shadow:var(--shadow);}
   .cierre-prop-bar{display:flex; height:16px; border-radius:8px; overflow:hidden; background:var(--surface-2); margin-bottom:14px;}
@@ -1679,6 +1714,10 @@ if ("serviceWorker" in navigator) {
   <div class="modal" id="fairSaleModalBody"></div>
 </div>
 
+<div class="modal-scrim" id="fairPayScrim">
+  <div class="modal" id="fairPayBody"></div>
+</div>
+
 <div class="modal-scrim" id="restockModalScrim">
   <div class="modal" id="restockModalBody"></div>
 </div>
@@ -2070,6 +2109,9 @@ if ("serviceWorker" in navigator) {
     historyCalendarSelectedDate: null, // 'YYYY-MM-DD' si se filtró el Historial a un día puntual, si no null
     historyCalendarOpen: false, // false = solo se ve la barra pequeña; true = calendario expandido
     confirmFairUndoId: null,
+    assignPaySaleId: null, // venta de feria a la que se le esta asignando metodo de pago desde el historial
+    assignPay: null,
+    fairPayPick: null, // mini ventana de metodo de pago (escaneo / unidad extra de kit)
     pagosHistoryOpen: false,
     userName: "",
     lastClient: "",
@@ -6487,6 +6529,168 @@ if ("serviceWorker" in navigator) {
     CIERRE_METHODS.forEach(function(m){ t += parseFloat(d[m.key])||0; });
     return t;
   }
+  // ---------------- Metodo de pago por venta de feria ----------------
+  // Cada venta de feria guarda payments:[{method, amount}] (un solo metodo o varios si el
+  // pago fue dividido). Las ventas anteriores a este cambio no tienen payments y se tratan
+  // como "sin metodo asignado" (no se asumen como efectivo).
+  var PAY_METHODS = [CIERRE_CASH].concat(CIERRE_METHODS);
+  function payMethodByKey(k){ return PAY_METHODS.filter(function(m){ return m.key === k; })[0] || null; }
+  function newPayState(){ return {method:null, split:false, amounts:{}}; }
+  function round2(n){ return Math.round((parseFloat(n)||0)*100)/100; }
+  function payLogoHtml(m){
+    return m.iconStyle
+      ? '<img class="pay-logo-icon" src="' + m.logo + '" alt="">'
+      : '<span class="pay-logo-chip"><img src="' + m.logo + '" alt=""></span>';
+  }
+  function payPickerInnerHtml(pay){
+    var html = '<div class="pay-label">¿Con qué pagó el cliente? <span class="pay-req">obligatorio</span></div>';
+    if(!pay.split){
+      html += '<div class="pay-chips">' + PAY_METHODS.map(function(m){
+        return '<button type="button" class="pay-chip' + (pay.method === m.key ? ' sel' : '') + '" data-pay-method="' + m.key + '" style="--pay-color:' + m.color + ';">' + payLogoHtml(m) + '<span>' + esc(m.label) + '</span></button>';
+      }).join('') + '<button type="button" class="pay-chip pay-chip-split" data-pay-split="1">✂ Dividido</button></div>';
+    } else {
+      html += '<div class="pay-split-box"><div class="pay-split-top"><b>Pago dividido</b><button type="button" class="pay-split-off" data-pay-split="0">Quitar división</button></div>'
+        + PAY_METHODS.map(function(m){
+          return '<div class="pay-split-row" style="--pay-color:' + m.color + ';"><span class="pay-split-name">' + payLogoHtml(m) + '<span>' + esc(m.label) + '</span></span>'
+            + '<input type="number" min="0" step="0.01" inputmode="decimal" data-pay-amt="' + m.key + '" value="' + esc(pay.amounts[m.key] == null ? '' : pay.amounts[m.key]) + '" placeholder="0.00"></div>';
+        }).join('')
+        + '<div class="pay-split-sum" data-pay-sum></div></div>';
+    }
+    return html;
+  }
+  function attachPayPicker(containerId, pay, getTotal){
+    var box = document.getElementById(containerId);
+    if(!box) return;
+    function sumOthers(exceptKey){
+      var t = 0;
+      PAY_METHODS.forEach(function(m){ if(m.key !== exceptKey) t += parseFloat(pay.amounts[m.key]) || 0; });
+      return t;
+    }
+    function updateSum(){
+      var el = box.querySelector('[data-pay-sum]');
+      if(!el) return;
+      var total = round2(getTotal());
+      var diff = round2(total - sumOthers(null));
+      if(total <= 0){ el.className = 'pay-split-sum ok'; el.textContent = 'Total ' + fmtMoney(0); }
+      else if(Math.abs(diff) < 0.005){ el.className = 'pay-split-sum ok'; el.textContent = '✓ Suma ' + fmtMoney(total); }
+      else if(diff > 0){ el.className = 'pay-split-sum'; el.textContent = 'Falta ' + fmtMoney(diff) + ' de ' + fmtMoney(total); }
+      else { el.className = 'pay-split-sum'; el.textContent = 'Sobra ' + fmtMoney(-diff) + ' sobre ' + fmtMoney(total); }
+    }
+    function rerender(){ box.innerHTML = payPickerInnerHtml(pay); bind(); updateSum(); }
+    function bind(){
+      box.querySelectorAll('[data-pay-method]').forEach(function(btn){
+        btn.addEventListener('click', function(){ pay.method = btn.getAttribute('data-pay-method'); rerender(); });
+      });
+      box.querySelectorAll('[data-pay-split]').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          pay.split = btn.getAttribute('data-pay-split') === '1';
+          pay.amounts = {};
+          if(pay.split) pay.method = null;
+          rerender();
+        });
+      });
+      box.querySelectorAll('[data-pay-amt]').forEach(function(inp){
+        var key = inp.getAttribute('data-pay-amt');
+        inp.addEventListener('input', function(){ pay.amounts[key] = inp.value; updateSum(); });
+        inp.addEventListener('focus', function(){
+          if(inp.value === ''){
+            var rem = round2(getTotal() - sumOthers(key));
+            if(rem > 0){ inp.value = rem.toFixed(2); pay.amounts[key] = inp.value; updateSum(); }
+          }
+          inp.select();
+        });
+      });
+    }
+    box._paySum = updateSum;
+    bind();
+    updateSum();
+  }
+  function paySumRefresh(containerId){
+    var b = document.getElementById(containerId);
+    if(b && b._paySum) b._paySum();
+  }
+  function payResolve(pay, total){
+    total = round2(total);
+    if(total <= 0) return {ok:true, payments:[]};
+    if(!pay.split){
+      if(!pay.method) return {ok:false, msg:'Elige con qué pagó el cliente.'};
+      return {ok:true, payments:[{method:pay.method, amount:total}]};
+    }
+    var list = [], sum = 0;
+    PAY_METHODS.forEach(function(m){
+      var a = round2(pay.amounts[m.key]);
+      if(a > 0){ list.push({method:m.key, amount:a}); sum += a; }
+    });
+    if(!list.length) return {ok:false, msg:'Ingresa cuánto pagó con cada método.'};
+    if(Math.abs(round2(sum) - total) > 0.005) return {ok:false, msg:'Los montos no suman el total (' + fmtMoney(total) + ').'};
+    return {ok:true, payments:list};
+  }
+  function payPaymentsText(payments){
+    return (payments || []).map(function(p){
+      var m = payMethodByKey(p.method);
+      return esc(m ? m.label : p.method) + ' <b>' + fmtMoney(p.amount||0) + '</b>';
+    }).join(' · ');
+  }
+
+  // Mini ventana para elegir el metodo de pago cuando la venta se registra sin formulario
+  // (escaneo de codigo de barras o unidad suelta que sobra de un kit).
+  function askFairPayment(opts, onDone){
+    state.fairPayPick = {title: opts.title, sub: opts.sub, total: opts.total, pay: newPayState(), onDone: onDone};
+    document.getElementById('fairPayScrim').classList.add('open');
+    renderFairPayModal();
+  }
+  function closeFairPayModal(){
+    state.fairPayPick = null;
+    document.getElementById('fairPayScrim').classList.remove('open');
+    var scanInput = document.getElementById('fairScanInput');
+    if(scanInput) setTimeout(function(){ scanInput.focus(); }, 30);
+  }
+  function renderFairPayModal(){
+    var p = state.fairPayPick;
+    if(!p) return;
+    var html = '<h3 style="margin-top:0;">' + esc(p.title) + '</h3>'
+      + '<div class="fair-sale-remaining">' + esc(p.sub) + ' · <b>' + fmtMoney(p.total) + '</b></div>'
+      + '<div class="pay-picker" id="payPickerMini">' + payPickerInnerHtml(p.pay) + '</div>'
+      + '<div class="modal-actions"><button class="cancel-btn" id="fpCancelBtn" type="button">Cancelar</button><button class="confirm-btn" id="fpConfirmBtn" type="button">Registrar venta</button></div>';
+    document.getElementById('fairPayBody').innerHTML = html;
+    attachPayPicker('payPickerMini', p.pay, function(){ return p.total; });
+    document.getElementById('fpCancelBtn').addEventListener('click', closeFairPayModal);
+    document.getElementById('fpConfirmBtn').addEventListener('click', function(){
+      var res = payResolve(p.pay, p.total);
+      if(!res.ok){ showStatus(res.msg, true); return; }
+      var cb = p.onDone;
+      closeFairPayModal();
+      cb(res.payments);
+    });
+  }
+
+  // Lo que deberia haber en cada metodo segun las ventas registradas de la feria.
+  function fairPaymentTotals(fairId){
+    var by = {}, unAmount = 0, unCount = 0;
+    PAY_METHODS.forEach(function(m){ by[m.key] = 0; });
+    activeFairSalesFor(fairId).forEach(function(sale){
+      if(sale.kind === 'flask_free') return;
+      if(sale.payments && sale.payments.length){
+        sale.payments.forEach(function(pp){ if(by.hasOwnProperty(pp.method)) by[pp.method] += parseFloat(pp.amount)||0; });
+      } else if((sale.total||0) > 0){
+        unAmount += sale.total; unCount++;
+      }
+    });
+    PAY_METHODS.forEach(function(m){ by[m.key] = round2(by[m.key]); });
+    return {byMethod: by, unassignedAmount: round2(unAmount), unassignedCount: unCount};
+  }
+  function cierreExpectedLineHtml(expected, actual, touched, useKey){
+    if(!(expected > 0) && !touched) return '';
+    var html = 'Según ventas: <b>' + fmtMoney(expected) + '</b>';
+    if(expected > 0 && useKey) html += '<button type="button" class="cx-use" data-cierre-use="' + useKey + '">Usar</button>';
+    if(touched){
+      var diff = round2(actual - expected);
+      if(Math.abs(diff) < 0.005) html += '<br><span class="cx-ok">✓ Cuadra</span>';
+      else html += '<br><span class="cx-bad">' + (diff > 0 ? 'Sobran ' : 'Faltan ') + fmtMoney(Math.abs(diff)) + '</span>';
+    }
+    return html;
+  }
+
   function fairClosingHtml(fairId){
     var f = findFair(fairId);
     var d = state.fairClosingDraft || {};
@@ -6497,10 +6701,12 @@ if ("serviceWorker" in navigator) {
     html += '<div class="fair-header"><div><span class="fair-status-pill active">Cerrando</span><h2>Cierre de caja</h2><div class="fair-date">' + esc(f.name) + '</div></div></div>';
     html += '<div class="fair-live-note">Cuenta el efectivo y registra lo cobrado en cada método de pago antes de cerrar. Esto queda guardado en el reporte de la feria.</div>';
 
+    html += '<div class="fair-live-note cierre-exp-note" id="cierreExpNote"></div>';
     html += '<div class="cierre-grid">';
     html += '<div class="cierre-card cierre-wide" style="--cierre-color:' + CIERRE_CASH.color + ';">' +
       '<div class="cierre-card-head">' + cierreLogoHtml(CIERRE_CASH, 'cierre-logo-chip', 'cierre-logo-icon') + '</div>' +
       '<div class="cierre-sub">Cuenta todo el efectivo físico que tienes al cerrar (incluye la caja chica).</div>' +
+      '<div class="cierre-expected" id="cierreExpEfectivo"></div>' +
       '<input type="number" min="0" step="0.01" id="cierreEfectivoContadoInput" value="' + esc(d.efectivoContado) + '" placeholder="0.00" style="margin-top:8px;">' +
       '<div class="cierre-cash-breakdown">' +
         '<div class="cierre-cash-breakdown-row"><span>− Caja chica inicial</span><span class="num">−' + fmtMoney(cajaChica) + '</span></div>' +
@@ -6512,6 +6718,7 @@ if ("serviceWorker" in navigator) {
         '<div class="cierre-card-head">' + cierreLogoHtml(m, 'cierre-logo-chip', 'cierre-logo-icon') + '</div>' +
         '<div class="cierre-sub">' + esc(m.sub) + '</div>' +
         '<input type="number" min="0" step="0.01" data-cierre-key="' + m.key + '" value="' + esc(d[m.key]) + '" placeholder="0.00" style="margin-top:8px;">' +
+        '<div class="cierre-expected" data-cierre-exp="' + m.key + '"></div>' +
         '</div>';
     }).join('');
     html += '</div>';
@@ -6529,7 +6736,51 @@ if ("serviceWorker" in navigator) {
     return html;
   }
 
+  function updateCierreExpected(fairId){
+    var d = state.fairClosingDraft || {};
+    var f = findFair(fairId);
+    var pt = fairPaymentTotals(fairId);
+    var cajaChica = (f && f.cajaChicaInicial) || 0;
+    var salidas = fairCashOutsTotal(fairId);
+    var efEl = document.getElementById('cierreExpEfectivo');
+    if(efEl) efEl.innerHTML = cierreExpectedLineHtml(pt.byMethod.efectivo, cierreEfectivoCobrado(fairId), String(d.efectivoContado||'') !== '', 'efectivo');
+    CIERRE_METHODS.forEach(function(m){
+      var el = document.querySelector('[data-cierre-exp="' + m.key + '"]');
+      if(el) el.innerHTML = cierreExpectedLineHtml(pt.byMethod[m.key], parseFloat(d[m.key])||0, String(d[m.key]||'') !== '', m.key);
+    });
+    var note = document.getElementById('cierreExpNote');
+    if(note){
+      var totalExpected = 0;
+      PAY_METHODS.forEach(function(m){ totalExpected += pt.byMethod[m.key]; });
+      if(pt.unassignedCount > 0){
+        note.className = 'fair-live-note cierre-exp-note cierre-mismatch-warn';
+        note.innerHTML = '<span>' + pt.unassignedCount + (pt.unassignedCount === 1 ? ' venta' : ' ventas') + ' (' + fmtMoney(pt.unassignedAmount) + ') sin método de pago asignado. No se incluyen en "Según ventas". Puedes asignarlo en el historial de la feria.</span><button type="button" id="cierreOpenHistoryBtn">Abrir historial</button>';
+      } else if(totalExpected > 0){
+        note.className = 'fair-live-note cierre-exp-note';
+        note.innerHTML = '<span>Todas las ventas tienen método de pago. Cada tarjeta muestra lo que debería haber según las ventas.</span><button type="button" id="cierreUseAllBtn">Rellenar todo según ventas</button>';
+      } else {
+        note.className = 'fair-live-note cierre-exp-note';
+        note.innerHTML = '<span>Todavía no hay ventas con método de pago en esta feria.</span>';
+      }
+    }
+  }
+
+  function cierreUseExpected(fairId, key){
+    var d = state.fairClosingDraft || {};
+    var f = findFair(fairId);
+    var pt = fairPaymentTotals(fairId);
+    var exp = pt.byMethod[key] || 0;
+    if(key === 'efectivo'){
+      d.efectivoContado = round2(exp + ((f && f.cajaChicaInicial) || 0) - fairCashOutsTotal(fairId)).toFixed(2);
+      var ef = document.getElementById('cierreEfectivoContadoInput'); if(ef) ef.value = d.efectivoContado;
+    } else {
+      d[key] = exp.toFixed(2);
+      var inp = document.querySelector('[data-cierre-key="' + key + '"]'); if(inp) inp.value = d[key];
+    }
+  }
+
   function updateCierreComputed(fairId){
+    updateCierreExpected(fairId);
     var bd = document.getElementById('cierreBdCobrado');
     if(bd) bd.textContent = fmtMoney(cierreEfectivoCobrado(fairId));
     var t = cierreTotal(fairId);
@@ -6595,6 +6846,16 @@ if ("serviceWorker" in navigator) {
         updateCierreComputed(fairId);
       });
     });
+    var cierreRoot = document.querySelector('.category[data-cat="FERIAS"]');
+    if(cierreRoot) cierreRoot.addEventListener('click', function(ev){
+      var useBtn = ev.target.closest && ev.target.closest('[data-cierre-use]');
+      if(useBtn){ cierreUseExpected(fairId, useBtn.getAttribute('data-cierre-use')); updateCierreComputed(fairId); return; }
+      if(ev.target.closest && ev.target.closest('#cierreUseAllBtn')){
+        PAY_METHODS.forEach(function(m){ cierreUseExpected(fairId, m.key); });
+        updateCierreComputed(fairId); return;
+      }
+      if(ev.target.closest && ev.target.closest('#cierreOpenHistoryBtn')){ openFairHistoryDrawer(); return; }
+    });
     var confirmBtn = document.getElementById('confirmFairClosingBtn');
     if(confirmBtn) confirmBtn.addEventListener('click', function(){
       if(confirmBtn.disabled) return;
@@ -6613,6 +6874,9 @@ if ("serviceWorker" in navigator) {
         guayaquil: parseFloat(d.guayaquil)||0,
         totalCobrado: cierreTotal(fairId)
       };
+      var ptSave = fairPaymentTotals(fairId);
+      cierre.segunVentas = ptSave.byMethod;
+      cierre.ventasSinMetodo = ptSave.unassignedAmount;
       confirmBtn.disabled = true;
       closeFair(fairId, cierre);
     });
@@ -7487,7 +7751,8 @@ if ("serviceWorker" in navigator) {
       price: price,
       client: activeClientValue() || '',
       notes: '',
-      giftFlask: false
+      giftFlask: false,
+      pay: newPayState()
     };
     document.getElementById('fairSaleModalScrim').classList.add('open');
     renderFairSaleModal();
@@ -7526,6 +7791,7 @@ if ("serviceWorker" in navigator) {
     html += '<div class="qty-group" style="justify-content:center; margin-bottom:12px;"><button id="fsQtyDec" type="button">−</button><input type="number" min="1" step="1" value="' + m.qty + '" id="fsQtyInput"><button id="fsQtyInc" type="button">+</button></div>';
     html += '<div class="chip-row" style="justify-content:center; margin-bottom:14px;">' + [1,3,6,12].map(function(n){ return '<button class="chip" data-fs-qty-set="' + n + '" type="button">' + n + '</button>'; }).join('') + '</div>';
     html += '<div class="field"><label>Precio unitario (USD)</label><input type="number" min="0" step="0.01" id="fsPriceInput" value="' + m.price + '"></div>';
+    html += '<div class="pay-picker" id="payPickerSale">' + payPickerInnerHtml(m.pay) + '</div>';
     html += '<div class="field"><label>Cliente (opcional)</label><input type="text" id="fsClientInput" list="clientNamesList" value="' + esc(m.client) + '" placeholder="Nombre del comprador" maxlength="60"></div>';
     html += '<div class="field"><label>Notas (opcional)</label><input type="text" id="fsNoteInput" value="' + esc(m.notes) + '" placeholder="Ej. evento, pedido especial…" maxlength="120"></div>';
     if(canGiftFlask){
@@ -7540,15 +7806,16 @@ if ("serviceWorker" in navigator) {
     var m = state.fairSaleModal;
     if(!m) return;
     var qtyInput = document.getElementById('fsQtyInput');
-    function setQty(v){ m.qty = Math.max(1, v); if(qtyInput) qtyInput.value = m.qty; }
+    function setQty(v){ m.qty = Math.max(1, v); if(qtyInput) qtyInput.value = m.qty; paySumRefresh('payPickerSale'); }
+    attachPayPicker('payPickerSale', m.pay, function(){ return (m.qty||0) * (m.price||0); });
     document.getElementById('fsQtyDec').addEventListener('click', function(){ setQty((parseInt(qtyInput.value,10)||1) - 1); });
     document.getElementById('fsQtyInc').addEventListener('click', function(){ setQty((parseInt(qtyInput.value,10)||1) + 1); });
-    if(qtyInput) qtyInput.addEventListener('input', function(){ m.qty = Math.max(1, parseInt(qtyInput.value,10) || 1); });
+    if(qtyInput) qtyInput.addEventListener('input', function(){ m.qty = Math.max(1, parseInt(qtyInput.value,10) || 1); paySumRefresh('payPickerSale'); });
     document.querySelectorAll('[data-fs-qty-set]').forEach(function(el){
       el.addEventListener('click', function(){ setQty(parseInt(el.getAttribute('data-fs-qty-set'),10)); });
     });
     var priceInput = document.getElementById('fsPriceInput');
-    if(priceInput) priceInput.addEventListener('input', function(){ m.price = parseFloat(priceInput.value) || 0; });
+    if(priceInput) priceInput.addEventListener('input', function(){ m.price = parseFloat(priceInput.value) || 0; paySumRefresh('payPickerSale'); });
     var clientInput = document.getElementById('fsClientInput');
     if(clientInput) clientInput.addEventListener('input', function(){ m.client = clientInput.value; });
     var noteInput = document.getElementById('fsNoteInput');
@@ -7585,11 +7852,14 @@ if ("serviceWorker" in navigator) {
     var client = (m.client||'').trim();
     var note = (m.notes||'').trim();
     var giftFlask = isStock && !!m.giftFlask;
+    var payRes = payResolve(m.pay, price * qty);
+    if(!payRes.ok){ showStatus(payRes.msg, true); return; }
+    var payments = payRes.payments;
     ensureUser(function(){
       if(isStock){
-        registerFairUnitSale(s, qty, price, client, note, giftFlask);
+        registerFairUnitSale(s, qty, price, client, note, giftFlask, payments);
       } else {
-        registerFairCustomSale(c, qty, price, client, note);
+        registerFairCustomSale(c, qty, price, client, note, payments);
       }
       if(client) noteClientUsed(client);
       closeFairSaleModal();
@@ -7597,7 +7867,7 @@ if ("serviceWorker" in navigator) {
     });
   }
 
-  function registerFairUnitSale(s, qty, price, client, note, giftFlask){
+  function registerFairUnitSale(s, qty, price, client, note, giftFlask, payments){
     if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
     var product = findProduct(s.productId);
     if(!product){ showStatus('No se encontró el producto.', true); return; }
@@ -7633,7 +7903,7 @@ if ("serviceWorker" in navigator) {
         state.db.collection('fairSales').add({
           fairId: fairId, kind: 'unitario', productId: s.productId, flavor: s.flavor, presentation: s.presentation,
           category: s.category, qty: qty, unitPrice: price, total: total, client: client||'', notes: note||'',
-          createdAt: nowIso
+          payments: payments || [], createdAt: nowIso
         })
       ];
       if(giftFlask){
@@ -7662,7 +7932,7 @@ if ("serviceWorker" in navigator) {
     if(action === 'venta'){ openFairSaleModal('custom', id); return; }
   }
 
-  function registerFairCustomSale(c, qty, price, client, note){
+  function registerFairCustomSale(c, qty, price, client, note, payments){
     if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
     var total = price * qty;
     var nowIso = new Date().toISOString();
@@ -7670,7 +7940,7 @@ if ("serviceWorker" in navigator) {
       state.db.doc('fairCustomItems/' + c.id).update({ soldQty: (c.soldQty||0) + qty }),
       state.db.collection('fairSales').add({
         fairId: c.fairId, kind: 'custom', name: c.name, qty: qty, unitPrice: price, total: total,
-        client: client||'', notes: note||'', createdAt: nowIso
+        client: client||'', notes: note||'', payments: payments || [], createdAt: nowIso
       })
     ]).then(function(){
       showStatus('Venta registrada: ' + qty + ' u. de ' + c.name + '.');
@@ -7762,9 +8032,12 @@ if ("serviceWorker" in navigator) {
     var s = fairStockFor(fairId).filter(function(x){ return x.productId === product.id; })[0];
     if(!s){ showStatus('"' + product.flavor + '" no está en el stock de esta feria.', true); return; }
     if(fairRemaining(s) <= 0){ showStatus('Ya no queda stock de "' + product.flavor + '" en esta feria.', true); return; }
-    ensureUser(function(){
-      registerFairUnitSale(s, 1, product.pvpPerUnit||0, '', '', false);
-    });
+    var scanPvp = product.pvpPerUnit||0;
+    var goScan = function(payments){
+      ensureUser(function(){ registerFairUnitSale(s, 1, scanPvp, '', '', false, payments); });
+    };
+    if(scanPvp > 0) askFairPayment({title:'Venta por escaneo', sub: s.flavor + ' · 1 u.', total: scanPvp}, goScan);
+    else goScan([]);
   }
 
   function closeFair(fairId, cierre){
@@ -7869,10 +8142,24 @@ if ("serviceWorker" in navigator) {
       }
     }
     var amt = s.kind === 'flask_free' ? '🎁' : fmtMoney(s.total||0);
+    var payHtml = '';
+    if(s.kind !== 'flask_free' && (s.total||0) > 0){
+      var hasPay = s.payments && s.payments.length;
+      if(state.assignPaySaleId === s.id && !s.reversed){
+        payHtml = '<div class="move-assign"><div class="pay-picker" id="payPickerAssign">' + payPickerInnerHtml(state.assignPay) + '</div>'
+          + '<div class="modal-actions"><button class="cancel-btn" data-action="cancel-pay" data-sid="' + s.id + '" type="button">Cancelar</button>'
+          + '<button class="confirm-btn" data-action="save-pay" data-sid="' + s.id + '" type="button">Guardar</button></div></div>';
+      } else if(hasPay){
+        payHtml = '<div class="move-pay">Pago: ' + payPaymentsText(s.payments) + (s.reversed ? '' : '<button class="move-pay-btn" data-action="ask-pay" data-sid="' + s.id + '" type="button">Cambiar</button>') + '</div>';
+      } else if(!s.reversed){
+        payHtml = '<div class="move-pay"><span class="move-pay-warn">Sin método de pago</span><button class="move-pay-btn" data-action="ask-pay" data-sid="' + s.id + '" type="button">Asignar</button></div>';
+      }
+    }
     return '<div class="move-item">' +
       '<div class="top"><span>' + fairSaleDescription(s) + '</span><span class="amt neg num">' + amt + '</span></div>' +
       '<div class="meta">' + fairSaleTypeLabel(s) + ' · ' + fmtInt(s.qty||0) + ' u. · ' + relTime(s.createdAt) +
         (s.client ? (' · Cliente: <span class="move-client">' + esc(s.client) + '</span>') : '') + (s.notes ? (' · ' + esc(s.notes)) : '') + '</div>' +
+      payHtml +
       (actionsHtml ? ('<div class="move-actions">' + actionsHtml + '</div>') : '') +
       '</div>';
   }
@@ -7895,6 +8182,10 @@ if ("serviceWorker" in navigator) {
     }
     body.innerHTML = sales.map(function(s){ return fairHistoryItemHtml(s); }).join('');
     attachFairHistoryEvents();
+    if(state.assignPaySaleId){
+      var asSale = state.fairSales.filter(function(x){ return x.id === state.assignPaySaleId; })[0];
+      if(asSale) attachPayPicker('payPickerAssign', state.assignPay, function(){ return asSale.total || 0; });
+    }
   }
 
   function attachFairHistoryEvents(){
@@ -7914,6 +8205,21 @@ if ("serviceWorker" in navigator) {
     if(action === 'ask-undo'){ state.confirmFairUndoId = sid; renderFairHistory(); return; }
     if(action === 'cancel-undo'){ state.confirmFairUndoId = null; renderFairHistory(); return; }
     if(action === 'do-undo'){ state.confirmFairUndoId = null; undoFairSale(s); return; }
+    if(action === 'ask-pay'){ state.assignPaySaleId = sid; state.assignPay = newPayState(); renderFairHistory(); return; }
+    if(action === 'cancel-pay'){ state.assignPaySaleId = null; state.assignPay = null; renderFairHistory(); return; }
+    if(action === 'save-pay'){
+      var res = payResolve(state.assignPay, s.total || 0);
+      if(!res.ok){ showStatus(res.msg, true); return; }
+      if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
+      state.db.doc('fairSales/' + sid).update({ payments: res.payments }).then(function(){
+        s.payments = res.payments;
+        state.assignPaySaleId = null; state.assignPay = null;
+        showStatus('Método de pago guardado.');
+        renderFairHistory();
+        if(state.fairView === 'closing') updateCierreComputed(state.currentFairId);
+      }).catch(function(){ showStatus('No se pudo guardar el método de pago.', true); });
+      return;
+    }
   }
 
   // Deshace una venta de feria (cualquier tipo) revirtiendo directamente lo que
@@ -7967,7 +8273,7 @@ if ("serviceWorker" in navigator) {
   }
 
   function openKitPopup(fairId, kitKey){
-    state.kitPopup = { fairId: fairId, kitKey: kitKey, picks: [], client: '', notes: '', err: '', overflow: null };
+    state.kitPopup = { fairId: fairId, kitKey: kitKey, picks: [], client: '', notes: '', err: '', overflow: null, pay: newPayState() };
     document.getElementById('kitPopupScrim').classList.add('open');
     renderKitPopup();
   }
@@ -8012,6 +8318,7 @@ if ("serviceWorker" in navigator) {
       '<div class="mini-field"><label>Cliente (opcional)</label><input type="text" id="kitClientInput" list="clientNamesList" value="' + esc(kp.client || activeClientValue()) + '" maxlength="60"></div>' +
       '<div class="mini-field"><label>Notas (opcional)</label><input type="text" id="kitNoteInput" value="' + esc(kp.notes||'') + '" maxlength="120"></div>' +
       '</div>';
+    html += '<div class="pay-picker" id="payPickerKit">' + payPickerInnerHtml(kp.pay) + '</div>';
     html += '<div class="kit-footer"><button class="kit-undo-btn" id="kitUndoBtn" type="button" ' + (total===0?'disabled':'') + '>Deshacer último</button>' +
       '<div class="modal-actions" style="margin:0;"><button class="cancel-btn" id="kitCancelBtn" type="button">Cancelar</button>' +
       '<button class="confirm-btn" id="kitConfirmBtn" type="button" ' + (total!==kd.max?'disabled':'') + '>Confirmar venta ($' + kd.price.toFixed(2) + ')</button></div></div>';
@@ -8036,6 +8343,7 @@ if ("serviceWorker" in navigator) {
         if(code) kitScanAdd(code);
       });
     }
+    attachPayPicker('payPickerKit', kp.pay, function(){ return KIT_DEFS[kp.kitKey].price; });
     var clientInput = document.getElementById('kitClientInput');
     if(clientInput) clientInput.addEventListener('input', function(){ kp.client = clientInput.value; });
     var noteInput = document.getElementById('kitNoteInput');
@@ -8091,9 +8399,13 @@ if ("serviceWorker" in navigator) {
     kp.overflow = null;
     if(asUnitSale && s){
       var product = findProduct(s.productId);
-      ensureUser(function(){
-        registerFairUnitSale(s, 1, product ? (product.pvpPerUnit||0) : 0, kp.client||'', 'Excedente de ' + KIT_DEFS[kp.kitKey].label, false);
-      });
+      var ovPrice = product ? (product.pvpPerUnit||0) : 0;
+      var ovClient = kp.client||'', ovNote = 'Excedente de ' + KIT_DEFS[kp.kitKey].label;
+      var goOv = function(payments){
+        ensureUser(function(){ registerFairUnitSale(s, 1, ovPrice, ovClient, ovNote, false, payments); });
+      };
+      if(ovPrice > 0) askFairPayment({title:'Unidad extra del kit', sub: s.flavor + ' · 1 u.', total: ovPrice}, goOv);
+      else goOv([]);
     }
     renderKitPopup();
   }
@@ -8104,6 +8416,8 @@ if ("serviceWorker" in navigator) {
     var kd = KIT_DEFS[kp.kitKey];
     if(kp.picks.length !== kd.max){ kp.err = 'Selecciona exactamente ' + kd.max + ' unidades.'; renderKitPopup(); return; }
     if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
+    var kitPayRes = payResolve(kp.pay, kd.price);
+    if(!kitPayRes.ok){ showStatus(kitPayRes.msg, true); return; }
     // Bloqueo contra doble clic: antes el botón seguía habilitado durante todo
     // el viaje de ida y vuelta a la red, así que un doble toque en una conexión
     // lenta podía registrar el mismo kit dos veces.
@@ -8138,7 +8452,7 @@ if ("serviceWorker" in navigator) {
     writes.push(state.db.collection('fairSales').add({
       fairId: fairId, kind: 'kit', kitKey: kd.key, kitLabel: kd.label, qty: kp.picks.length,
       unitPrice: null, total: kd.price, composition: composition, client: client, notes: notes,
-      createdAt: kitSaleAt
+      payments: kitPayRes.payments, createdAt: kitSaleAt
     }));
     Promise.all(writes).then(function(){
       if(client) noteClientUsed(client);
@@ -8159,6 +8473,7 @@ if ("serviceWorker" in navigator) {
     html += '<div class="cierre-grid">';
     html += '<div class="cierre-card cierre-wide" style="--cierre-color:' + CIERRE_CASH.color + ';">' +
       '<div class="cierre-card-head">' + cierreLogoHtml(CIERRE_CASH, 'cierre-logo-chip', 'cierre-logo-icon') + '</div>' +
+      (c.segunVentas && c.segunVentas.efectivo > 0 ? ('<div class="cierre-expected">' + cierreExpectedLineHtml(c.segunVentas.efectivo, c.efectivoCobrado||0, true, null) + '</div>') : '') +
       '<div class="cierre-cash-breakdown">' +
         '<div class="cierre-cash-breakdown-row"><span>Efectivo contado</span><span class="num">' + fmtMoney(c.efectivoContado||0) + '</span></div>' +
         '<div class="cierre-cash-breakdown-row"><span>− Caja chica inicial</span><span class="num">−' + fmtMoney(c.cajaChicaInicial||0) + '</span></div>' +
@@ -8168,7 +8483,9 @@ if ("serviceWorker" in navigator) {
     html += CIERRE_METHODS.map(function(m){
       return '<div class="cierre-card" style="--cierre-color:' + m.color + ';">' +
         '<div class="cierre-card-head">' + cierreLogoHtml(m, 'cierre-logo-chip', 'cierre-logo-icon') + '</div>' +
-        '<span class="cierre-static-amt">' + fmtMoney(c[m.key]||0) + '</span></div>';
+        '<span class="cierre-static-amt">' + fmtMoney(c[m.key]||0) + '</span>' +
+        (c.segunVentas && c.segunVentas[m.key] > 0 ? ('<div class="cierre-expected">' + cierreExpectedLineHtml(c.segunVentas[m.key], c[m.key]||0, true, null) + '</div>') : '') +
+        '</div>';
     }).join('');
     html += '</div>';
     html += '<div class="cierre-total-card"><span class="label">Total cobrado</span><span class="value">' + fmtMoney(c.totalCobrado||0) + '</span></div>';
