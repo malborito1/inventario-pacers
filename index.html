@@ -1231,6 +1231,26 @@ if ("serviceWorker" in navigator) {
   .attn-btn{width:100%; padding:13px; border:none; border-radius:10px; background:var(--critical); color:#fff; font-size:16px; font-weight:800; cursor:pointer; font-family:inherit;}
   .confirm-btn.is-incomplete{opacity:.55;}
 
+  /* ---- Margen / ganancia real de feria ---- */
+  .mgn-pill{display:inline-block; margin-left:8px; padding:2px 9px; border-radius:12px; font-size:12px; font-weight:800; background:var(--success-tint); color:var(--success); font-family:inherit;}
+  .mgn-pill.neg{background:var(--critical-tint); color:var(--critical);}
+  .fair-report-kpi .mgn-big{font-size:12.5px; font-weight:800; margin-left:8px; color:var(--success);}
+  .fair-report-kpi .mgn-big.neg{color:var(--critical);}
+  .rentab-sub{font-size:11.5px; color:var(--text-muted); font-weight:400; display:block; margin-top:1px;}
+  .mgn-wrap{overflow-x:auto; margin:6px 0 10px; border:1px solid var(--border); border-radius:12px; background:var(--surface);}
+  .mgn-table{width:100%; border-collapse:collapse; font-size:13px; min-width:480px;}
+  .mgn-table th{font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); text-align:right; padding:9px 10px; border-bottom:1px solid var(--border); font-weight:700;}
+  .mgn-table th:first-child, .mgn-table td:first-child{text-align:left;}
+  .mgn-table td{padding:8px 10px; text-align:right; border-bottom:1px solid var(--border); font-variant-numeric:tabular-nums;}
+  .mgn-table tr:last-child td{border-bottom:none;}
+  .mgn-table .mgn-sec td{background:var(--surface-2, var(--surface)); font-weight:800; font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); text-align:left;}
+  .mgn-table .mgn-total td{font-weight:800; border-top:2px solid var(--border); background:var(--surface-2, var(--surface));}
+  .mgn-table .mgn-pos{color:var(--success); font-weight:800;}
+  .mgn-table .mgn-neg{color:var(--critical); font-weight:800;}
+  .mgn-table .mgn-na{color:var(--text-muted); font-weight:600;}
+  .mgn-note{font-size:12px; color:var(--text-muted); margin:4px 0 0;}
+  .ranking-fair-tag{display:inline-block; margin-left:6px; padding:1px 7px; border-radius:10px; background:var(--sky-tint); color:var(--sky); font-size:10.5px; font-weight:800;}
+
   .cierre-mismatch-warn{color:var(--critical) !important; background:var(--critical-tint) !important;}
   .cierre-prop-card{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; box-shadow:var(--shadow);}
   .cierre-prop-bar{display:flex; height:16px; border-radius:8px; overflow:hidden; background:var(--surface-2); margin-bottom:14px;}
@@ -6318,6 +6338,41 @@ if ("serviceWorker" in navigator) {
     }).join('') + '</div>';
   }
 
+  // Ranking de ferias: ventas, margen bruto y ganancia real de cada feria, de la mas rentable
+  // a la menos rentable.
+  function rankingFairsHtml(){
+    var uioMap = importUnitCostMap();
+    var list = (state.fairs || []).map(function(fr){
+      var P = computeFairProfit(fr.id, uioMap);
+      return {fair: fr, P: P};
+    }).filter(function(x){ return x.P.revenue > 0 || x.P.feriaCosts > 0; })
+      .sort(function(a,b){ return b.P.profit - a.P.profit; });
+    var html = '<h3 class="ranking-subhead">Ferias por ganancia real</h3>';
+    if(!list.length) return html + '<p class="empty-hint">Todavía no hay ferias con ventas.</p>';
+    var tRev = 0, tCogs = 0, tCosts = 0;
+    list.forEach(function(x){ tRev += x.P.revenue; tCogs += x.P.cogs; tCosts += x.P.feriaCosts; });
+    var tMargin = tRev - tCogs, tProfit = tMargin - tCosts;
+    html += '<div class="fair-report-kpis">' +
+      '<div class="fair-report-kpi"><div class="label">Ventas en ferias</div><div class="value">' + fmtMoney(tRev) + '</div></div>' +
+      '<div class="fair-report-kpi"><div class="label">Margen bruto</div><div class="value">' + fmtMoney(tMargin) + '<span class="mgn-big' + (tMargin<0?' neg':'') + '">' + fmtPctShort(tRev>0 ? tMargin/tRev*100 : 0) + '</span></div></div>' +
+      '<div class="fair-report-kpi"><div class="label">Ganancia real</div><div class="value">' + fmtMoney(tProfit) + '<span class="mgn-big' + (tProfit<0?' neg':'') + '">' + fmtPctShort(tRev>0 ? tProfit/tRev*100 : 0) + '</span></div></div>' +
+      '</div>';
+    html += '<div class="mgn-wrap"><table class="mgn-table"><thead><tr><th>Feria</th><th>Ventas</th><th>Costo prod.</th><th>Margen bruto</th><th>Gastos feria</th><th>Ganancia real</th><th>%</th></tr></thead><tbody>';
+    list.forEach(function(x){
+      var P = x.P, pc = P.profit >= 0 ? 'mgn-pos' : 'mgn-neg', mc = P.margin >= 0 ? 'mgn-pos' : 'mgn-neg';
+      html += '<tr><td>' + esc(x.fair.name || 'Feria') + (x.fair.status !== 'closed' ? '<span class="ranking-fair-tag">en curso</span>' : '') + '</td>'
+        + '<td>' + fmtMoney(P.revenue) + '</td><td>' + fmtMoney(P.cogs) + '</td>'
+        + '<td class="' + mc + '">' + fmtMoney(P.margin) + ' <span class="rentab-sub">' + fmtPctShort(P.marginPct) + '</span></td>'
+        + '<td>' + fmtMoney(P.feriaCosts) + '</td>'
+        + '<td class="' + pc + '">' + fmtMoney(P.profit) + '</td><td class="' + pc + '">' + fmtPctShort(P.profitPct) + '</td></tr>';
+    });
+    html += '<tr class="mgn-total"><td>Total</td><td>' + fmtMoney(tRev) + '</td><td>' + fmtMoney(tCogs) + '</td><td>' + fmtMoney(tMargin) + '</td><td>' + fmtMoney(tCosts) + '</td>'
+      + '<td class="' + (tProfit>=0?'mgn-pos':'mgn-neg') + '">' + fmtMoney(tProfit) + '</td><td class="' + (tProfit>=0?'mgn-pos':'mgn-neg') + '">' + fmtPctShort(tRev>0 ? tProfit/tRev*100 : 0) + '</td></tr>';
+    html += '</tbody></table></div>';
+    html += '<p class="mgn-note">Costo del producto = costo puesto en Quito (UIO) de tus importaciones. Ganancia real = ventas − costo del producto − gastos de la feria (stand, otros costos y salidas de caja). El % es sobre las ventas.</p>';
+    return html;
+  }
+
   function renderRanking(){
     var root = document.getElementById('categoriesRoot');
     var period = state.rankingPeriod || 'week';
@@ -6328,10 +6383,11 @@ if ("serviceWorker" in navigator) {
       '<button type="button" class="ranking-view-btn' + (view==='clientes'?' active':'') + '" data-ranking-view="clientes">Clientes</button>' +
       '<button type="button" class="ranking-view-btn' + (view==='ventas'?' active':'') + '" data-ranking-view="ventas">Ventas</button>' +
       '<button type="button" class="ranking-view-btn' + (view==='anios'?' active':'') + '" data-ranking-view="anios">Años</button>' +
+      '<button type="button" class="ranking-view-btn' + (view==='ferias'?' active':'') + '" data-ranking-view="ferias">Ferias</button>' +
       '</div>';
     // La vista "Años" compara el historial completo agrupado por año calendario, no un
     // periodo puntual -- el selector de Periodo (Hoy/Esta semana/etc.) no aplica ahí.
-    if(view !== 'anios'){
+    if(view !== 'anios' && view !== 'ferias'){
       html += '<div class="field ranking-period-field"><label for="rankingPeriod">Periodo</label><select id="rankingPeriod">' +
         ['today','week','month','year','custom','all'].map(function(p){ return '<option value="' + p + '"' + (p===period?' selected':'') + '>' + (p==='custom'?'Personalizado':periodLabel(p)) + '</option>'; }).join('') +
         '</select></div>';
@@ -6342,12 +6398,12 @@ if ("serviceWorker" in navigator) {
           '</div>';
       }
     }
-    if(state.extMovementsLoading && !state.extMovements){
+    if(view !== 'ferias' && state.extMovementsLoading && !state.extMovements){
       html += '<p class="empty-hint">Cargando historial de ventas…</p></div>';
       root.innerHTML = html;
       return;
     }
-    if(!state.extMovements && state.extMovementsFailed){
+    if(view !== 'ferias' && !state.extMovements && state.extMovementsFailed){
       html += '<p class="empty-hint">⚠ No se pudo cargar el historial completo de ventas, así que no se muestran cifras parciales (saldrían muy por debajo de las reales). <button type="button" class="confirm-btn" id="rankingRetryHistBtn">Reintentar</button></p></div>';
       root.innerHTML = html;
       var retryBtn = document.getElementById('rankingRetryHistBtn');
@@ -6358,7 +6414,9 @@ if ("serviceWorker" in navigator) {
       });
       return;
     }
-    if(view === 'clientes'){
+    if(view === 'ferias'){
+      html += rankingFairsHtml();
+    } else if(view === 'clientes'){
       var cdata = computeClientRankingData(period);
       html += '<label class="supermaxi-sales-toggle"><input type="checkbox" id="ventasIncludeSupermaxi"' + (state.includeSupermaxiSales?' checked':'') + '> 🏬 Incluir ventas de Supermaxi</label>';
       html += '<div class="mini-field ranking-client-search-field"><label for="rankingClientSearch">Buscar cliente</label>' +
@@ -8563,33 +8621,170 @@ if ("serviceWorker" in navigator) {
     return html;
   }
 
-  function fairProfitabilityHtml(fairId, f, revenue, cogs, uncostedCustomNames){
-    var standCost = f.standCost || 0;
-    var otherCosts = fairCostsTotal(fairId);
-    var cashOuts = fairCashOutsTotal(fairId);
-    var totalCosts = cogs + standCost + otherCosts + cashOuts;
-    var profit = revenue - totalCosts;
+  // ---------------- Costo real del producto y margen de feria ----------------
+  // Costo por unidad PUESTO EN QUITO (UIO) segun las importaciones: el mismo valor que muestra
+  // la columna UIO de cada importacion (mercaderia + flete + costos locales, repartido con el
+  // factor de costeo). Se toma el de la importacion mas reciente que tenga ese producto,
+  // prefiriendo las ya recibidas o cerradas (sus costos ya son definitivos).
+  function importUnitCostMap(){
+    var map = {};
+    function ingest(list, finalOnly){
+      list.forEach(function(imp){
+        var isFinal = (imp.status === 'cerrada' || imp.status === 'recibida');
+        if(finalOnly !== isFinal) return;
+        var totals = importTotals(imp);
+        var factor = totals.factor || 0;
+        if(!(factor > 0)) return;
+        (imp.products || []).forEach(function(line){
+          var c = importLineCalc(line);
+          if(!(c.cajas > 0) || !(c.porUnidad > 0)) return;
+          var gp = importFindGeneralProduct(line.linea, line.sabor, line.presentacion);
+          if(!gp) return;
+          map[gp.id] = {uio: c.porUnidad * factor, importName: imp.name || ''};
+        });
+      });
+    }
+    var sorted = (state.imports || []).slice().sort(function(a,b){ return String(a.createdAt||'') < String(b.createdAt||'') ? -1 : 1; });
+    // Primero las abiertas (solo como respaldo) y despues las definitivas, que las pisan.
+    ingest(sorted, false);
+    ingest(sorted, true);
+    return map;
+  }
+  function fairUnitCostFor(productId, uioMap){
+    var u = productId ? uioMap[productId] : null;
+    if(u && u.uio > 0) return {cost: u.uio, src: 'uio'};
+    var p = productId ? findProduct(productId) : null;
+    if(p && (p.costPerUnit||0) > 0) return {cost: p.costPerUnit, src: 'inv'};
+    return {cost: 0, src: null};
+  }
+  function fmtPctShort(v){ return (Math.round(v*10)/10).toFixed(1).replace('.', ',') + ' %'; }
+
+  // Ventas, costo del producto, margen bruto y ganancia real de una feria, mas el detalle por
+  // producto / kit / item propio. Lo usan el reporte de la feria y el Ranking de ferias.
+  function computeFairProfit(fairId, uioMap){
+    var f = findFair(fairId) || {};
+    uioMap = uioMap || importUnitCostMap();
+    var norm = function(x){ return String(x||'').trim().toLowerCase(); };
+    var customCost = {};
+    fairCustomFor(fairId).forEach(function(c){ customCost[norm(c.name)] = c.costPerUnit || 0; });
+    var units = {}, kits = {}, customs = {};
+    var revenue = 0, cogs = 0;
+    var noCost = {}, invUsed = {};
+    function row(map, key, label, extra){
+      if(!map[key]) map[key] = Object.assign({label: label, units: 0, revenue: 0, cost: 0, missing: false}, extra || {});
+      return map[key];
+    }
+    activeFairSalesFor(fairId).forEach(function(sl){
+      var rev = sl.total || 0;
+      if(sl.kind === 'unitario'){
+        revenue += rev;
+        var uc = fairUnitCostFor(sl.productId, uioMap);
+        var label = (sl.flavor||'') + (sl.presentation ? (' · ' + sl.presentation) : '');
+        var r = row(units, sl.productId || label, label, {category: sl.category});
+        r.units += sl.qty||0; r.revenue += rev; r.cost += (sl.qty||0) * uc.cost; cogs += (sl.qty||0) * uc.cost;
+        if(!(uc.cost > 0) && rev > 0){ r.missing = true; noCost[label] = true; }
+        if(uc.src === 'inv') invUsed[label] = true;
+      } else if(sl.kind === 'kit'){
+        revenue += rev;
+        var kd = KIT_DEFS[sl.kitKey];
+        var kr = row(kits, sl.kitKey || 'kit', kd ? kd.label : (sl.kitLabel || 'Kit'));
+        kr.units += 1; kr.revenue += rev;
+        (sl.composition || []).forEach(function(cm){
+          var kc = fairUnitCostFor(cm.productId, uioMap);
+          var cst = (cm.qty||0) * kc.cost;
+          kr.cost += cst; cogs += cst;
+          if(!(kc.cost > 0)){ kr.missing = true; noCost[kr.label] = true; }
+          if(kc.src === 'inv'){ var pr = cm.productId ? findProduct(cm.productId) : null; invUsed[pr ? ((pr.flavor||'') + (pr.presentation ? (' · ' + pr.presentation) : '')) : (cm.flavor||'')] = true; }
+        });
+      } else if(sl.kind === 'custom'){
+        revenue += rev;
+        var cc = customCost[norm(sl.name)] || 0;
+        var cr = row(customs, sl.name || 'Ítem', sl.name || 'Ítem propio');
+        cr.units += sl.qty||0; cr.revenue += rev; cr.cost += (sl.qty||0) * cc; cogs += (sl.qty||0) * cc;
+        if(!(cc > 0)){ cr.missing = true; noCost[cr.label] = true; }
+      } else if(sl.kind === 'flask_free'){
+        // Un regalo no genera venta pero si cuesta.
+        var gc = customCost[norm(sl.name)] || 0;
+        var gr = row(customs, sl.name || 'Ítem', sl.name || 'Ítem propio');
+        gr.cost += (sl.qty||0) * gc; cogs += (sl.qty||0) * gc; gr.gifts = (gr.gifts||0) + (sl.qty||0);
+      }
+    });
+    var standCost = f.standCost || 0, otherCosts = fairCostsTotal(fairId), cashOuts = fairCashOutsTotal(fairId);
+    var feriaCosts = standCost + otherCosts + cashOuts;
+    var margin = revenue - cogs;
+    var profit = margin - feriaCosts;
+    function toList(map){ return Object.keys(map).map(function(k){ return map[k]; }).sort(function(a,b){ return (b.revenue-b.cost) - (a.revenue-a.cost); }); }
+    return {
+      revenue: revenue, cogs: cogs, margin: margin, marginPct: revenue > 0 ? margin/revenue*100 : 0,
+      standCost: standCost, otherCosts: otherCosts, cashOuts: cashOuts, feriaCosts: feriaCosts,
+      profit: profit, profitPct: revenue > 0 ? profit/revenue*100 : 0,
+      unitRows: toList(units), kitRows: toList(kits), customRows: toList(customs),
+      noCost: Object.keys(noCost), invUsed: Object.keys(invUsed)
+    };
+  }
+
+  function mgnCellHtml(rev, cost, missing){
+    if(missing || !(cost > 0)) return '<td class="mgn-na">—</td><td class="mgn-na">—</td>';
+    var m = rev - cost, pct = rev > 0 ? m/rev*100 : 0;
+    var cls = m >= 0 ? 'mgn-pos' : 'mgn-neg';
+    return '<td class="' + cls + '">' + fmtMoney(m) + '</td><td class="' + cls + '">' + fmtPctShort(pct) + '</td>';
+  }
+  function fairMarginTableHtml(P){
+    var sections = [
+      {title:'Productos sueltos', rows:P.unitRows},
+      {title:'Kits', rows:P.kitRows},
+      {title:'Ítems propios', rows:P.customRows}
+    ].filter(function(sec){ return sec.rows.length; });
+    if(!sections.length) return '';
+    var html = '<div class="fair-sub-head">Margen por producto</div><div class="mgn-wrap"><table class="mgn-table"><thead><tr>'
+      + '<th>Producto</th><th>Unid.</th><th>Venta</th><th>Costo</th><th>Margen</th><th>%</th></tr></thead><tbody>';
+    sections.forEach(function(sec){
+      html += '<tr class="mgn-sec"><td colspan="6">' + esc(sec.title) + '</td></tr>';
+      sec.rows.forEach(function(r){
+        html += '<tr><td>' + esc(r.label) + (r.gifts ? (' <span class="rentab-sub">' + r.gifts + ' regalado' + (r.gifts===1?'':'s') + ' (cuesta, no vende)</span>') : '') + '</td>'
+          + '<td>' + fmtInt(r.units) + '</td><td>' + fmtMoney(r.revenue) + '</td>'
+          + '<td>' + (r.cost > 0 ? fmtMoney(r.cost) : '<span class="mgn-na">—</span>') + '</td>'
+          + mgnCellHtml(r.revenue, r.cost, r.missing) + '</tr>';
+      });
+    });
+    html += '<tr class="mgn-total"><td>Total mercadería</td><td></td><td>' + fmtMoney(P.revenue) + '</td><td>' + fmtMoney(P.cogs) + '</td>'
+      + '<td class="' + (P.margin >= 0 ? 'mgn-pos' : 'mgn-neg') + '">' + fmtMoney(P.margin) + '</td><td class="' + (P.margin >= 0 ? 'mgn-pos' : 'mgn-neg') + '">' + fmtPctShort(P.marginPct) + '</td></tr>';
+    html += '</tbody></table></div>';
+    html += '<p class="mgn-note">Costo = lo que te cuesta cada unidad puesta en Quito (columna UIO de tu importación más reciente de ese producto).</p>';
+    if(P.invUsed.length) html += '<p class="mgn-note">Sin importación registrada, se usó el costo del Inventario en: ' + P.invUsed.map(esc).join(', ') + '.</p>';
+    if(P.noCost.length) html += '<p class="mgn-note" style="color:var(--critical);">Sin costo registrado (no se calcula su margen): ' + P.noCost.map(esc).join(', ') + '.</p>';
+    return html;
+  }
+
+  function fairProfitabilityHtml(fairId, f, P){
+    var profit = P.profit;
+    var pillM = '<span class="mgn-pill' + (P.margin < 0 ? ' neg' : '') + '">' + fmtPctShort(P.marginPct) + '</span>';
+    var pillP = '<span class="mgn-pill' + (profit < 0 ? ' neg' : '') + '">' + fmtPctShort(P.profitPct) + '</span>';
 
     var html = '<div class="fair-sub-head">Rentabilidad</div>';
+    html += '<div class="fair-report-kpis">' +
+      '<div class="fair-report-kpi"><div class="label">Ventas</div><div class="value">' + fmtMoney(P.revenue) + '</div></div>' +
+      '<div class="fair-report-kpi"><div class="label">Margen bruto</div><div class="value">' + fmtMoney(P.margin) + '<span class="mgn-big' + (P.margin < 0 ? ' neg' : '') + '">' + fmtPctShort(P.marginPct) + '</span></div></div>' +
+      '<div class="fair-report-kpi"><div class="label">' + (profit >= 0 ? 'Ganancia real' : 'Pérdida real') + '</div><div class="value">' + fmtMoney(Math.abs(profit)) + '<span class="mgn-big' + (profit < 0 ? ' neg' : '') + '">' + fmtPctShort(P.profitPct) + '</span></div></div>' +
+      '</div>';
     html += '<div class="cierre-cash-breakdown rentab-box">';
-    html += '<div class="cierre-cash-breakdown-row"><span>Ingresos (ventas)</span><span class="num">' + fmtMoney(revenue) + '</span></div>';
-    html += '<div class="cierre-cash-breakdown-row"><span>− Costo de mercadería vendida</span><span class="num">−' + fmtMoney(cogs) + '</span></div>';
-    html += '<div class="cierre-cash-breakdown-row"><span>− Costo del stand</span><span class="num">−' + fmtMoney(standCost) + '</span></div>';
-    html += '<div class="cierre-cash-breakdown-row"><span>− Otros costos de la feria</span><span class="num">−' + fmtMoney(otherCosts) + '</span></div>';
-    html += '<div class="cierre-cash-breakdown-row"><span>− Salidas de caja</span><span class="num">−' + fmtMoney(cashOuts) + '</span></div>';
-    html += '<div class="cierre-cash-breakdown-row result"><span>= ' + (profit>=0?'Ganancia':'Pérdida') + '</span><span class="num">' + fmtMoney(Math.abs(profit)) + '</span></div>';
+    html += '<div class="cierre-cash-breakdown-row"><span>Ventas</span><span class="num">' + fmtMoney(P.revenue) + '</span></div>';
+    html += '<div class="cierre-cash-breakdown-row"><span>− Costo del producto vendido<span class="rentab-sub">lo que te cuesta puesto en Quito</span></span><span class="num">−' + fmtMoney(P.cogs) + '</span></div>';
+    html += '<div class="cierre-cash-breakdown-row result"><span>= Margen bruto' + pillM + '</span><span class="num">' + fmtMoney(P.margin) + '</span></div>';
+    html += '<div class="cierre-cash-breakdown-row"><span>− Costo del stand</span><span class="num">−' + fmtMoney(P.standCost) + '</span></div>';
+    html += '<div class="cierre-cash-breakdown-row"><span>− Otros costos de la feria</span><span class="num">−' + fmtMoney(P.otherCosts) + '</span></div>';
+    html += '<div class="cierre-cash-breakdown-row"><span>− Salidas de caja</span><span class="num">−' + fmtMoney(P.cashOuts) + '</span></div>';
+    html += '<div class="cierre-cash-breakdown-row result"><span>= ' + (profit>=0?'Ganancia real':'Pérdida real') + pillP + '<span class="rentab-sub">% sobre las ventas</span></span><span class="num">' + fmtMoney(Math.abs(profit)) + '</span></div>';
     html += '</div>';
 
     if(Math.abs(profit) < 0.005){
       html += '<div class="fair-live-note">Punto de equilibrio: las ventas cubrieron exactamente los costos de la feria.</div>';
     } else if(profit > 0){
-      html += '<div class="fair-live-note">Feria rentable: ganaste ' + fmtMoney(profit) + ' por encima de todos los costos.</div>';
+      html += '<div class="fair-live-note">Feria rentable: ganaste ' + fmtMoney(profit) + ' reales (' + fmtPctShort(P.profitPct) + ' de las ventas) después del costo de producto y de todos los gastos de la feria.</div>';
     } else {
       html += '<div class="fair-live-note cierre-mismatch-warn">Todavía no cubres los costos de la feria: faltan ' + fmtMoney(Math.abs(profit)) + '.</div>';
     }
-    if(uncostedCustomNames && uncostedCustomNames.length){
-      html += '<p class="hint" style="margin-top:6px;">No incluye el costo de: ' + uncostedCustomNames.map(esc).join(', ') + ' (todavía no tienen un costo unitario registrado).</p>';
-    }
+    html += fairMarginTableHtml(P);
     return html;
   }
 
@@ -8623,7 +8818,6 @@ if ("serviceWorker" in navigator) {
           byFlavor[key] = { label:s.flavor, qty:0, category:s.category, photoUrl: prod?prod.photoUrl:null };
         }
         byFlavor[key].qty += s.qty||0;
-        cogs += (s.qty||0) * ((s.productId && findProduct(s.productId) && findProduct(s.productId).costPerUnit) || 0);
         if(isBulkPresentation(s.presentation)){
           bulkCounts[s.category] = (bulkCounts[s.category]||0) + (s.qty||0);
           bulkRevenue[s.category] = (bulkRevenue[s.category]||0) + (s.total||0);
@@ -8643,13 +8837,11 @@ if ("serviceWorker" in navigator) {
             byFlavor[key2] = { label:c.flavor, qty:0, category:c.category, photoUrl: prod2?prod2.photoUrl:null };
           }
           byFlavor[key2].qty += c.qty||0;
-          cogs += (c.qty||0) * ((c.productId && findProduct(c.productId) && findProduct(c.productId).costPerUnit) || 0);
         });
       } else if(s.kind === 'custom'){
         var t = customTotals[s.name] || {sold:0, free:0, revenue:0};
         t.sold += s.qty||0; t.revenue += s.total||0;
         customTotals[s.name] = t;
-        cogs += (s.qty||0) * (customCostByName[(s.name||'').trim().toLowerCase()] || 0);
       } else if(s.kind === 'flask_free'){
         var tn = customTotals[s.name] || {sold:0, free:0, revenue:0};
         tn.free += s.qty||0;
@@ -8701,10 +8893,7 @@ if ("serviceWorker" in navigator) {
       }).join('') +
       '</div>';
 
-    var uncostedCustomNames = customNames.filter(function(name){
-      return !(customCostByName[(name||'').trim().toLowerCase()] > 0);
-    });
-    html += fairProfitabilityHtml(fairId, f, revenue, cogs, uncostedCustomNames);
+    html += fairProfitabilityHtml(fairId, f, computeFairProfit(fairId));
 
     if(f.cierre){
       html += fairCierreReportHtml(f, revenue);
