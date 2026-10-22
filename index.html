@@ -8727,7 +8727,7 @@ if ("serviceWorker" in navigator) {
     if(missing || !(cost > 0)) return '<td class="mgn-na">—</td><td class="mgn-na">—</td>';
     var m = rev - cost, pct = rev > 0 ? m/rev*100 : 0;
     var cls = m >= 0 ? 'mgn-pos' : 'mgn-neg';
-    return '<td class="' + cls + '">' + fmtMoney(m) + '</td><td class="' + cls + '">' + fmtPctShort(pct) + '</td>';
+    return '<td class="' + cls + '">' + fmtMoney(m) + '</td><td class="' + (rev > 0 ? cls : 'mgn-na') + '">' + (rev > 0 ? fmtPctShort(pct) : '—') + '</td>';
   }
   function fairMarginTableHtml(P){
     var sections = [
