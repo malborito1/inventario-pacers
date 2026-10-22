@@ -1251,6 +1251,28 @@ if ("serviceWorker" in navigator) {
   .mgn-note{font-size:12px; color:var(--text-muted); margin:4px 0 0;}
   .ranking-fair-tag{display:inline-block; margin-left:6px; padding:1px 7px; border-radius:10px; background:var(--sky-tint); color:var(--sky); font-size:10.5px; font-weight:800;}
 
+  /* ---- Tarjeta de punto de equilibrio de la feria ---- */
+  .be-card{grid-column:1 / -1; border-radius:12px; padding:14px 16px 13px; border:1px solid var(--be-c); border-left:6px solid var(--be-c); background:var(--be-t); box-shadow:var(--shadow);}
+  .be-red{--be-c:var(--critical); --be-t:var(--critical-tint);}
+  .be-yellow{--be-c:var(--warning); --be-t:var(--warning-tint);}
+  .be-green{--be-c:var(--success); --be-t:var(--success-tint);}
+  .be-neutral{--be-c:var(--border); --be-t:var(--surface);}
+  .be-head{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  .be-title{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted);}
+  .be-pill{padding:3px 11px; border-radius:14px; background:var(--be-c); color:var(--on-solid); font-size:11.5px; font-weight:800; letter-spacing:.02em;}
+  .be-neutral .be-pill{background:var(--surface-2, var(--border)); color:var(--text-muted);}
+  .be-big{font-size:27px; font-weight:800; line-height:1.15; margin-top:6px; color:var(--be-c); font-variant-numeric:tabular-nums;}
+  .be-neutral .be-big{color:var(--text); font-size:18px;}
+  .be-big small{font-size:13px; font-weight:700; color:var(--text-muted); margin-left:6px;}
+  .be-bar{position:relative; height:13px; border-radius:7px; background:color-mix(in srgb, var(--text) 12%, transparent); margin:12px 0 26px;}
+  .be-bar > span{display:block; height:100%; border-radius:7px; background:var(--be-c);}
+  .be-bar > i{position:absolute; top:-4px; bottom:-4px; width:3px; border-radius:2px; background:var(--text); left:66.667%; margin-left:-1px;}
+  .be-bar > em{position:absolute; top:19px; left:66.667%; transform:translateX(-50%); font-style:normal; font-size:10.5px; font-weight:700; color:var(--text-muted); white-space:nowrap;}
+  .be-meta{display:flex; flex-wrap:wrap; gap:4px 18px; font-size:13px; color:var(--text-muted);}
+  .be-meta b{color:var(--text); font-weight:800;}
+  .be-sub{margin-top:6px; font-size:12.5px; color:var(--text-muted);}
+  .be-sub b{color:var(--text);}
+
   .cierre-mismatch-warn{color:var(--critical) !important; background:var(--critical-tint) !important;}
   .cierre-prop-card{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; box-shadow:var(--shadow);}
   .cierre-prop-bar{display:flex; height:16px; border-radius:8px; overflow:hidden; background:var(--surface-2); margin-bottom:14px;}
@@ -2555,7 +2577,8 @@ if ("serviceWorker" in navigator) {
       '<div class="kpi"><div class="label">Unidades vendidas</div><div class="value num">' + fmtInt(k.unitsSold) + '</div></div>' +
       '<div class="kpi kpi-ventas-totales"><div class="label">Ventas totales</div><div class="value num">' + fmtMoney(k.totalSales) + '</div></div>' +
       '<div class="kpi"><div class="label">Ticket promedio</div><div class="value num">' + fmtMoney(k.avgTicket) + '</div></div>' +
-      standCostTile;
+      standCostTile +
+      fairBreakevenCardHtml(computeFairProfit(fairId));
     attachStandCostKpiEvents(fairId);
   }
 
@@ -8756,6 +8779,54 @@ if ("serviceWorker" in navigator) {
     return html;
   }
 
+  // Tarjeta KPI de punto de equilibrio: ventas que necesitas para cubrir los gastos de la feria
+  // (stand + otros costos + salidas de caja) dado tu margen bruto real. Rojo = falta,
+  // amarillo = ya llegaste (hasta 10% por encima), verde = superado.
+  function fairBreakevenCardHtml(P){
+    var costs = P.feriaCosts || 0;
+    var title = '<span class="be-title">Punto de equilibrio</span>';
+    if(!(costs > 0)){
+      return '<div class="be-card be-neutral"><div class="be-head">' + title + '<span class="be-pill">Sin gastos</span></div>'
+        + '<div class="be-big">No hay gastos de feria que cubrir</div>'
+        + '<div class="be-sub">Registra el costo del stand u otros costos para calcular el punto de equilibrio.</div></div>';
+    }
+    if(!(P.revenue > 0)){
+      return '<div class="be-card be-neutral"><div class="be-head">' + title + '<span class="be-pill">Sin ventas</span></div>'
+        + '<div class="be-big">Gastos por cubrir: ' + fmtMoney(costs) + '</div>'
+        + '<div class="be-sub">Con la primera venta se calcula cuánto necesitas vender para llegar al equilibrio.</div></div>';
+    }
+    if(!(P.margin > 0)){
+      return '<div class="be-card be-red"><div class="be-head">' + title + '<span class="be-pill">Sin margen</span></div>'
+        + '<div class="be-big">El producto cuesta más de lo que vendes</div>'
+        + '<div class="be-sub">Con margen bruto de ' + fmtPctShort(P.marginPct) + ' no se puede llegar al equilibrio. Revisa precios o costos.</div></div>';
+    }
+    var rate = P.margin / P.revenue;
+    var need = costs / rate;
+    var ratio = P.revenue / need;
+    var level = ratio < 1 ? 'red' : (ratio < 1.1 ? 'yellow' : 'green');
+    var pill = level === 'red' ? 'Falta' : (level === 'yellow' ? 'En equilibrio' : 'Superado');
+    var big, sub = '';
+    if(level === 'red'){
+      var faltan = need - P.revenue;
+      big = 'Faltan ' + fmtMoney(faltan) + '<small>en ventas</small>';
+      var kitPrice = (KIT_DEFS.SACHETS_8 && KIT_DEFS.SACHETS_8.price) || 30;
+      sub = 'Equivale a unos <b>' + fmtInt(Math.ceil(faltan / kitPrice)) + ' kits</b> de ' + fmtMoney(kitPrice) + '.';
+    } else if(level === 'yellow'){
+      big = '¡Llegaste al equilibrio!';
+      sub = 'Ya cubriste todos los gastos. Ganancia real por ahora: <b>' + fmtMoney(P.profit) + '</b>.';
+    } else {
+      big = 'Superado por ' + fmtMoney(P.revenue - need) + '<small>en ventas</small>';
+      sub = 'Ganancia real: <b>' + fmtMoney(P.profit) + '</b> (' + fmtPctShort(P.profitPct) + ' de las ventas).';
+    }
+    var fill = Math.min(ratio, 1.5) / 1.5 * 100;
+    return '<div class="be-card be-' + level + '"><div class="be-head">' + title + '<span class="be-pill">' + pill + '</span></div>'
+      + '<div class="be-big">' + big + '</div>'
+      + '<div class="be-bar"><span style="width:' + fill.toFixed(1) + '%;"></span><i></i><em>Equilibrio</em></div>'
+      + '<div class="be-meta"><span>Ventas necesarias <b>' + fmtMoney(need) + '</b></span><span>Llevas <b>' + fmtMoney(P.revenue) + '</b> (' + Math.round(ratio*100) + ' %)</span><span>Gastos de la feria <b>' + fmtMoney(costs) + '</b></span><span>Margen bruto <b>' + fmtPctShort(P.marginPct) + '</b></span></div>'
+      + (sub ? ('<div class="be-sub">' + sub + '</div>') : '')
+      + '</div>';
+  }
+
   function fairProfitabilityHtml(fairId, f, P){
     var profit = P.profit;
     var pillM = '<span class="mgn-pill' + (P.margin < 0 ? ' neg' : '') + '">' + fmtPctShort(P.marginPct) + '</span>';
@@ -8767,6 +8838,7 @@ if ("serviceWorker" in navigator) {
       '<div class="fair-report-kpi"><div class="label">Margen bruto</div><div class="value">' + fmtMoney(P.margin) + '<span class="mgn-big' + (P.margin < 0 ? ' neg' : '') + '">' + fmtPctShort(P.marginPct) + '</span></div></div>' +
       '<div class="fair-report-kpi"><div class="label">' + (profit >= 0 ? 'Ganancia real' : 'Pérdida real') + '</div><div class="value">' + fmtMoney(Math.abs(profit)) + '<span class="mgn-big' + (profit < 0 ? ' neg' : '') + '">' + fmtPctShort(P.profitPct) + '</span></div></div>' +
       '</div>';
+    html += '<div class="kpis" style="margin-bottom:12px;">' + fairBreakevenCardHtml(P) + '</div>';
     html += '<div class="cierre-cash-breakdown rentab-box">';
     html += '<div class="cierre-cash-breakdown-row"><span>Ventas</span><span class="num">' + fmtMoney(P.revenue) + '</span></div>';
     html += '<div class="cierre-cash-breakdown-row"><span>− Costo del producto vendido<span class="rentab-sub">lo que te cuesta puesto en Quito</span></span><span class="num">−' + fmtMoney(P.cogs) + '</span></div>';
