@@ -5143,21 +5143,43 @@ if ("serviceWorker" in navigator) {
 
   function registerDistributorInvoice(client, line, dueDate, product, discountPct, note){
     if(!state.db) return Promise.reject(new Error('no-db'));
-    var amount = line.total;
     var displayName = client + (note ? (' ' + note) : '');
-    return state.db.collection('pendingPayments').add({
-      name: displayName,
-      amount: amount,
-      unitSinIva: line.unit,
-      baseSinIva: line.base,
-      dueDate: dueDate,
-      createdAt: new Date().toISOString(),
-      addedBy: state.userName,
-      origin: 'venta',
-      productId: product.id,
-      productLabel: product.presentation + ' · ' + product.flavor,
-      discountPct: discountPct || 0
-    }).then(function(){
+    var col = state.db.collection('pendingPayments');
+    // La factura calcula el IVA UNA sola vez sobre el subtotal de todas las líneas, pero
+    // cada producto se registra por separado. Para que la suma de las líneas cuadre al
+    // centavo con la factura, esta línea absorbe el ajuste de redondeo: su monto es
+    // (total de la factura con las bases acumuladas) menos lo que ya suman las líneas
+    // anteriores de la misma factura. Si alguna línea anterior es antigua (sin base
+    // guardada) no se puede reconstruir y se usa el monto de la línea sola.
+    return col.where('name','==',displayName).get().then(function(snap){
+      var prevBase = 0, prevAmt = 0, canAdjust = true;
+      snap.docs.forEach(function(d){
+        var x = d.data();
+        if(x.name !== displayName || x.origin !== 'venta' || (x.dueDate||'') !== (dueDate||'') || x.status === 'paid') return;
+        if(x.baseSinIva == null){ canAdjust = false; return; }
+        prevBase += x.baseSinIva;
+        prevAmt += (x.amount||0);
+      });
+      var amount = line.total;
+      if(canAdjust && prevBase > 0){
+        var sumBase = cents2(prevBase + line.base);
+        var invoiceTotal = cents2(sumBase + cents2(sumBase * IVA_RATE));
+        amount = cents2(invoiceTotal - prevAmt);
+      }
+      return col.add({
+        name: displayName,
+        amount: amount,
+        unitSinIva: line.unit,
+        baseSinIva: line.base,
+        dueDate: dueDate,
+        createdAt: new Date().toISOString(),
+        addedBy: state.userName,
+        origin: 'venta',
+        productId: product.id,
+        productLabel: product.presentation + ' · ' + product.flavor,
+        discountPct: discountPct || 0
+      }).then(function(){ return amount; });
+    }).then(function(amount){
       var descNote = (discountPct>0) ? (' (' + discountPct + '% desc.)') : '';
       showStatus('Cuenta por cobrar registrada en Pagos: ' + fmtMoney(amount) + ' de ' + displayName + descNote + '.');
     });
