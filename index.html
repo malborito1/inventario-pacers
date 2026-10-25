@@ -3847,11 +3847,18 @@ if ("serviceWorker" in navigator) {
   function importTotals(imp){
     var products = imp.products || [];
     var totalCajas=0, totalKg=0, totalUnidades=0, totalMercaderia=0, totalVenta=0;
+    // Base del margen proyectado: solo las líneas que se venden a Supermaxi (las que
+    // tienen precio de venta $/u) y las Cajas Display (empaque de esa venta).
+    var mercaderiaMargen = 0, lineasConPrecio = 0, lineasSinPrecio = 0;
     products.forEach(function(line){
       var c = importLineCalc(line);
       totalCajas += c.cajas; totalKg += c.kg; totalUnidades += c.unidades; totalMercaderia += c.total;
       var pv = parseFloat(line.precioVenta)||0;
       totalVenta += pv*c.unidades;
+      var esDisplay = (line.linea === IMPORT_DISPLAY_LINE.linea && line.sabor === IMPORT_DISPLAY_LINE.sabor);
+      if(pv > 0){ lineasConPrecio++; mercaderiaMargen += c.total; }
+      else if(esDisplay){ mercaderiaMargen += c.total; }
+      else if(c.total > 0){ lineasSinPrecio++; }
     });
     var freight = parseFloat(imp.freight)||0;
     var mercaderiaConFlete = totalMercaderia + freight;
@@ -3872,7 +3879,11 @@ if ("serviceWorker" in navigator) {
     var largo = parseFloat(vc.largo)||0, ancho = parseFloat(vc.ancho)||0, altoInput = parseFloat(vc.alto)||0, factorConv = parseFloat(vc.factor)||5385;
     var altoEfectivo = altoInput>0 ? altoInput : altoCm;
     var pesoVolumetrico = factorConv>0 ? Math.round((largo*ancho*altoEfectivo/factorConv)*100)/100 : 0;
-    var margenProyectado = totalVenta-granTotal;
+    // Costo puesto en Quito de lo que se vende: el total a pagar (mercadería + freight +
+    // costos locales) se reparte en proporción al valor FOB de cada línea (es el mismo
+    // factor de costeo de la tabla). Las líneas sin precio de venta no entran al margen.
+    var costoMargen = (lineasConPrecio > 0 && totalMercaderia > 0) ? granTotal * (mercaderiaMargen / totalMercaderia) : granTotal;
+    var margenProyectado = totalVenta-costoMargen;
     // % sobre la venta proyectada (margen / venta), no sobre el costo.
     var margenProyectadoPct = totalVenta>0 ? (margenProyectado/totalVenta)*100 : 0;
     return {
@@ -3881,8 +3892,13 @@ if ("serviceWorker" in navigator) {
       totalCostosNormales:totalCostosNormales, totalCostosExtra:totalCostosExtra,
       granTotal:granTotal, factor:factor, filas:filas, altoCm:altoCm, altoEfectivo:altoEfectivo, pesoKg:pesoKg, pesoLbs:pesoLbs,
       pesoVolumetrico:pesoVolumetrico, totalVentaProyectada:totalVenta, margenProyectado: margenProyectado,
-      margenProyectadoPct: margenProyectadoPct
+      margenProyectadoPct: margenProyectadoPct, costoMargen: costoMargen, lineasSinPrecio: lineasSinPrecio, lineasConPrecio: lineasConPrecio
     };
+  }
+
+  function importMarginNoteHtml(totals){
+    if(!(totals.lineasSinPrecio > 0) || !(totals.lineasConPrecio > 0)) return '';
+    return '<div class="imp-kv" style="font-size:12px;color:var(--text-muted);"><span>Margen solo de los productos con precio de venta (' + totals.lineasConPrecio + ' de ' + (totals.lineasConPrecio + totals.lineasSinPrecio) + ' líneas). Costo asignado</span><b>' + fmtMoney(totals.costoMargen) + '</b></div>';
   }
 
   function createImport(name){
@@ -4184,6 +4200,7 @@ if ("serviceWorker" in navigator) {
     if(totals.totalVentaProyectada>0){
       html += '<div class="imp-kv" style="margin-top:8px;"><span>Venta proyectada</span><b>'+ fmtMoney(totals.totalVentaProyectada) +'</b></div>';
       html += '<div class="imp-kv"><span>Margen proyectado</span><b style="color:'+(totals.margenProyectado>=0?'var(--success)':'var(--critical)')+';">'+ fmtMoney(totals.margenProyectado) +' <span style="font-weight:600;">('+ (totals.margenProyectadoPct||0).toLocaleString('es-EC',{minimumFractionDigits:1,maximumFractionDigits:1}) +'%)</span></b></div>';
+      html += importMarginNoteHtml(totals);
     }
     html += '</div>';
     return html;
@@ -4200,6 +4217,7 @@ if ("serviceWorker" in navigator) {
     if(totals.totalVentaProyectada>0){
       html += '<div class="imp-kv"><span>Venta proyectada</span><b>'+ fmtMoney(totals.totalVentaProyectada) +'</b></div>';
       html += '<div class="imp-kv"><span>Margen proyectado</span><b style="color:'+(totals.margenProyectado>=0?'var(--success)':'var(--critical)')+';">'+ fmtMoney(totals.margenProyectado) +' <span style="font-weight:600;">('+ (totals.margenProyectadoPct||0).toLocaleString('es-EC',{minimumFractionDigits:1,maximumFractionDigits:1}) +'%)</span></b></div>';
+      html += importMarginNoteHtml(totals);
     }
     return html;
   }
