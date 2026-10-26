@@ -1449,6 +1449,8 @@ if ("serviceWorker" in navigator) {
   .imp-cost-remove{background:none; border:none; color:var(--critical); cursor:pointer; font-size:15px; flex:none; width:22px;}
   .imp-cost-note-btn{background:none; border:none; cursor:pointer; font-size:13px; flex:none; width:22px; opacity:.4; border-radius:6px;}
   .imp-cost-note-btn.has-note{opacity:1; background:var(--accent-tint);}
+  .imp-cost-smx-btn{background:none; border:1px solid var(--border); cursor:pointer; font-size:11px; font-weight:700; flex:none; width:22px; height:22px; padding:0; line-height:1; color:var(--text-muted); opacity:.55; border-radius:6px;}
+  .imp-cost-smx-btn.on{opacity:1; background:var(--sky-tint); color:var(--link); border-color:var(--link);}
   /* Nota de referencia de un costo (ej. "calculado sobre $X CIF"): fila angosta
      justo debajo de la fila del costo, para que quede ahí mismo a futuro. */
   .imp-cost-row-wrap{display:flex; flex-direction:column; gap:3px;}
@@ -3882,7 +3884,10 @@ if ("serviceWorker" in navigator) {
     // Costo puesto en Quito de lo que se vende: el total a pagar (mercadería + freight +
     // costos locales) se reparte en proporción al valor FOB de cada línea (es el mismo
     // factor de costeo de la tabla). Las líneas sin precio de venta no entran al margen.
-    var costoMargen = (lineasConPrecio > 0 && totalMercaderia > 0) ? granTotal * (mercaderiaMargen / totalMercaderia) : granTotal;
+    // Los costos marcados "solo Supermaxi" (c.soloSupermaxi) no se reparten: van completos
+    // al margen de Supermaxi; el resto del total a pagar sí se reparte por valor FOB.
+    var costoSoloSmx = costos.reduce(function(sum,c){ return c.soloSupermaxi ? sum+(parseFloat(c.monto)||0) : sum; }, 0);
+    var costoMargen = (lineasConPrecio > 0 && totalMercaderia > 0) ? ((granTotal - costoSoloSmx) * (mercaderiaMargen / totalMercaderia) + costoSoloSmx) : granTotal;
     var margenProyectado = totalVenta-costoMargen;
     // Comisión del socio (cuñado) sobre el margen de lo que se factura a Supermaxi.
     // Porcentaje editable por importación (imp.socioPct); por defecto 15 %.
@@ -3897,7 +3902,7 @@ if ("serviceWorker" in navigator) {
       totalCostosNormales:totalCostosNormales, totalCostosExtra:totalCostosExtra,
       granTotal:granTotal, factor:factor, filas:filas, altoCm:altoCm, altoEfectivo:altoEfectivo, pesoKg:pesoKg, pesoLbs:pesoLbs,
       pesoVolumetrico:pesoVolumetrico, totalVentaProyectada:totalVenta, margenProyectado: margenProyectado,
-      margenProyectadoPct: margenProyectadoPct, costoMargen: costoMargen, socioPct: socioPct, comisionSocio: comisionSocio, gananciaNeta: gananciaNeta, lineasSinPrecio: lineasSinPrecio, lineasConPrecio: lineasConPrecio
+      margenProyectadoPct: margenProyectadoPct, costoMargen: costoMargen, costoSoloSmx: costoSoloSmx, socioPct: socioPct, comisionSocio: comisionSocio, gananciaNeta: gananciaNeta, lineasSinPrecio: lineasSinPrecio, lineasConPrecio: lineasConPrecio
     };
   }
 
@@ -3909,7 +3914,7 @@ if ("serviceWorker" in navigator) {
 
   function importMarginNoteHtml(totals){
     if(!(totals.lineasSinPrecio > 0) || !(totals.lineasConPrecio > 0)) return '';
-    return '<div class="imp-kv" style="font-size:12px;color:var(--text-muted);"><span>Margen solo de los productos con precio de venta (' + totals.lineasConPrecio + ' de ' + (totals.lineasConPrecio + totals.lineasSinPrecio) + ' líneas). Costo asignado</span><b>' + fmtMoney(totals.costoMargen) + '</b></div>';
+    return '<div class="imp-kv" style="font-size:12px;color:var(--text-muted);"><span>Margen solo de los productos con precio de venta (' + totals.lineasConPrecio + ' de ' + (totals.lineasConPrecio + totals.lineasSinPrecio) + ' líneas). Costo asignado' + (totals.costoSoloSmx > 0 ? ' (incluye ' + fmtMoney(totals.costoSoloSmx) + ' solo Supermaxi)' : '') + '</span><b>' + fmtMoney(totals.costoMargen) + '</b></div>';
   }
 
   function createImport(name){
@@ -4154,6 +4159,7 @@ if ("serviceWorker" in navigator) {
       + '<input type="checkbox" class="imp-cost-check" data-cidx="'+idx+'" '+(c.pagado?'checked':'')+' title="Pagado">'
       + '<input type="text" class="imp-cost-name" data-cidx="'+idx+'" value="'+esc(c.concepto||'')+'" placeholder="Concepto" onfocus="this.select()">'
       + '<input type="number" step="0.01" class="imp-cost-amount" data-cidx="'+idx+'" value="'+(c.monto||0)+'" onfocus="this.select()">'
+      + '<button type="button" class="imp-cost-smx-btn'+(c.soloSupermaxi?' on':'')+'" data-cidx="'+idx+'" title="'+(c.soloSupermaxi?'Solo Supermaxi: va completo al margen de Supermaxi (clic para quitar)':'Marcar como costo solo de Supermaxi (va completo al margen de Supermaxi)')+'">S</button>'
       + '<button type="button" class="imp-cost-note-btn'+(hasNote?' has-note':'')+'" data-cidx="'+idx+'" title="'+(hasNote?'Ver/editar nota':'Agregar nota')+'">📝</button>'
       + '<button type="button" class="imp-cost-remove" data-cidx="'+idx+'" title="Quitar">✕</button>'
       + '</div>';
@@ -4636,6 +4642,14 @@ if ("serviceWorker" in navigator) {
         var idx = parseInt(el.getAttribute('data-cidx'),10);
         var costs = (imp.localCosts||[]).slice();
         costs.splice(idx,1);
+        updateImportField(imp.id, {localCosts: costs});
+      });
+    });
+    document.querySelectorAll('.imp-cost-smx-btn').forEach(function(el){
+      el.addEventListener('click', function(){
+        var idx = parseInt(el.getAttribute('data-cidx'),10);
+        var costs = (imp.localCosts||[]).slice();
+        costs[idx] = Object.assign({}, costs[idx], {soloSupermaxi: !(costs[idx] && costs[idx].soloSupermaxi)});
         updateImportField(imp.id, {localCosts: costs});
       });
     });
