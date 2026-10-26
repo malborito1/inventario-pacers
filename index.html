@@ -1446,6 +1446,12 @@ if ("serviceWorker" in navigator) {
   .imp-cost-row input[type=number]{width:78px; flex:none;}
   .imp-cost-row input{padding:6px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:12.5px;}
   .imp-cost-check{width:18px; height:18px; flex:none; cursor:pointer;}
+  /* Pantallas angostas: el concepto ocupa su propia línea completa y debajo van monto y botones */
+  @media (max-width:560px){
+    .imp-cost-row .imp-cost-check{margin:0;}
+    .imp-cost-row input[type=text]{box-sizing:border-box; flex:1 1 calc(100% - 25px); min-width:0;}
+    .imp-cost-row input[type=number]{box-sizing:border-box; margin-left:24px; flex:1 1 90px; width:auto; min-width:0;}
+  }
   .imp-cost-remove{background:none; border:none; color:var(--critical); cursor:pointer; font-size:15px; flex:none; width:22px;}
   .imp-cost-note-btn{background:none; border:none; cursor:pointer; font-size:13px; flex:none; width:22px; opacity:.4; border-radius:6px;}
   .imp-cost-note-btn.has-note{opacity:1; background:var(--accent-tint);}
@@ -1454,10 +1460,11 @@ if ("serviceWorker" in navigator) {
   /* Nota de referencia de un costo (ej. "calculado sobre $X CIF"): fila angosta
      justo debajo de la fila del costo, para que quede ahí mismo a futuro. */
   .imp-cost-row-wrap{display:flex; flex-direction:column; gap:3px;}
-  .imp-cost-note-row{display:flex; align-items:center; gap:8px; padding-left:24px;}
+  .imp-cost-note-row{display:flex; align-items:flex-start; flex-wrap:wrap; gap:4px 8px; padding-left:24px;}
+  .imp-cost-note-row .imp-cost-note-tag{padding-top:7px;}
   .imp-cost-row-wrap.has-note{border-left:4px solid var(--link); background:var(--sky-tint); border-radius:8px; padding:7px 8px 7px 8px; margin:2px 0;}
   .imp-cost-note-tag{flex:none; font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--link); white-space:nowrap;}
-  .imp-cost-note-row input{flex:1 1 auto; min-width:0; width:100%; font-size:12.5px; padding:5px 8px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-style:normal;}
+  .imp-cost-note-row textarea{flex:1 1 150px; min-width:0; font-family:inherit; font-size:12.5px; line-height:1.35; padding:5px 8px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-style:normal; resize:none; overflow:hidden; box-sizing:border-box;}
   .imp-add-row{background:none; border:1px dashed var(--border); color:var(--text-muted); border-radius:8px; padding:6px 10px; cursor:pointer; font-size:12px; margin-top:6px; width:100%;}
   /* Costos "extra" (ej. desde "Cajas Madre"): verde bajito para distinguirlos
      de los costos normales de importación, pero suman igual al total. */
@@ -4152,6 +4159,13 @@ if ("serviceWorker" in navigator) {
   // Cada costo puede llevar una "nota" de referencia (ej. sobre qué valor CIF
   // se calculó ese rubro): el botón 📝 la despliega; si ya tiene texto queda
   // siempre visible, para que sirva de referencia futura sin tener que abrirla.
+  // Las notas de los costos son <textarea> que crecen según el texto (se ven completas
+  // también en pantallas angostas); se reajustan al escribir y al cambiar el tamaño de la ventana.
+  function autosizeNote(el){ el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
+  window.addEventListener('resize', function(){
+    Array.prototype.forEach.call(document.querySelectorAll('.imp-cost-note-input'), autosizeNote);
+  });
+
   function importCostRowHtml(impId, c, idx){
     var noteKey = impId + '_' + idx;
     var hasNote = !!(c.nota && c.nota.trim());
@@ -4166,7 +4180,7 @@ if ("serviceWorker" in navigator) {
       + '<button type="button" class="imp-cost-remove" data-cidx="'+idx+'" title="Quitar">✕</button>'
       + '</div>';
     if(noteOpen){
-      html += '<div class="imp-cost-note-row"><span class="imp-cost-note-tag" title="Nota de este rubro">↳ Nota</span><input type="text" class="imp-cost-note-input" data-cidx="'+idx+'" value="'+esc(c.nota||'')+'" placeholder="Nota de referencia (ej. sobre qué valor se calculó este rubro)" maxlength="200" onfocus="this.select()"></div>';
+      html += '<div class="imp-cost-note-row"><span class="imp-cost-note-tag" title="Nota de este rubro">↳ Nota</span><textarea class="imp-cost-note-input" rows="1" data-cidx="'+idx+'" placeholder="Nota de referencia (ej. sobre qué valor se calculó este rubro)" maxlength="200">'+esc(c.nota||'')+'</textarea></div>';
     }
     html += '</div>';
     return html;
@@ -4664,6 +4678,9 @@ if ("serviceWorker" in navigator) {
       });
     });
     document.querySelectorAll('.imp-cost-note-input').forEach(function(el){
+      autosizeNote(el);
+      el.addEventListener('input', function(){ autosizeNote(el); });
+      el.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); el.blur(); } });
       el.addEventListener('change', function(){
         var idx = parseInt(el.getAttribute('data-cidx'),10);
         var costs = (imp.localCosts||[]).slice();
