@@ -1454,8 +1454,10 @@ if ("serviceWorker" in navigator) {
   /* Nota de referencia de un costo (ej. "calculado sobre $X CIF"): fila angosta
      justo debajo de la fila del costo, para que quede ahí mismo a futuro. */
   .imp-cost-row-wrap{display:flex; flex-direction:column; gap:3px;}
-  .imp-cost-note-row{padding-left:24px;}
-  .imp-cost-note-row input{width:100%; font-size:11.5px; padding:5px 8px; border-radius:6px; border:1px dashed var(--border); background:var(--surface); color:var(--text-muted); font-style:italic;}
+  .imp-cost-note-row{display:flex; align-items:center; gap:8px; padding-left:24px;}
+  .imp-cost-row-wrap.has-note{border-left:4px solid var(--link); background:var(--sky-tint); border-radius:8px; padding:7px 8px 7px 8px; margin:2px 0;}
+  .imp-cost-note-tag{flex:none; font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--link); white-space:nowrap;}
+  .imp-cost-note-row input{flex:1 1 auto; min-width:0; width:100%; font-size:12.5px; padding:5px 8px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-style:normal;}
   .imp-add-row{background:none; border:1px dashed var(--border); color:var(--text-muted); border-radius:8px; padding:6px 10px; cursor:pointer; font-size:12px; margin-top:6px; width:100%;}
   /* Costos "extra" (ej. desde "Cajas Madre"): verde bajito para distinguirlos
      de los costos normales de importación, pero suman igual al total. */
@@ -4154,7 +4156,7 @@ if ("serviceWorker" in navigator) {
     var noteKey = impId + '_' + idx;
     var hasNote = !!(c.nota && c.nota.trim());
     var noteOpen = hasNote || !!state.openCostNotes[noteKey];
-    var html = '<div class="imp-cost-row-wrap">';
+    var html = '<div class="imp-cost-row-wrap' + (noteOpen ? ' has-note' : '') + '">';
     html += '<div class="imp-cost-row'+(c.extra?' extra':'')+'">'
       + '<input type="checkbox" class="imp-cost-check" data-cidx="'+idx+'" '+(c.pagado?'checked':'')+' title="Pagado">'
       + '<input type="text" class="imp-cost-name" data-cidx="'+idx+'" value="'+esc(c.concepto||'')+'" placeholder="Concepto" onfocus="this.select()">'
@@ -4164,7 +4166,7 @@ if ("serviceWorker" in navigator) {
       + '<button type="button" class="imp-cost-remove" data-cidx="'+idx+'" title="Quitar">✕</button>'
       + '</div>';
     if(noteOpen){
-      html += '<div class="imp-cost-note-row"><input type="text" class="imp-cost-note-input" data-cidx="'+idx+'" value="'+esc(c.nota||'')+'" placeholder="Nota de referencia (ej. sobre qué valor se calculó este rubro)" maxlength="200" onfocus="this.select()"></div>';
+      html += '<div class="imp-cost-note-row"><span class="imp-cost-note-tag" title="Nota de este rubro">↳ Nota</span><input type="text" class="imp-cost-note-input" data-cidx="'+idx+'" value="'+esc(c.nota||'')+'" placeholder="Nota de referencia (ej. sobre qué valor se calculó este rubro)" maxlength="200" onfocus="this.select()"></div>';
     }
     html += '</div>';
     return html;
