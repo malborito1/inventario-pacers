@@ -807,6 +807,7 @@ if ("serviceWorker" in navigator) {
   .cliente-name{font-weight:700; font-size:14px; color:var(--text);}
   .cliente-detail{font-size:12.5px; color:var(--text-muted); text-align:right;}
   .cliente-count{font-weight:500; color:var(--text-muted);}
+  .cliente-note{font-weight:400; font-size:13px; color:var(--text-muted);}
   .cliente-products{display:flex; flex-direction:column; gap:3px; padding-left:2px;}
   .cliente-subitem{font-size:12.5px; color:var(--text);}
 
@@ -2185,6 +2186,7 @@ if ("serviceWorker" in navigator) {
     historyCalendarMonth: null, // 'YYYY-MM' que muestra el mini-calendario del Historial; null = mes actual
     historyCalendarSelectedDate: null, // 'YYYY-MM-DD' si se filtró el Historial a un día puntual, si no null
     historyCalendarOpen: false, // false = solo se ve la barra pequeña; true = calendario expandido
+    clienteSearch: '', // texto del buscador de la pestaña Clientes
     historySearch: '', // texto del buscador del Historial (cliente, nota, producto, usuario)
     confirmFairUndoId: null,
     assignPaySaleId: null, // venta de feria a la que se le esta asignando metodo de pago desde el historial
@@ -3491,30 +3493,58 @@ if ("serviceWorker" in navigator) {
   // ---------------- Clientes ----------------
   function renderCliente(){
     var root = document.getElementById('categoriesRoot');
+    // Si el usuario está escribiendo en el buscador, se conserva el foco y el cursor tras redibujar.
+    var ae = document.activeElement;
+    var keepFocus = !!(ae && ae.id === 'clienteSearch');
+    var caret = keepFocus ? ae.selectionStart : null;
+    // Historial completo (no solo los 150 recientes) para que Clientes y su buscador vean todas las ventas.
+    var source = state.movements;
+    if(state.extMovements){ source = allMovements(); }
+    else if(!state.extMovementsFailed){ ensureExtendedMovements(function(){ if(state.activeTab === 'CLIENTE') render(); }); }
     // !m.reversed: si una venta se deshizo desde el Historial (p.ej. porque
     // se registró desde el producto equivocado y debía salir de Grace), el
     // movimiento original queda marcado como revertido y no debe seguir
     // apareciendo aquí como si esa cantidad se le hubiese vendido al cliente.
-    var entries = state.movements.filter(function(m){ return m.client && m.client.trim() && m.type === 'venta' && !m.reversed; });
+    var entries = source.filter(function(m){ return m.client && m.client.trim() && m.type === 'venta' && !m.reversed; });
+    var searchHtml = '<div class="hist-search-wrap"><input type="text" class="hist-search" id="clienteSearch" placeholder="Buscar cliente, nota (#17) o producto" autocomplete="off" value="' + esc(state.clienteSearch||'') + '">' +
+      '<button type="button" class="hist-search-clear" id="clienteSearchClear" title="Borrar búsqueda"' + (state.clienteSearch ? '' : ' hidden') + '>×</button></div>';
+    function finish(html){
+      root.innerHTML = html;
+      var si = document.getElementById('clienteSearch');
+      if(si){
+        si.addEventListener('input', function(){
+          state.clienteSearch = si.value;
+          renderCliente();
+        });
+        if(keepFocus){ si.focus(); try{ si.setSelectionRange(caret, caret); }catch(e){} }
+      }
+      var sc = document.getElementById('clienteSearchClear');
+      if(sc) sc.addEventListener('click', function(){
+        state.clienteSearch = '';
+        renderCliente();
+        var s2 = document.getElementById('clienteSearch'); if(s2) s2.focus();
+      });
+    }
     if(entries.length === 0){
       var emptyHtml = '<div class="category" data-cat="CLIENTE"><div class="category-head"><h2>Clientes</h2><span class="count">0 ventas con nombre registrado</span></div>';
       emptyHtml += '<p class="empty-hint">Aún no registras nombres de comprador en tus ventas. Usa el campo "Cliente" al registrar una venta.</p></div>';
-      root.innerHTML = emptyHtml;
+      finish(emptyHtml);
       return;
     }
-    // Agrupa los movimientos del mismo cliente hechos dentro de una ventana
-    // corta de tiempo -- una sola sesión de venta con varios productos,
-    // registrados uno por uno -- en una sola tarjeta, en vez de una fila
-    // por producto.
+    // Agrupa los movimientos del mismo cliente (y la misma nota, p.ej. "#17") hechos dentro
+    // de una ventana corta de tiempo -- una sola sesión de venta con varios productos,
+    // registrados uno por uno -- en una sola tarjeta, en vez de una fila por producto.
     var GROUP_WINDOW_MS = 10 * 60 * 1000;
     var byClient = {};
     entries.forEach(function(m){
-      var key = m.client.trim();
+      var key = m.client.trim() + '\u0001' + (m.note||'').trim();
       (byClient[key] = byClient[key] || []).push(m);
     });
     var groups = [];
-    Object.keys(byClient).forEach(function(client){
-      var list = byClient[client].slice().sort(function(a,b){ return new Date(b.at) - new Date(a.at); });
+    Object.keys(byClient).forEach(function(key){
+      var client = key.split('\u0001')[0];
+      var note = key.split('\u0001')[1] || '';
+      var list = byClient[key].slice().sort(function(a,b){ return new Date(b.at) - new Date(a.at); });
       var current = null;
       list.forEach(function(m){
         var t = new Date(m.at).getTime();
@@ -3522,28 +3552,40 @@ if ("serviceWorker" in navigator) {
           current.items.push(m);
           current.lastAt = Math.min(current.lastAt, t);
         } else {
-          current = { client: client, items: [m], lastAt: t };
+          current = { client: client, note: note, items: [m], lastAt: t };
           groups.push(current);
         }
       });
     });
     groups.sort(function(a,b){ return new Date(b.items[0].at) - new Date(a.items[0].at); });
-    var html = '<div class="category" data-cat="CLIENTE"><div class="category-head"><h2>Clientes</h2><span class="count">' + groups.length + ' ventas con nombre registrado</span></div>';
+    var totalGroups = groups.length;
+    var q = historyNorm((state.clienteSearch||'').trim());
+    if(q){
+      var terms = q.split(/\s+/).filter(Boolean);
+      groups = groups.filter(function(g){
+        var hay = historyNorm(g.client + ' ' + g.note + ' ' + g.items.map(function(m){ return m.productLabel||''; }).join(' '));
+        return terms.every(function(t){ return hay.indexOf(t) !== -1; });
+      });
+    }
+    var countTxt = q ? (groups.length + ' de ' + totalGroups + ' ventas') : (groups.length + ' ventas con nombre registrado');
+    var html = searchHtml + '<div class="category" data-cat="CLIENTE"><div class="category-head"><h2>Clientes</h2><span class="count">' + countTxt + '</span></div>';
     html += '<div class="cliente-list">';
+    if(!groups.length) html += '<p class="empty-hint">No se encontró nada con esa búsqueda.</p>';
     groups.forEach(function(g){
       var mostRecent = g.items[0];
       var dateHtml = fmtDateDMY(mostRecent.at) + ' (' + relTime(mostRecent.at) + ')';
+      var noteHtml = g.note ? (' <span class="cliente-note">' + esc(g.note) + '</span>') : '';
       if(g.items.length === 1){
         var m = g.items[0];
-        html += '<div class="cliente-item"><div class="cliente-item-head"><span class="cliente-name">' + esc(g.client) + '</span><span class="cliente-detail">' + esc(m.productLabel||'') + ' · ' + fmtInt(m.qty) + ' u · ' + dateHtml + '</span></div></div>';
+        html += '<div class="cliente-item"><div class="cliente-item-head"><span class="cliente-name">' + esc(g.client) + noteHtml + '</span><span class="cliente-detail">' + esc(m.productLabel||'') + ' · ' + fmtInt(m.qty) + ' u · ' + dateHtml + '</span></div></div>';
       } else {
         var totalQty = g.items.reduce(function(s,m2){ return s + (m2.qty||0); }, 0);
         var productsHtml = g.items.map(function(m2){ return '<div class="cliente-subitem">' + esc(m2.productLabel||'') + ' · ' + fmtInt(m2.qty) + ' u</div>'; }).join('');
-        html += '<div class="cliente-item"><div class="cliente-item-head"><span class="cliente-name">' + esc(g.client) + ' <span class="cliente-count">(' + g.items.length + ' productos · ' + fmtInt(totalQty) + ' u)</span></span><span class="cliente-detail">' + dateHtml + '</span></div><div class="cliente-products">' + productsHtml + '</div></div>';
+        html += '<div class="cliente-item"><div class="cliente-item-head"><span class="cliente-name">' + esc(g.client) + noteHtml + ' <span class="cliente-count">(' + g.items.length + ' productos · ' + fmtInt(totalQty) + ' u)</span></span><span class="cliente-detail">' + dateHtml + '</span></div><div class="cliente-products">' + productsHtml + '</div></div>';
       }
     });
     html += '</div></div>';
-    root.innerHTML = html;
+    finish(html);
   }
 
   // Salidas de stock que NO son venta (no suman dinero al Ranking ni a Reportes).
