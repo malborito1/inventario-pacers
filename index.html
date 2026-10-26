@@ -610,6 +610,9 @@ if ("serviceWorker" in navigator) {
   .mini-field label{display:block; font-size:11px; font-weight:600; color:var(--text-muted); margin-bottom:3px; text-transform:uppercase; letter-spacing:.04em;}
   .mini-field input{width:100%; max-width:260px; padding:7px 9px; border-radius:8px; border:1px solid var(--border); background:var(--surface); font-size:13px; color:var(--text);}
   .form-note{font-size:11px; color:var(--text-muted); margin:2px 0 0; flex:1 1 100%;}
+  .grace-cortesia{flex:1 1 100%; display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted); margin:2px 0 0; cursor:pointer;}
+  .grace-cortesia input{margin:0; width:14px; height:14px; accent-color:var(--grace-color); cursor:pointer;}
+  .grace-cortesia span b{color:var(--text); font-weight:600;}
   .tag-grace{
     font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
     padding:2px 7px; border-radius:999px; background:var(--grace-tint); color:var(--grace-color); margin-left:6px;
@@ -2959,6 +2962,7 @@ if ("serviceWorker" in navigator) {
           + '<div class="mini-field"><label>Cliente (opcional)</label><input type="text" id="gclientInput-' + g.id + '" list="clientNamesList" value="' + esc(activeClientValue()) + '" placeholder="Nombre del comprador" maxlength="60"></div>'
           + '<div class="mini-field"><label>Notas (opcional)</label><input type="text" id="gnoteInput-' + g.id + '" value="' + esc(activeNoteValue()) + '" placeholder="Ej. evento, pedido especial…" maxlength="120"></div>'
           + '</div>';
+        html += '<label class="grace-cortesia"><input type="checkbox" id="gcortesiaInput-' + g.id + '"><span><b>Cortesía</b> (regalo): descuenta stock pero no suma venta</span></label>';
       }
       html += '<button class="confirm-btn" data-gaction="confirm-move" data-gid="' + g.id + '" data-mode="' + openMode + '">' + (isVenta?'Registrar venta':'Registrar ingreso a Grace') + '</button>';
       html += '<button class="cancel-btn" data-gaction="cancel-move" data-gid="' + g.id + '">Cancelar</button>';
@@ -3082,10 +3086,12 @@ if ("serviceWorker" in navigator) {
       var client = clientInput ? clientInput.value.trim() : '';
       var noteInput = document.getElementById('gnoteInput-' + gid);
       var note = noteInput ? noteInput.value.trim() : '';
+      var cortesiaInput = document.getElementById('gcortesiaInput-' + gid);
+      var cortesia = !!(mode === 'venta' && cortesiaInput && cortesiaInput.checked);
       ensureUser(function(){
-        applyGraceMovement(g, mode, qty, client, note);
-        if(mode === 'venta' && client) noteClientUsed(client);
-        if(mode === 'venta' && note) noteNoteUsed(note);
+        applyGraceMovement(g, mode, qty, client, note, cortesia);
+        if(mode === 'venta' && client && !cortesia) noteClientUsed(client);
+        if(mode === 'venta' && note && !cortesia) noteNoteUsed(note);
         state.openGraceRow = null;
         render();
       });
@@ -3673,7 +3679,7 @@ if ("serviceWorker" in navigator) {
   }
 
   // Salidas de stock que NO son venta (no suman dinero al Ranking ni a Reportes).
-  var SALIDA_REASONS = {regalo:'Regalo', auspicio:'Auspicio', muestra:'Muestra', reposicion:'Reposición Supermaxi', otro:'Otro'};
+  var SALIDA_REASONS = {cortesia:'Cortesía', regalo:'Regalo', auspicio:'Auspicio', muestra:'Muestra', reposicion:'Reposición Supermaxi', otro:'Otro'};
 
   function historyItemHtml(m, confirmId){
     if(confirmId === undefined) confirmId = state.confirmUndoId;
@@ -4055,7 +4061,7 @@ if ("serviceWorker" in navigator) {
   // Igual que applyMovement: se envuelve en una transacción para que dos
   // ventas casi simultáneas del mismo ítem de Grace (o del producto vinculado)
   // no se pisen entre sí.
-  function applyGraceMovement(item, type, qty, client, note){
+  function applyGraceMovement(item, type, qty, client, note, cortesia){
     if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
     var nowIso = new Date().toISOString();
     var linked = item.linkedProductId ? findProduct(item.linkedProductId) : null;
@@ -4083,10 +4089,12 @@ if ("serviceWorker" in navigator) {
       });
     }).then(function(){
       var label = item.label + ' · ' + item.group + ' (Grace)';
-      return state.db.collection('movements').add({
+      // Cortesía: descuenta Grace y el inventario general igual que una venta, pero se guarda como
+      // "salida" (motivo cortesía) para que NO sume dinero al Ranking, Reportes ni Clientes.
+      return state.db.collection('movements').add(Object.assign({
         productId: linked ? linked.id : null,
         productLabel: label,
-        type: type,
+        type: cortesia ? 'salida' : type,
         qty: qty,
         deltaStock: productDelta,
         at: nowIso,
@@ -4096,11 +4104,11 @@ if ("serviceWorker" in navigator) {
         deltaGrace: actualGraceDelta,
         client: client || '',
         note: note || ''
-      });
+      }, cortesia ? {reason: 'cortesia'} : {}));
     }).then(function(){
       var moved = Math.abs(actualGraceDelta);
       var extraNote = (type === 'venta' && moved < qty) ? (' (se ajustó a ' + moved + ' u. porque no había más stock)') : '';
-      showStatus((type==='venta' ? 'Venta de Grace registrada: ' : 'Ingreso a Grace registrado: ') + moved + ' u. de ' + item.label + '.' + extraNote);
+      showStatus((type==='venta' ? (cortesia ? 'Cortesía de Grace registrada (sin venta): ' : 'Venta de Grace registrada: ') : 'Ingreso a Grace registrado: ') + moved + ' u. de ' + item.label + '.' + extraNote);
     }).catch(function(){
       showStatus('No se pudo registrar el movimiento de Grace.', true);
     });
