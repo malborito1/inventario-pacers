@@ -810,6 +810,51 @@ if ("serviceWorker" in navigator) {
   .cliente-note{font-weight:400; font-size:13px; color:var(--text-muted);}
   .cliente-products{display:flex; flex-direction:column; gap:3px; padding-left:2px;}
   .cliente-subitem{font-size:12.5px; color:var(--text);}
+  /* Corchetes por línea de producto dentro de cada venta (pestaña Clientes) */
+  :root{
+    --cli-card-bg:var(--success-tint); --cli-card-border:var(--success);
+    --cli-endurance:#B87451; --cli-endurance-text:#a8623f;
+    --cli-hcf:#EDC200; --cli-hcf-text:#9a7700;
+    --cli-recovery:#5C6E91; --cli-recovery-text:#4d5f82;
+    --cli-other:#7a8a82; --cli-other-text:#5b6b62;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --cli-card-bg:#172920; --cli-card-border:#2e7a53;
+      --cli-endurance:#d49270; --cli-endurance-text:#e0a687;
+      --cli-hcf:#F5CF3D; --cli-hcf-text:#F5CF3D;
+      --cli-recovery:#8fa3cc; --cli-recovery-text:#a9b9da;
+      --cli-other:#8fa39a; --cli-other-text:#a9b9b0;
+    }
+  }
+  :root[data-theme="dark"]{
+    --cli-card-bg:#172920; --cli-card-border:#2e7a53;
+    --cli-endurance:#d49270; --cli-endurance-text:#e0a687;
+    --cli-hcf:#F5CF3D; --cli-hcf-text:#F5CF3D;
+    --cli-recovery:#8fa3cc; --cli-recovery-text:#a9b9da;
+    --cli-other:#8fa39a; --cli-other-text:#a9b9b0;
+  }
+  .cliente-item{background:var(--cli-card-bg); border-color:var(--cli-card-border);}
+  /* Modo oscuro: verde de Clientes más suave (encabezado incluido) */
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]) .category[data-cat="CLIENTE"]{--cc:#58b88a; --ct:#172920;}
+  }
+  :root[data-theme="dark"] .category[data-cat="CLIENTE"]{--cc:#58b88a; --ct:#172920;}
+  .cli-groups{display:flex; flex-direction:column; gap:8px; margin-top:2px;}
+  .cli-br{--c:var(--cli-other); --ct:var(--cli-other-text); border:2px solid var(--c); border-right:none; border-radius:8px 0 0 8px; padding:6px 8px 7px 10px; position:relative;}
+  .cli-br::before,.cli-br::after{content:""; position:absolute; right:0; width:7px; border-top:2px solid var(--c);}
+  .cli-br::before{top:-2px;}
+  .cli-br::after{bottom:-2px; border-top:none; border-bottom:2px solid var(--c);}
+  .cli-br[data-cat="ENDURANCE"]{--c:var(--cli-endurance); --ct:var(--cli-endurance-text);}
+  .cli-br[data-cat="HCF"]{--c:var(--cli-hcf); --ct:var(--cli-hcf-text);}
+  .cli-br[data-cat="RECOVERY"]{--c:var(--cli-recovery); --ct:var(--cli-recovery-text);}
+  .cli-br-h{font-size:11.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--ct); margin-bottom:5px; display:flex; gap:8px; flex-wrap:wrap;}
+  .cli-br-h span{font-weight:500; color:var(--text-muted); text-transform:none; letter-spacing:0;}
+  .cli-pres{font-size:11.5px; color:var(--text-muted); margin:0 0 3px;}
+  .cli-chips{display:flex; flex-wrap:wrap; gap:5px;}
+  .cli-chips + .cli-pres{margin-top:6px;}
+  .cli-chip{background:var(--surface); border:1px solid var(--border); border-radius:999px; padding:2px 9px; font-size:12.5px; color:var(--text); white-space:nowrap;}
+  .cli-chip b{font-weight:700; margin-left:3px;}
 
   /* ---------- Ranking ---------- */
   .ranking-period-field{max-width:220px; margin-bottom:18px;}
@@ -3491,6 +3536,47 @@ if ("serviceWorker" in navigator) {
   }
 
   // ---------------- Clientes ----------------
+  var CLIENTE_CAT_ORDER = ['ENDURANCE','HCF','RECOVERY'];
+  var CLIENTE_CAT_NAMES = {ENDURANCE:'Endurance', HCF:'HCF', RECOVERY:'Recovery', OTROS:'Otros'};
+  // Resume los movimientos de una venta en corchetes por línea (Endurance/HCF/Recovery),
+  // con los sabores como pastillas "Sabor cantidad" y, si hay varios envases, subtítulo por presentación.
+  function clienteInfo(m){
+    var p = m.productId ? findProduct(m.productId) : null;
+    var parts = (m.productLabel||'').split(' · ');
+    return {
+      cat: (p && p.category) || 'OTROS',
+      pres: (p && p.presentation) || parts[0] || '',
+      flavor: (p && p.flavor) || parts.slice(1).join(' · ') || m.productLabel || ''
+    };
+  }
+  function clienteGroupsHtml(items){
+    var cats = {};
+    items.slice().reverse().forEach(function(m){
+      var inf = clienteInfo(m);
+      var c = cats[inf.cat] = cats[inf.cat] || {pres:{}, order:[]};
+      var pr = c.pres[inf.pres];
+      if(!pr){ pr = c.pres[inf.pres] = {fl:{}, forder:[]}; c.order.push(inf.pres); }
+      if(!(inf.flavor in pr.fl)){ pr.fl[inf.flavor] = 0; pr.forder.push(inf.flavor); }
+      pr.fl[inf.flavor] += (m.qty||0);
+    });
+    var keys = CLIENTE_CAT_ORDER.filter(function(k){ return cats[k]; }).concat(Object.keys(cats).filter(function(k){ return CLIENTE_CAT_ORDER.indexOf(k) < 0; }));
+    var html = '<div class="cli-groups">';
+    keys.forEach(function(k){
+      var c = cats[k], nFl = 0, nU = 0;
+      c.order.forEach(function(pn){ var pr = c.pres[pn]; nFl += pr.forder.length; pr.forder.forEach(function(f){ nU += pr.fl[f]; }); });
+      var one = c.order.length === 1;
+      var sub = (one && c.order[0] ? (esc(c.order[0]) + ' · ') : '') + nFl + (nFl === 1 ? ' sabor' : ' sabores') + ' · ' + fmtInt(nU) + ' u';
+      html += '<div class="cli-br" data-cat="' + esc(k) + '"><div class="cli-br-h">' + esc(CLIENTE_CAT_NAMES[k] || k) + ' <span>' + sub + '</span></div>';
+      c.order.forEach(function(pn){
+        var pr = c.pres[pn];
+        if(!one) html += '<div class="cli-pres">' + esc(pn) + '</div>';
+        html += '<div class="cli-chips">' + pr.forder.map(function(f){ return '<span class="cli-chip">' + esc(f) + '<b>' + fmtInt(pr.fl[f]) + '</b></span>'; }).join('') + '</div>';
+      });
+      html += '</div>';
+    });
+    return html + '</div>';
+  }
+
   function renderCliente(){
     var root = document.getElementById('categoriesRoot');
     // Si el usuario está escribiendo en el buscador, se conserva el foco y el cursor tras redibujar.
@@ -3535,6 +3621,8 @@ if ("serviceWorker" in navigator) {
     // de una ventana corta de tiempo -- una sola sesión de venta con varios productos,
     // registrados uno por uno -- en una sola tarjeta, en vez de una fila por producto.
     var GROUP_WINDOW_MS = 10 * 60 * 1000;
+    // Con nota (factura/pedido) la tarjeta reúne toda la factura aunque se haya registrado en varios momentos (hasta 3 días).
+    var NOTE_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
     var byClient = {};
     entries.forEach(function(m){
       var key = m.client.trim() + '\u0001' + (m.note||'').trim();
@@ -3548,7 +3636,7 @@ if ("serviceWorker" in navigator) {
       var current = null;
       list.forEach(function(m){
         var t = new Date(m.at).getTime();
-        if(current && (current.lastAt - t) <= GROUP_WINDOW_MS){
+        if(current && (current.lastAt - t) <= (note ? NOTE_WINDOW_MS : GROUP_WINDOW_MS)){
           current.items.push(m);
           current.lastAt = Math.min(current.lastAt, t);
         } else {
@@ -3563,7 +3651,7 @@ if ("serviceWorker" in navigator) {
     if(q){
       var terms = q.split(/\s+/).filter(Boolean);
       groups = groups.filter(function(g){
-        var hay = historyNorm(g.client + ' ' + g.note + ' ' + g.items.map(function(m){ return m.productLabel||''; }).join(' '));
+        var hay = historyNorm(g.client + ' ' + g.note + ' ' + g.items.map(function(m){ var i = clienteInfo(m); return (m.productLabel||'') + ' ' + i.cat + ' ' + i.pres; }).join(' '));
         return terms.every(function(t){ return hay.indexOf(t) !== -1; });
       });
     }
@@ -3580,8 +3668,7 @@ if ("serviceWorker" in navigator) {
         html += '<div class="cliente-item"><div class="cliente-item-head"><span class="cliente-name">' + esc(g.client) + noteHtml + '</span><span class="cliente-detail">' + esc(m.productLabel||'') + ' · ' + fmtInt(m.qty) + ' u · ' + dateHtml + '</span></div></div>';
       } else {
         var totalQty = g.items.reduce(function(s,m2){ return s + (m2.qty||0); }, 0);
-        var productsHtml = g.items.map(function(m2){ return '<div class="cliente-subitem">' + esc(m2.productLabel||'') + ' · ' + fmtInt(m2.qty) + ' u</div>'; }).join('');
-        html += '<div class="cliente-item"><div class="cliente-item-head"><span class="cliente-name">' + esc(g.client) + noteHtml + ' <span class="cliente-count">(' + g.items.length + ' productos · ' + fmtInt(totalQty) + ' u)</span></span><span class="cliente-detail">' + dateHtml + '</span></div><div class="cliente-products">' + productsHtml + '</div></div>';
+        html += '<div class="cliente-item"><div class="cliente-item-head"><span class="cliente-name">' + esc(g.client) + noteHtml + ' <span class="cliente-count">(' + g.items.length + ' productos · ' + fmtInt(totalQty) + ' u)</span></span><span class="cliente-detail">' + dateHtml + '</span></div>' + clienteGroupsHtml(g.items) + '</div>';
       }
     });
     html += '</div></div>';
