@@ -687,6 +687,11 @@ if ("serviceWorker" in navigator) {
     display:flex; align-items:center; justify-content:space-between; user-select:none;
   }
   .hist-cal-toggle:hover{color:var(--text);}
+  .hist-search-wrap{position:relative; margin:0 0 10px;}
+  .hist-search{width:100%; box-sizing:border-box; padding:10px 34px 10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--surface); color:var(--text); font-size:14px; font-family:inherit;}
+  .hist-search:focus{outline:none; border-color:var(--accent);}
+  .hist-search-clear{position:absolute; right:6px; top:50%; transform:translateY(-50%); border:none; background:none; color:var(--text-muted); font-size:18px; line-height:1; cursor:pointer; padding:4px 8px;}
+  .hist-search-info{font-size:12.5px; color:var(--text-muted); margin:0 0 10px;}
   .hist-cal-toggle .chev{font-size:10px;}
 
   /* ---------- Pagos pendientes ---------- */
@@ -2180,6 +2185,7 @@ if ("serviceWorker" in navigator) {
     historyCalendarMonth: null, // 'YYYY-MM' que muestra el mini-calendario del Historial; null = mes actual
     historyCalendarSelectedDate: null, // 'YYYY-MM-DD' si se filtró el Historial a un día puntual, si no null
     historyCalendarOpen: false, // false = solo se ve la barra pequeña; true = calendario expandido
+    historySearch: '', // texto del buscador del Historial (cliente, nota, producto, usuario)
     confirmFairUndoId: null,
     assignPaySaleId: null, // venta de feria a la que se le esta asignando metodo de pago desde el historial
     assignPay: null,
@@ -3668,23 +3674,82 @@ if ("serviceWorker" in navigator) {
     var badge = document.getElementById('historyCount');
     badge.textContent = state.movements.length;
     var body = document.getElementById('historyBody');
-    var selected = state.historyCalendarSelectedDate;
-    var list = selected
-      ? state.movements.filter(function(m){ return m.type === 'venta' && localDateKey(m.at) === selected; })
-      : state.movements;
-    var html = '<div class="hist-cal-toggle" id="histCalToggle">\uD83D\uDCC5 Calendario de ventas <span class="chev">' + (state.historyCalendarOpen ? '\u25B2' : '\u25BC') + '</span></div>';
+    // Con búsqueda activa se revisa el historial COMPLETO (no solo los 150 movimientos recientes).
+    var html = '<div class="hist-search-wrap"><input type="text" class="hist-search" id="histSearch" placeholder="Buscar cliente, nota (#17), producto o usuario" autocomplete="off" value="' + esc(state.historySearch||'') + '">' +
+      '<button type="button" class="hist-search-clear" id="histSearchClear" title="Borrar búsqueda"' + (state.historySearch ? '' : ' hidden') + '>×</button></div>';
+    html += '<div class="hist-cal-toggle" id="histCalToggle">📅 Calendario de ventas <span class="chev">' + (state.historyCalendarOpen ? '▲' : '▼') + '</span></div>';
     if(state.historyCalendarOpen){
       html += historyCalendarHtml();
     }
+    html += '<div id="histList">' + historyListHtml() + '</div>';
+    body.innerHTML = html;
+    attachHistoryCalendarEvents();
+    attachHistoryEvents();
+    var si = document.getElementById('histSearch');
+    if(si){
+      si.addEventListener('input', function(){
+        state.historySearch = si.value;
+        var cl = document.getElementById('histSearchClear');
+        if(cl) cl.hidden = !si.value;
+        renderHistoryList();
+      });
+    }
+    var sc = document.getElementById('histSearchClear');
+    if(sc) sc.addEventListener('click', function(){
+      state.historySearch = '';
+      renderHistory();
+      var s2 = document.getElementById('histSearch'); if(s2) s2.focus();
+    });
+  }
+
+  function historyNorm(s){
+    return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  }
+
+  // Lista de movimientos según día del calendario y texto de búsqueda.
+  function historyListHtml(){
+    var selected = state.historyCalendarSelectedDate;
+    var q = historyNorm((state.historySearch||'').trim());
+    var searching = q.length > 0;
+    var source = state.movements;
+    var loadingFull = false;
+    if(searching){
+      if(state.extMovements){ source = allMovements(); }
+      else if(!state.extMovementsFailed){ loadingFull = true; ensureExtendedMovements(function(){ renderHistoryList(); }); }
+    }
+    var list = source;
+    if(selected) list = list.filter(function(m){ return m.type === 'venta' && localDateKey(m.at) === selected; });
+    if(searching){
+      var terms = q.split(/\s+/).filter(Boolean);
+      list = list.filter(function(m){
+        var hay = historyNorm([m.client, m.note, m.productLabel, m.user, m.reason].join(' '));
+        return terms.every(function(t){ return hay.indexOf(t) !== -1; });
+      });
+    }
+    var html = '';
     if(selected){
       html += '<div class="hist-cal-filter-bar"><span>Ventas del ' + fmtDateOnly(selected) + ' (' + list.length + ')</span>' +
         '<button class="hist-cal-clear" type="button" data-history-cal-clear>Ver todo el historial</button></div>';
     }
+    if(searching){
+      html += '<p class="hist-search-info">' + (loadingFull ? 'Buscando en todo el historial...' : (list.length + (list.length === 1 ? ' resultado' : ' resultados') + ' en todo el historial')) + '</p>';
+    }
+    if(loadingFull) return html;
     html += list.length === 0
-      ? ('<p class="empty-hint">' + (selected ? 'No hubo ventas ese día.' : 'Aún no hay movimientos registrados.') + '</p>')
+      ? ('<p class="empty-hint">' + (searching ? 'No se encontró nada con esa búsqueda.' : (selected ? 'No hubo ventas ese día.' : 'Aún no hay movimientos registrados.')) + '</p>')
       : list.map(function(m){ return historyItemHtml(m, state.confirmUndoId); }).join('');
-    body.innerHTML = html;
-    attachHistoryCalendarEvents();
+    return html;
+  }
+
+  function renderHistoryList(){
+    var box = document.getElementById('histList');
+    if(!box){ renderHistory(); return; }
+    box.innerHTML = historyListHtml();
+    var clr = box.querySelector('[data-history-cal-clear]');
+    if(clr) clr.addEventListener('click', function(){
+      state.historyCalendarSelectedDate = null;
+      renderHistory();
+    });
     attachHistoryEvents();
   }
 
@@ -3700,7 +3765,7 @@ if ("serviceWorker" in navigator) {
   }
 
   function handleHistoryAction(action, mid){
-    var m = state.movements.filter(function(x){ return x.id===mid; })[0];
+    var m = state.movements.filter(function(x){ return x.id===mid; })[0] || (state.extMovements||[]).filter(function(x){ return x.id===mid; })[0];
     if(!m) return;
     if(action === 'ask-undo'){ state.confirmUndoId = mid; renderHistory(); return; }
     if(action === 'cancel-undo'){ state.confirmUndoId = null; renderHistory(); return; }
@@ -3735,11 +3800,85 @@ if ("serviceWorker" in navigator) {
           reversalOf: m.id
         });
       }).then(function(){
-        showStatus('Movimiento revertido.');
+        m.reversed = true; // también en la copia local (movimientos fuera de la ventana en vivo)
+        // Si era una venta a distribuidor con cuenta por cobrar, se corrige también su línea en Pagos.
+        return (m.type === 'venta') ? unwindInvoiceLine(m) : null;
+      }).then(function(msg){
+        showStatus(msg || 'Movimiento revertido.');
+        renderHistory();
       }).catch(function(){
         showStatus('No se pudo deshacer el movimiento. Intenta de nuevo.', true);
       });
     });
+  }
+
+  // Busca la línea de Pagos (pendingPayments) que nació de esta venta a distribuidor.
+  // Las ventas nuevas guardan paymentId; en las antiguas se busca por cliente + nota +
+  // producto (y unidades, y cercanía en el tiempo) y solo se actúa si hay una coincidencia clara.
+  function findLinkedInvoiceLine(m){
+    var pays = state.payments || [];
+    if(m.paymentId){
+      var byId = pays.filter(function(p){ return p.id === m.paymentId; })[0];
+      return byId || null;
+    }
+    if(!m.client || !m.productId) return null;
+    var displayName = m.client + (m.note ? (' ' + m.note) : '');
+    var mAt = new Date(m.at).getTime();
+    var best = null, bestScore = Infinity;
+    pays.forEach(function(p){
+      if(p.origin !== 'venta' || p.name !== displayName || p.productId !== m.productId || !p.dueDate) return;
+      var dt = Math.abs(new Date(p.createdAt).getTime() - mAt);
+      if(!(dt < 10*60*1000)) return;
+      var qtyMismatch = 0;
+      if(p.unitSinIva && p.baseSinIva != null){
+        qtyMismatch = (Math.round(p.baseSinIva / p.unitSinIva) === m.qty) ? 0 : 1;
+      }
+      var score = qtyMismatch * 1e9 + dt;
+      if(score < bestScore){ bestScore = score; best = p; }
+    });
+    return best;
+  }
+
+  // Al deshacer una venta: quita su línea de Pagos y reparte de nuevo los centavos de las
+  // demás líneas de esa factura para que sigan sumando exactamente el total de la factura.
+  // Devuelve el mensaje a mostrar (o null si la venta no tenía cuenta por cobrar).
+  function unwindInvoiceLine(m){
+    try{
+      var line = findLinkedInvoiceLine(m);
+      if(!line) return Promise.resolve(null);
+      if(line.status === 'paid'){
+        return Promise.resolve('Movimiento revertido. Ojo: su línea de ' + line.name + ' en Pagos ya estaba pagada, revísala a mano.');
+      }
+      var group = (state.payments || []).filter(function(p){ return p.name === line.name && (p.dueDate||'') === (line.dueDate||''); });
+      var hasSettle = group.some(function(p){ return p.origin === 'abono' || p.origin === 'retencion'; });
+      var rest = group.filter(function(p){ return p.origin === 'venta' && p.status !== 'paid' && p.id !== line.id; })
+        .sort(function(a,b){ return String(a.createdAt).localeCompare(String(b.createdAt)); });
+      var batch = state.db.batch();
+      batch.delete(state.db.doc('pendingPayments/' + line.id));
+      var adjusted = false;
+      if(rest.length && rest.every(function(p){ return p.baseSinIva != null; })){
+        var cum = 0, prevTotal = 0;
+        rest.forEach(function(p){
+          cum = cents2(cum + p.baseSinIva);
+          var tot = cents2(cum + cents2(cum * IVA_RATE));
+          var amt = cents2(tot - prevTotal);
+          prevTotal = tot;
+          if(Math.abs(amt - (p.amount||0)) > 0.004){
+            batch.update(state.db.doc('pendingPayments/' + p.id), {amount: amt});
+            adjusted = true;
+          }
+        });
+      }
+      return batch.commit().then(function(){
+        var msg = 'Venta deshecha y su línea de ' + line.name + ' (' + fmtMoney(line.amount) + ') se quitó de Pagos' + (adjusted ? '; se reajustaron los centavos de la factura.' : '.');
+        if(hasSettle) msg += ' Esa factura ya tenía abonos o retención: revisa que sigan cuadrando.';
+        return msg;
+      }).catch(function(){
+        return 'Movimiento revertido, pero NO se pudo quitar su línea de ' + line.name + ' en Pagos. Elimínala ahí a mano.';
+      });
+    }catch(e){
+      return Promise.resolve('Movimiento revertido. Revisa en Pagos si quedó alguna línea de esa venta.');
+    }
   }
 
   function undoGraceMovement(m){
@@ -5171,10 +5310,16 @@ if ("serviceWorker" in navigator) {
             invExtra = {revenue: distribLineTotals(p, qty, discountPct).total};
             if(discountPct > 0) invExtra.discountPct = discountPct;
           }
+          // La venta guarda el id de su línea en Pagos, para poder corregirla si luego se deshace.
+          var payRef = null;
+          if(mode === 'venta' && dueDate && state.db){
+            payRef = state.db.collection('pendingPayments').doc();
+            invExtra.paymentId = payRef.id;
+          }
           var moveDone = applyMovement(p, mode, qty, client, note, invExtra);
           if(mode === 'venta' && dueDate){
             moveDone.then(function(moved){
-              return registerDistributorInvoice(client, distribLineTotals(p, moved, discountPct), dueDate, p, discountPct, note);
+              return registerDistributorInvoice(client, distribLineTotals(p, moved, discountPct), dueDate, p, discountPct, note, payRef);
             }).catch(function(){
               showStatus('La venta se registró, pero no se pudo crear la cuenta por cobrar en Pagos. Agrégala ahí manualmente.', true);
             });
@@ -5217,7 +5362,7 @@ if ("serviceWorker" in navigator) {
     return {unit: unit, base: base, iva: iva, total: cents2(base + iva)};
   }
 
-  function registerDistributorInvoice(client, line, dueDate, product, discountPct, note){
+  function registerDistributorInvoice(client, line, dueDate, product, discountPct, note, payRef){
     if(!state.db) return Promise.reject(new Error('no-db'));
     var displayName = client + (note ? (' ' + note) : '');
     var col = state.db.collection('pendingPayments');
@@ -5242,7 +5387,7 @@ if ("serviceWorker" in navigator) {
         var invoiceTotal = cents2(sumBase + cents2(sumBase * IVA_RATE));
         amount = cents2(invoiceTotal - prevAmt);
       }
-      return col.add({
+      var payDoc = {
         name: displayName,
         amount: amount,
         unitSinIva: line.unit,
@@ -5254,7 +5399,8 @@ if ("serviceWorker" in navigator) {
         productId: product.id,
         productLabel: product.presentation + ' · ' + product.flavor,
         discountPct: discountPct || 0
-      }).then(function(){ return amount; });
+      };
+      return (payRef ? payRef.set(payDoc) : col.add(payDoc)).then(function(){ return amount; });
     }).then(function(amount){
       var descNote = (discountPct>0) ? (' (' + discountPct + '% desc.)') : '';
       showStatus('Cuenta por cobrar registrada en Pagos: ' + fmtMoney(amount) + ' de ' + displayName + descNote + '.');
