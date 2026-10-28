@@ -4854,7 +4854,8 @@ if ("serviceWorker" in navigator) {
     (state.imports || []).forEach(function(imp){
       var st = imp.status || 'creada', isPlan = (st === 'creada');
       if(!isPlan && !FC_TRANSIT[st]) return;
-      var arr = fcArrival(imp, today), any = false;
+      var arr = fcArrival(imp, today), any = false, ordD = null;
+      (imp.milestones || []).forEach(function(m){ if(fcNorm(m.label) === 'puse la orden') ordD = fcParseDate(m.date); });
       (imp.products || []).forEach(function(l){
         var pr = fcPres(l.presentacion); if(!pr) return;
         var c = importLineCalc(l); if(!(c.unidades > 0)) return;
@@ -4868,7 +4869,7 @@ if ("serviceWorker" in navigator) {
         it.known.push({date: arr, units: units, imp: imp.name, planned: isPlan});
         any = true;
       });
-      if(any) (isPlan ? planned : transit).push({name: imp.name, date: arr});
+      if(any) (isPlan ? planned : transit).push({name: imp.name, date: arr, order: (isPlan && ordD && ordD > today) ? ordD : null});
     });
     allMovements().forEach(function(m){
       if(m.reversed || (m.type !== 'venta' && m.type !== 'salida') || !m.at) return;
@@ -4943,10 +4944,22 @@ if ("serviceWorker" in navigator) {
       var nm0 = new Date(ideal.getFullYear(), ideal.getMonth() + 1, 5);
       for(var q = 0; q < 2; q++){ var dd = new Date(nm0.getFullYear(), nm0.getMonth() + q, 5); opts.push({d: dd, label: FC_MES[dd.getMonth()] + ' ' + dd.getFullYear()}); }
     }
+    var planOrd = null;
+    B.planned.forEach(function(t){ if(t.order && (!planOrd || t.order < planOrd)) planOrd = t.order; });
+    var planIdx = -1;
+    if(planOrd){
+      opts.forEach(function(op, oi){
+        if(op.d.getFullYear() === planOrd.getFullYear() && op.d.getMonth() === planOrd.getMonth() && planIdx < 0){
+          op.d = planOrd; planIdx = oi;
+          if(oi === 0) op.label = 'Tu importación: ' + fcFmtD(planOrd);
+        }
+      });
+    }
     var optIdx = 0;
     if(opts.length){
       optIdx = (S.opt != null && S.opt < opts.length) ? S.opt : (opts[1].d <= new Date(2027, 0, 5) ? 1 : 0);
-      if(S.opt == null && ideal < new Date(2027, 0, 1)){ for(var oi = 1; oi < opts.length; oi++){ if(opts[oi].d >= new Date(2027, 0, 1)){ optIdx = oi; break; } } }
+      if(S.opt == null && planIdx >= 0) optIdx = planIdx;
+      else if(S.opt == null && ideal < new Date(2027, 0, 1)){ for(var oi = 1; oi < opts.length; oi++){ if(opts[oi].d >= new Date(2027, 0, 1)){ optIdx = oi; break; } } }
     }
     var fixed = [];
     if(opts.length){ for(var k = 0; k < S.n; k++){ var fd = new Date(opts[optIdx].d.getFullYear(), opts[optIdx].d.getMonth() + Math.round(k * 12 / S.n), opts[optIdx].d.getDate()); fixed.push(fd); } }
