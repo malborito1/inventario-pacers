@@ -4803,7 +4803,6 @@ if ("serviceWorker" in navigator) {
   function fcFlavorKey(s){ var n = fcNorm(s); return (typeof IMPORT_PHOTO_ALIASES !== 'undefined' && IMPORT_PHOTO_ALIASES[n]) || n; }
   function fcKey(cat, pres, flavor){
     var f = fcFlavorKey(flavor);
-    if(fcNorm(cat) === 'recovery' && pres === 'Sachets' && f === 'vanilla') f = 'vanilla new formula';
     return fcNorm(cat) + '|' + pres + '|' + f;
   }
   function fcParseDate(s){ var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); return m ? new Date(+m[1], +m[2]-1, +m[3]) : null; }
@@ -4879,7 +4878,8 @@ if ("serviceWorker" in navigator) {
     });
     var list = order.map(function(k){ return map[k]; });
     list.forEach(function(it){ it.r = fcRateOf(it.hist, curM); });
-    list = list.filter(function(it){ return it.stock > 0 || it.known.length || it.r.s12 > 0; });
+    // La Vanilla antigua NO se junta con la New Formula: no tiene fila propia (sus ventas viejas solo cuentan para el ritmo de Recovery).
+    list = list.filter(function(it){ return it.key !== 'recovery|Sachets|vanilla' && (it.stock > 0 || it.known.length || it.r.s12 > 0); });
     // Recovery sachets: las ventas se reparten entre sus sabores activos
     var rec = list.filter(function(it){ return it.cat === 'recovery' && it.pres === 'Sachets'; });
     if(rec.length){
