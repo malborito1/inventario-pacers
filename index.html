@@ -1667,6 +1667,10 @@ if ("serviceWorker" in navigator) {
   .fc-months{height:20px; border-bottom:1px solid var(--border);}
   .fc-m{position:absolute; top:0; font-size:10.5px; color:var(--text-muted); font-weight:700; text-transform:uppercase; border-left:1px solid color-mix(in srgb,var(--border) 60%,transparent); padding-left:3px; height:20px; box-sizing:border-box; overflow:hidden;}
   .fc-m i{font-style:normal; margin-left:4px; color:var(--text);}
+  .fc-m.y0{background:color-mix(in srgb,var(--text-muted) 24%,transparent);}
+  .fc-m.y1{background:color-mix(in srgb,var(--imports-color) 26%,transparent);}
+  .fc-m.y2{background:color-mix(in srgb,var(--fc-sug) 28%,transparent);}
+  .fc-m.y3{background:color-mix(in srgb,var(--warning) 30%,transparent);}
   .fc-bodywrap{position:relative;}
   .fc-overlay{position:absolute; left:0; right:0; top:0; bottom:0; display:flex; pointer-events:none; z-index:1;}
   .fc-overlay .fc-track{height:100%;}
@@ -4840,6 +4844,8 @@ if ("serviceWorker" in navigator) {
       var pr = fcPres(p.presentation); if(!pr) return;
       var it = ensure(p.category, pr, p.flavor, p.unitsPerBox);
       it.stock += (parseFloat(p.stock) || 0);
+      var po = (p.order != null && !isNaN(parseFloat(p.order))) ? parseFloat(p.order) : 9000;
+      it.ord = (it.ord == null) ? po : Math.min(it.ord, po);
       if(fcNorm(p.flavor) === 'vanilla new formula') it.flavor = p.flavor;
       idKey[p.id] = it.key;
     });
@@ -4897,7 +4903,7 @@ if ("serviceWorker" in navigator) {
     });
     var products = list.map(function(it){
       var cat = FC_CAT[it.cat] || it.cat;
-      return {key: it.key, n: it.flavor, l: cat, pres: it.pres, upc: it.upc, stock: it.stock, known: it.known, rate: it.rate,
+      return {key: it.key, ord: (it.ord == null ? 9999 : it.ord), n: it.flavor, l: cat, pres: it.pres, upc: it.upc, stock: it.stock, known: it.known, rate: it.rate,
         est: !!it.est, limited: FC_LIMITED_RE.test(it.flavor), cushion: it.cat === 'recovery' ? 0 : null};
     });
     return {products: products, transit: transit, planned: planned};
@@ -4918,6 +4924,8 @@ if ("serviceWorker" in navigator) {
   }
   function fcFmtD(d){ return d.getDate() + ' ' + FC_MES[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2); }
   function fcFmtM(d){ return FC_MES[d.getMonth()] + ' ' + d.getFullYear(); }
+  var FC_CAT_RANK = {Endurance: 0, HCF: 1, Recovery: 2}, FC_PRES_RANK = {'30 servings': 0, 'Sachets': 1};
+  function fcInvCmp(a, b){ return (FC_CAT_RANK[a.l] - FC_CAT_RANK[b.l]) || (FC_PRES_RANK[a.pres] - FC_PRES_RANK[b.pres]) || (a.ord - b.ord); }
   function fcName(p){ return p.n + (p.pres === 'Sachets' ? '' : ' · funda 30'); }
   function fcMonthsText(m){ return m >= 24 ? 'más de 24 meses' : (m < 1 ? 'menos de 1 mes' : (Math.round(m) + (Math.round(m) === 1 ? ' mes' : ' meses'))); }
 
@@ -5013,15 +5021,14 @@ if ("serviceWorker" in navigator) {
     // ---- linea de tiempo
     var rowsNeed = r.items.filter(function(it){ return (it.runIdx >= 0 && it.runIdx < 640) || it.arr.length > it.p.known.length; });
     var rowsRest = r.items.filter(function(it){ return rowsNeed.indexOf(it) < 0; });
-    var ord = {Endurance: 0, HCF: 1, Recovery: 2};
-    rowsNeed.sort(function(a, b){
-      var ka = ord[a.p.l] * 10 + (a.p.pres === 'Sachets' ? 0 : 5), kb = ord[b.p.l] * 10 + (b.p.pres === 'Sachets' ? 0 : 5);
-      return ka - kb || ((a.runIdx < 0 ? 1e9 : a.runIdx) - (b.runIdx < 0 ? 1e9 : b.runIdx));
-    });
+    // mismo orden que el inventario: categoria, presentacion (30 servings antes que Sachets) y orden del catalogo
+    var ord = {Endurance: 0, HCF: 1, Recovery: 2}, presRank = {'30 servings': 0, 'Sachets': 1};
+    rowsNeed.sort(function(a, b){ return fcInvCmp(a.p, b.p); });
+    rowsRest.sort(function(a, b){ return fcInvCmp(a.p, b.p); });
     var months = '';
     for(var i = 0; i < MCOUNT; i++){
       var dm = new Date(chartStart.getFullYear(), chartStart.getMonth() + i, 1);
-      months += '<div class="fc-m' + (dm.getMonth() === 0 ? ' yr' : '') + '" style="left:' + pct(dm) + '%;width:' + (100 / MCOUNT) + '%">' + FC_MES[dm.getMonth()] + (dm.getMonth() === 0 || i === 0 ? '<i>' + String(dm.getFullYear()).slice(2) + '</i>' : '') + '</div>';
+      months += '<div class="fc-m y' + ((dm.getFullYear() - chartStart.getFullYear()) % 4) + (dm.getMonth() === 0 ? ' yr' : '') + '" style="left:' + pct(dm) + '%;width:' + (100 / MCOUNT) + '%">' + FC_MES[dm.getMonth()] + (dm.getMonth() === 0 || i === 0 ? '<i>' + String(dm.getFullYear()).slice(2) + '</i>' : '') + '</div>';
     }
     var bands = '';
     for(var yy = chartStart.getFullYear(); yy <= chartEnd.getFullYear(); yy++){
@@ -5107,7 +5114,7 @@ if ("serviceWorker" in navigator) {
 
     // ---- tarjetas de pedidos
     var cardsG = shown.map(function(g){
-      var gl = g.lines.slice().sort(function(a, b2){ return b2.boxes - a.boxes; }).map(function(l){
+      var gl = g.lines.slice().sort(function(a, b2){ return fcInvCmp(a.p, b2.p); }).map(function(l){
         return '<div class="fc-pl"><span>' + esc(fcName(l.p)) + ' <small>' + esc(l.p.l) + '</small></span><b>' + l.boxes + ' caja' + (l.boxes > 1 ? 's' : '') + '</b></div>';
       }).join('');
       var title = g.fixed ? '📌 ' + (fixedG.length > 1 ? 'Pedido ' + (fixedG.indexOf(g) + 1) : 'Tu pedido') : '💡 Pedido sugerido';
