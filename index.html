@@ -1688,6 +1688,7 @@ if ("serviceWorker" in navigator) {
   .fc-seg-out{background:repeating-linear-gradient(45deg,var(--critical) 0 3px,transparent 3px 6px); border:1px dashed var(--critical); box-sizing:border-box;}
   .fc-chip{position:absolute; top:50%; transform:translate(-50%,-50%); z-index:2; background:var(--imports-color); color:var(--on-solid); font-size:10.5px; font-weight:800; border-radius:999px; padding:0 6px; line-height:15px; box-shadow:0 0 0 2px var(--surface);}
   .fc-chip.sug{background:var(--fc-sug); color:var(--surface);}
+  .fc-chip.plan{background:var(--surface); color:var(--imports-color); box-shadow:0 0 0 2px var(--imports-color);}
   .fc-chip.sw{position:static; transform:none; display:inline-block; margin-right:5px;}
   .fc-pick{cursor:pointer;} .fc-pick:hover .fc-name{color:var(--imports-color);}
   .fc-pick.sel{background:color-mix(in srgb,var(--imports-color) 10%,transparent); border-radius:6px;} .fc-pick.sel .fc-name{font-weight:800; color:var(--imports-color);}
@@ -5019,7 +5020,7 @@ if ("serviceWorker" in navigator) {
     ctl += seg('Colchón', 'cushion', cushionTxt) + '</div>';
 
     // ---- linea de tiempo
-    var rowsNeed = r.items.filter(function(it){ return (it.runIdx >= 0 && it.runIdx < 640) || it.arr.length > it.p.known.length; });
+    var rowsNeed = r.items.filter(function(it){ return (it.runIdx >= 0 && it.runIdx < 640) || it.arr.length > it.p.known.length || it.p.est || it.p.known.some(function(a){ return a.planned; }); });
     var rowsRest = r.items.filter(function(it){ return rowsNeed.indexOf(it) < 0; });
     // mismo orden que el inventario: categoria, presentacion (30 servings antes que Sachets) y orden del catalogo
     var ord = {Endurance: 0, HCF: 1, Recovery: 2}, presRank = {'30 servings': 0, 'Sachets': 1};
@@ -5085,6 +5086,9 @@ if ("serviceWorker" in navigator) {
         var l = g.lines.filter(function(x){ return x.k === it.k; })[0];
         if(l && g.date < chartEnd) chips += '<div class="fc-chip' + (g.fixed ? '' : ' sug') + '" style="left:' + pct(g.date) + '%" title="Pedir ' + l.boxes + ' cajas">+' + l.boxes + '</div>';
       });
+      it.p.known.forEach(function(a){
+        if(a.planned && a.date < chartEnd) chips += '<div class="fc-chip plan" style="left:' + pct(a.date) + '%" title="' + esc(a.imp) + ': llegan ' + Math.round(a.units / it.p.upc) + ' cajas">+' + Math.round(a.units / it.p.upc) + '</div>';
+      });
       var ro = it.runout ? 'se acaba ' + fcFmtD(it.runout) : 'dura más de 5 años';
       body += '<div class="fc-row fc-pick' + (S.sel === it.p.key ? ' sel' : '') + '" data-key="' + esc(it.p.key) + '" title="' + esc(ro) + '"><div class="fc-name' + (it.p.est ? ' est' : '') + '">' + esc(fcName(it.p)) + (it.p.est ? ' ~' : '') + '</div><div class="fc-track">' + segs + chips + '</div></div>';
     });
@@ -5094,7 +5098,7 @@ if ("serviceWorker" in navigator) {
     var timeline = '<div class="fc-tl"><div class="fc-row fc-top" style="height:' + headH + 'px"><div class="fc-name"></div><div class="fc-track fc-heads" style="height:' + headH + 'px">' + headsHtml + '</div></div>'
       + '<div class="fc-row fc-months"><div class="fc-name"></div><div class="fc-track">' + months + '</div></div>'
       + '<div class="fc-bodywrap"><div class="fc-overlay"><div class="fc-name"></div><div class="fc-track">' + bands + lines + beyond + '</div></div>' + body + '</div></div>';
-    var legend = '<div class="fc-legend"><span><i class="fc-seg-grn"></i>Stock de sobra</span><span><i class="fc-seg-amb"></i>Alcanza 2 a 5 meses</span><span><i class="fc-seg-red"></i>Menos de 2 meses</span><span><i class="fc-seg-out"></i>Sin stock</span><span><i class="fc-peak sw"></i>Tus picos (abril y julio)</span><span><b class="fc-chip sw">+3</b>Tu pedido</span><span><b class="fc-chip sug sw">+3</b>Pedido sugerido</span></div>';
+    var legend = '<div class="fc-legend"><span><i class="fc-seg-grn"></i>Stock de sobra</span><span><i class="fc-seg-amb"></i>Alcanza 2 a 5 meses</span><span><i class="fc-seg-red"></i>Menos de 2 meses</span><span><i class="fc-seg-out"></i>Sin stock</span><span><i class="fc-peak sw"></i>Tus picos (abril y julio)</span><span><b class="fc-chip sw">+3</b>Tu pedido</span><span><b class="fc-chip sug sw">+3</b>Pedido sugerido</span><span><b class="fc-chip plan sw">+3</b>Planeado en Importaciones</span></div>';
     var rest = rowsRest.length ? '<p class="fc-rest"><b>' + rowsRest.length + (rowsRest.length === 1 ? ' producto con más de 20 meses de stock</b> (no necesita pedido por ahora): ' : ' productos con más de 20 meses de stock</b> (no necesitan pedido por ahora): ') + rowsRest.map(function(it){ return esc(fcName(it.p)); }).join(', ') + '.</p>' : '';
     var howto = '<p class="fc-how">Cada barra es un producto, de izquierda a derecha en el tiempo. <b>Verde</b>: stock de sobra. <b>Amarillo</b>: se está acabando. <b>Rojo</b>: casi sin stock. El círculo es lo que hay que pedir (<b>morado</b> tu pedido, <b>verde azulado</b> sugerido). <b>Toca un producto</b> para ver el detalle.</p>';
 
