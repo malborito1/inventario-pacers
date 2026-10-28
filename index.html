@@ -1675,6 +1675,7 @@ if ("serviceWorker" in navigator) {
   .fc-overlay{position:absolute; left:0; right:0; top:0; bottom:0; display:flex; pointer-events:none; z-index:1;}
   .fc-overlay .fc-track{height:100%;}
   .fc-peak{position:absolute; top:0; bottom:0; background:color-mix(in srgb,var(--warning) 18%,transparent);}
+  .fc-pk{position:absolute; left:0; right:0; top:0; bottom:0; overflow:hidden; display:flex; align-items:center; justify-content:center; writing-mode:vertical-rl; transform:rotate(180deg); white-space:pre; font-size:11px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--warning); filter:brightness(.8); opacity:.5; pointer-events:none; user-select:none;}
   .fc-peak.sw{position:static; display:inline-block; width:16px; height:10px; border-radius:3px; margin-right:5px;}
   .fc-vline{position:absolute; top:0; bottom:0; border-left:2px dashed var(--imports-color);}
   .fc-vline.sug{border-left-color:var(--fc-sug);}
@@ -5043,9 +5044,9 @@ if ("serviceWorker" in navigator) {
     }
     var bands = '';
     for(var yy = chartStart.getFullYear(); yy <= chartEnd.getFullYear(); yy++){
-      [[3, 10, 25], [6, 20, 31]].forEach(function(b){
+      [[3, 10, 25, 'Petzel'], [6, 20, 31, 'UTMB']].forEach(function(b){
         var a = new Date(yy, b[0], b[1]), z = new Date(yy, b[0], b[2]);
-        if(z > chartStart && a < chartEnd) bands += '<div class="fc-peak" style="left:' + pct(a) + '%;width:' + (pct(z) - pct(a)) + '%"></div>';
+        if(z > chartStart && a < chartEnd) bands += '<div class="fc-peak" style="left:' + pct(a) + '%;width:' + (pct(z) - pct(a)) + '%"><span class="fc-pk">' + new Array(41).join(b[3] + '   ·   ') + '</span></div>';
       });
     }
     var lines = '', headsList = [];
