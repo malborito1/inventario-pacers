@@ -1591,6 +1591,46 @@ if ("serviceWorker" in navigator) {
   .imp-input-cajas, .imp-input-ventau{width:58px !important; text-align:center;}
   .imp-input-precio{width:82px !important; text-align:center;}
   #impClienteInput{color:#3b82f6; font-weight:800; font-size:15px;}
+
+  /* ---------------- Vencimientos por lote (modo Importaciones) ---------------- */
+  .imp-sabor-cell{display:flex; align-items:center; justify-content:space-between; gap:6px; min-width:0;}
+  .imp-sabor-cell .nm{min-width:0; white-space:nowrap;}
+  .imp-exp{flex:0 0 auto; border:1px solid transparent; background:transparent; color:var(--text-muted); font-size:10.5px; line-height:14px; padding:0 6px; border-radius:999px; cursor:pointer; font-family:inherit; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap;}
+  .imp-exp.empty{opacity:.5; padding:0 3px;}
+  .imp-exp:hover{border-color:var(--imports-color); color:var(--imports-color); opacity:1;}
+  .imp-exp.set{border-color:var(--border); background:var(--surface);}
+  .imp-exp.soon{border-color:var(--warning); background:var(--warning-tint); color:var(--warning);}
+  .imp-exp.crit{border-color:var(--critical); background:var(--critical-tint); color:var(--critical);}
+  .exp-pop{position:fixed; z-index:1000; width:244px; background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 26px rgba(0,0,0,.22); padding:10px; color:var(--text);}
+  .exp-pop .cap{font-size:10.5px; color:var(--text-muted); margin:0 0 6px; font-weight:600;}
+  .exp-pop .yrs{display:flex; gap:4px; margin-bottom:8px;}
+  .exp-pop .yrs button, .exp-pop .mons button{border:1px solid var(--border); background:var(--surface-2); color:var(--text); border-radius:8px; font-size:12px; font-weight:700; padding:6px 0; cursor:pointer; font-family:inherit;}
+  .exp-pop .yrs button{flex:1; padding:6px 0;}
+  .exp-pop .yrs button.on{background:var(--imports-color); color:var(--on-solid); border-color:var(--imports-color);}
+  .exp-pop .mons{display:grid; grid-template-columns:repeat(4,1fr); gap:4px;}
+  .exp-pop .mons button:hover{border-color:var(--imports-color); color:var(--imports-color);}
+  .exp-pop .mons button.cur{border-color:var(--imports-color); box-shadow:inset 0 0 0 1px var(--imports-color);}
+  .exp-pop .clr{margin-top:8px; font-size:11px; color:var(--text-muted); background:none; border:none; cursor:pointer; padding:0; text-decoration:underline; font-family:inherit;}
+  .exp-backdrop{position:fixed; inset:0; z-index:999; background:rgba(0,0,0,.35); display:flex; align-items:center; justify-content:center; padding:16px;}
+  .exp-quick{width:340px; max-width:100%; background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:0 10px 30px rgba(0,0,0,.3); padding:14px; color:var(--text);}
+  .exp-quick .top{display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-muted); font-weight:700; text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px; gap:8px;}
+  .exp-quick .bar{height:5px; background:var(--surface-2); border-radius:99px; overflow:hidden; margin-bottom:12px;}
+  .exp-quick .bar i{display:block; height:100%; background:var(--imports-color);}
+  .exp-quick .prod{display:flex; align-items:center; gap:10px; margin-bottom:10px;}
+  .exp-quick .prod .ph{width:44px; height:44px; border-radius:8px; background:var(--surface-2); border:1px solid var(--border); object-fit:cover; flex:0 0 auto;}
+  .exp-quick .prod b{font-size:16px;} .exp-quick .prod small{display:block; color:var(--text-muted); font-size:12px;}
+  .exp-quick .acts{display:flex; justify-content:space-between; gap:8px; margin-top:12px;}
+  .exp-quick .acts button{border:1px solid var(--border); background:var(--surface-2); color:var(--text); border-radius:8px; padding:6px 12px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit;}
+  .exp-quick .exp-pop{position:static; width:auto; box-shadow:none; border:none; padding:0; background:transparent;}
+  .exp-quick .done{text-align:center; padding:18px 0 8px; font-weight:700;}
+  .exp-launch{border:1px solid var(--imports-color); background:var(--imports-tint); color:var(--imports-color); font-weight:800; font-size:12px; border-radius:9px; padding:7px 12px; cursor:pointer; font-family:inherit;}
+  .exp-soon-pill{font-size:12px; font-weight:800; padding:6px 12px; border-radius:9px; border:1px solid var(--warning); background:var(--warning-tint); color:var(--warning); cursor:pointer; font-family:inherit;}
+  .exp-list{width:420px; max-width:100%; background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:0 10px 30px rgba(0,0,0,.3); padding:14px; color:var(--text); max-height:80vh; overflow:auto;}
+  .exp-list h4{margin:0 0 8px; font-size:13px;}
+  .exp-list .r{display:flex; justify-content:space-between; gap:10px; padding:5px 0; border-bottom:1px solid var(--border); font-size:12.5px;}
+  .exp-list .r:last-child{border-bottom:none;}
+  .exp-list .r span:last-child{white-space:nowrap; font-weight:700;}
+  .exp-list .r span.crit{color:var(--critical);} .exp-list .r span.soon{color:var(--warning);}
 </style>
 
 <div class="pin-gate" id="pinGate">
@@ -4297,7 +4337,7 @@ if ("serviceWorker" in navigator) {
             ? ('<span style="color:'+genStockColor+'; font-weight:700;">' + (genStatus==='critical' ? '⚠ ' : '') + fmtInt(genProduct.stock||0) + '</span>')
             : '<span style="color:var(--text-muted);">—</span>';
           html += '<tr data-idx="'+idx+'" style="background:'+shadeBg+';">';
-          html += '<td>'+photoHtml+esc(line.sabor)+'</td>';
+          html += '<td>'+ (hasCajas ? ('<div class="imp-sabor-cell"><span class="nm">'+photoHtml+esc(line.sabor)+'</span>'+expChipHtml(line, idx)+'</div>') : (photoHtml+esc(line.sabor))) +'</td>';
           html += '<td class="imp-num">'+ genStockHtml +'</td>';
           html += '<td><input type="number" min="0" step="1" class="imp-input-cajas" data-idx="'+idx+'" value="'+(line.cajas||'')+'" onfocus="this.select()"></td>';
           html += '<td class="imp-num">'+ (hasCajas? fmtInt(c.unidades) : '') +'</td>';
@@ -4570,6 +4610,9 @@ if ("serviceWorker" in navigator) {
         + '</select>';
       html += '<input type="text" class="imp-select" id="impClienteInput" placeholder="Cliente / destino (opcional)" value="'+esc(imp.cliente||'')+'" style="width:200px;">';
       html += '<button class="btn-history" id="impAddLineBtn" type="button">+ Agregar línea</button>';
+      html += '<button class="exp-launch exp-keep" id="impExpQuickBtn" type="button">📅 Poner vencimientos</button>';
+      var __expN = expiryAlerts().length;
+      if(__expN > 0){ html += '<button class="exp-soon-pill exp-keep" id="impExpSoonBtn" type="button">⏳ ' + __expN + ' por vencer</button>'; }
       html += '<button class="btn-history btn-danger" id="impDeleteBtn" type="button">Eliminar</button>';
     }
     html += '</div>';
@@ -4670,6 +4713,7 @@ if ("serviceWorker" in navigator) {
     Array.prototype.forEach.call(root.querySelectorAll('input, select, textarea, button'), function(el){
       if(el.id && IMP_LOCK_KEEP_IDS.indexOf(el.id) !== -1) return;
       if(el.classList.contains('imp-cost-note-btn')) return;
+      if(el.classList.contains('imp-exp') || el.classList.contains('exp-keep')) return;
       var tag = el.tagName.toLowerCase();
       var type = (el.getAttribute('type') || '').toLowerCase();
       el.classList.add('imp-lock-el');
@@ -4683,6 +4727,10 @@ if ("serviceWorker" in navigator) {
   }
 
   function attachImportToolbarEvents(){
+    var expQuickBtn = document.getElementById('impExpQuickBtn');
+    if(expQuickBtn) expQuickBtn.addEventListener('click', function(){ expOpenQuick(); });
+    var expSoonBtn = document.getElementById('impExpSoonBtn');
+    if(expSoonBtn) expSoonBtn.addEventListener('click', function(){ expShowList(); });
     var unlockBtn = document.getElementById('impUnlockBtn');
     if(unlockBtn) unlockBtn.addEventListener('click', function(){ var i = currentImport(); if(!i) return; state.confirmUnlockImportId = i.id; render(); });
     var unlockCancel = document.getElementById('impUnlockCancelBtn');
@@ -4798,8 +4846,268 @@ if ("serviceWorker" in navigator) {
     });
   }
 
+
+  // ================= Vencimientos por lote =================
+  // Cada linea de una importacion puede tener su vencimiento (mes y año) en line.venc = 'YYYY-MM'.
+  // Se edita incluso en importaciones cerradas (es un dato de control, no cambia costos).
+  var EXP_MONTHS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  var EXP_MONTHS_CAP = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  function expParse(v){
+    var m = /^(\d{4})-(\d{2})$/.exec(String(v||''));
+    if(!m) return null;
+    return {y:parseInt(m[1],10), m:parseInt(m[2],10)};
+  }
+  function expLabel(v){
+    var d = expParse(v); if(!d) return '';
+    return EXP_MONTHS[d.m-1] + ' ' + String(d.y).slice(-2);
+  }
+  function expMonthsLeft(v){
+    var d = expParse(v); if(!d) return null;
+    var now = new Date();
+    return (d.y*12 + d.m) - (now.getFullYear()*12 + now.getMonth()+1);
+  }
+  function expStatus(v){
+    var ml = expMonthsLeft(v);
+    if(ml === null) return 'empty';
+    if(ml <= 1) return 'crit';
+    if(ml < 6) return 'soon';
+    return 'set';
+  }
+  function expChipHtml(line, idx){
+    var st = expStatus(line.venc);
+    if(st === 'empty') return '<button type="button" class="imp-exp empty" data-idx="'+idx+'" title="Poner vencimiento">📅</button>';
+    var txt = expLabel(line.venc);
+    return '<button type="button" class="imp-exp '+st+'" data-idx="'+idx+'" title="Vence '+EXP_MONTHS_CAP[expParse(line.venc).m-1]+' '+expParse(line.venc).y+'">'+(st==='soon'||st==='crit' ? '⏳ ' : '')+txt+'</button>';
+  }
+  function expImportOrderKey(imp){
+    var ms = imp.milestones || [];
+    for(var i = ms.length-1; i >= 0; i--){ if(ms[i] && ms[i].date) return String(ms[i].date); }
+    return String(imp.createdAt || '');
+  }
+  // Productos del inventario general cuyo lote (el que aún tiene unidades, vendiendo primero lo más viejo)
+  // vence en menos de 6 meses.
+  function expiryAlerts(){
+    var imps = (state.imports || []).slice().sort(function(a,b){ var ka = expImportOrderKey(a), kb = expImportOrderKey(b); return ka<kb ? -1 : (ka>kb ? 1 : 0); });
+    var norm = function(x){ return (x||'').toString().trim().toLowerCase(); };
+    var groups = {}, order = [];
+    imps.forEach(function(imp){
+      (imp.products || []).forEach(function(l){
+        var c = importLineCalc(l);
+        if(!(c.unidades > 0)) return;
+        if((parseFloat(l.precioVenta)||0) > 0) return;   // las líneas con precio son de Supermaxi (otro inventario)
+        var key = norm(l.linea)+'|'+norm(l.presentacion)+'|'+norm(l.sabor);
+        if(!groups[key]){ groups[key] = {linea:l.linea, presentacion:l.presentacion, sabor:l.sabor, lots:[]}; order.push(key); }
+        groups[key].lots.push({units:c.unidades, venc:l.venc||'', imp:imp.name});
+      });
+    });
+    var out = [];
+    order.forEach(function(key){
+      var g = groups[key];
+      var gp = importFindGeneralProduct(g.linea, g.sabor, g.presentacion);
+      if(!gp) return;
+      var remaining = parseFloat(gp.stock)||0;
+      for(var i = g.lots.length-1; i >= 0 && remaining > 0; i--){
+        var take = Math.min(remaining, g.lots[i].units);
+        remaining -= take;
+        var ml = expMonthsLeft(g.lots[i].venc);
+        if(ml !== null && ml < 6){
+          out.push({linea:g.linea, presentacion:g.presentacion, sabor:g.sabor, units:take, venc:g.lots[i].venc, monthsLeft:ml, imp:g.lots[i].imp});
+        }
+      }
+    });
+    out.sort(function(a,b){ return a.monthsLeft - b.monthsLeft; });
+    return out;
+  }
+
+  function expSaveLine(impId, idx, venc){
+    var imp = state.imports.filter(function(i){ return i.id === impId; })[0];
+    if(!imp || !state.db) return;
+    var products = (imp.products || []).slice();
+    var line = Object.assign({}, products[idx]);
+    if(venc) line.venc = venc; else delete line.venc;
+    products[idx] = line;
+    imp.products = products;     // se ve al instante; Firestore confirma enseguida
+    state.db.collection('imports').doc(impId).update({products: products}).catch(function(){
+      showStatus('No se pudo guardar el vencimiento. Intenta de nuevo.', true);
+    });
+  }
+
+  var __expYear = null;
+  function expLastYear(){
+    if(__expYear) return __expYear;
+    var y = null;
+    try{ y = parseInt(localStorage.getItem('expLastYear'),10); }catch(e){}
+    var cur = new Date().getFullYear();
+    return (y && y >= cur && y <= cur+4) ? y : cur+2;
+  }
+  function expRememberYear(y){ __expYear = y; try{ localStorage.setItem('expLastYear', String(y)); }catch(e){} }
+
+  function expPickerHtml(selYear, curVenc){
+    var cur = new Date().getFullYear();
+    var d = expParse(curVenc);
+    var h = '<div class="yrs">';
+    for(var y = cur; y <= cur+4; y++){ h += '<button type="button" data-expy="'+y+'" class="'+(y===selYear?'on':'')+'">'+y+'</button>'; }
+    h += '</div><div class="mons">';
+    for(var m = 1; m <= 12; m++){ h += '<button type="button" data-expm="'+m+'" class="'+(d && d.y===selYear && d.m===m ? 'cur' : '')+'">'+EXP_MONTHS_CAP[m-1]+'</button>'; }
+    return h + '</div>';
+  }
+
+  function expClosePop(){
+    var el = document.getElementById('expPop'); if(el) el.remove();
+    state.expPop = null;
+  }
+  function expOpenPop(btn, idx){
+    var imp = currentImport(); if(!imp) return;
+    if(state.expPop && state.expPop.idx === idx){ expClosePop(); return; }
+    expClosePop();
+    var line = (imp.products||[])[idx]; if(!line) return;
+    var d = expParse(line.venc);
+    state.expPop = {impId: imp.id, idx: idx, year: d ? d.y : expLastYear()};
+    var pop = document.createElement('div');
+    pop.className = 'exp-pop'; pop.id = 'expPop';
+    document.body.appendChild(pop);
+    expRenderPop(line);
+    var r = btn.getBoundingClientRect();
+    var w = pop.offsetWidth, h = pop.offsetHeight;
+    var left = Math.max(8, Math.min(r.left - 6, window.innerWidth - w - 8));
+    var top = r.bottom + 6;
+    if(top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+    pop.style.left = left + 'px'; pop.style.top = top + 'px';
+  }
+  function expRenderPop(line){
+    var pop = document.getElementById('expPop'); if(!pop || !state.expPop) return;
+    pop.innerHTML = '<p class="cap">' + esc(line.sabor) + ' · ' + esc(line.presentacion) + '</p>'
+      + expPickerHtml(state.expPop.year, line.venc)
+      + (line.venc ? '<button type="button" class="clr" data-expclear="1">Quitar vencimiento</button>' : '');
+  }
+
+  // Carga rápida: un producto a la vez; al tocar el mes pasa al siguiente.
+  function expQuickOrder(imp){
+    var products = imp.products || [];
+    var byLine = {}, lineOrder = [];
+    products.forEach(function(line, idx){
+      if(!(importLineCalc(line).cajas > 0)) return;
+      if(lineOrder.indexOf(line.linea) === -1) lineOrder.push(line.linea);
+      byLine[line.linea] = byLine[line.linea] || {};
+      byLine[line.linea][line.presentacion] = byLine[line.linea][line.presentacion] || [];
+      byLine[line.linea][line.presentacion].push(idx);
+    });
+    var order = [];
+    lineOrder.forEach(function(l){ Object.keys(byLine[l]).forEach(function(pk){ byLine[l][pk].forEach(function(i){ order.push(i); }); }); });
+    return order;
+  }
+  function expCloseQuick(){
+    var el = document.getElementById('expQuickWrap'); if(el) el.remove();
+    state.expQuick = null;
+    render();
+  }
+  function expOpenQuick(){
+    var imp = currentImport(); if(!imp) return;
+    expClosePop();
+    var order = expQuickOrder(imp);
+    if(!order.length){ showStatus('Esta importación no tiene productos con cajas.', true); return; }
+    var pos = 0;
+    for(var i = 0; i < order.length; i++){ if(!imp.products[order[i]].venc){ pos = i; break; } }
+    state.expQuick = {impId: imp.id, order: order, pos: pos, year: expLastYear()};
+    var wrap = document.getElementById('expQuickWrap');
+    if(!wrap){
+      wrap = document.createElement('div'); wrap.className = 'exp-backdrop'; wrap.id = 'expQuickWrap';
+      document.body.appendChild(wrap);
+    }
+    expRenderQuick();
+  }
+  function expRenderQuick(){
+    var q = state.expQuick, wrap = document.getElementById('expQuickWrap'); if(!q || !wrap) return;
+    var imp = state.imports.filter(function(i){ return i.id === q.impId; })[0]; if(!imp){ expCloseQuick(); return; }
+    var n = q.order.length;
+    if(q.pos >= n){
+      wrap.innerHTML = '<div class="exp-quick"><div class="done">✅ Listo, revisaste los ' + n + ' productos.</div><div class="acts" style="justify-content:center;"><button type="button" data-expq="close">Cerrar</button></div></div>';
+      return;
+    }
+    var line = imp.products[q.order[q.pos]];
+    var photo = importFindPhoto(line.linea, line.sabor, line.presentacion);
+    wrap.innerHTML = '<div class="exp-quick"><div class="top"><span>Poner vencimientos · ' + esc(imp.name) + '</span><span>' + (q.pos+1) + ' de ' + n + '</span></div>'
+      + '<div class="bar"><i style="width:' + Math.round((q.pos/n)*100) + '%"></i></div>'
+      + '<div class="prod">' + (photo ? '<img class="ph" src="'+photo+'" alt="">' : '<span class="ph"></span>') + '<div><b>' + esc(line.sabor) + '</b><small>' + esc(CATEGORY_LABEL[line.linea] || line.linea) + ' · ' + esc(line.presentacion) + (line.venc ? ' · hoy: ' + expLabel(line.venc) : '') + '</small></div></div>'
+      + '<div class="exp-pop" id="expQuickPicker">' + expPickerHtml(q.year, line.venc) + '</div>'
+      + '<div class="acts"><button type="button" data-expq="back"' + (q.pos===0?' disabled style="opacity:.4"':'') + '>← Atrás</button><button type="button" data-expq="close">Cerrar</button><button type="button" data-expq="skip">Saltar →</button></div></div>';
+  }
+
+  function expShowList(){
+    var items = expiryAlerts();
+    var wrap = document.createElement('div'); wrap.className = 'exp-backdrop'; wrap.id = 'expListWrap';
+    var rows = items.map(function(it){
+      var cls = it.monthsLeft <= 1 ? 'crit' : 'soon';
+      var when = it.monthsLeft < 0 ? 'vencido (' + expLabel(it.venc) + ')' : expLabel(it.venc);
+      return '<div class="r"><span>' + esc(it.sabor) + ' · ' + esc(it.presentacion) + ' <small style="color:var(--text-muted);">(' + esc(CATEGORY_LABEL[it.linea]||it.linea) + ', ' + esc(it.imp||'') + ')</small></span><span class="'+cls+'">' + fmtInt(it.units) + ' u · ' + when + '</span></div>';
+    }).join('');
+    wrap.innerHTML = '<div class="exp-list"><h4>⏳ Por vencer en menos de 6 meses</h4>' + (rows || '<div class="r"><span>Nada por vencer.</span></div>') + '<div class="acts" style="margin-top:10px; text-align:right;"><button type="button" class="btn-history" data-explist="close">Cerrar</button></div></div>';
+    document.body.appendChild(wrap);
+  }
+
+  // Un solo juego de escuchas globales (no se repiten al volver a dibujar la pantalla).
+  if(!window.__expBound){
+    window.__expBound = true;
+    document.addEventListener('click', function(e){
+      var t = e.target;
+      // selector de año/mes del cuadrito flotante
+      var pop = document.getElementById('expPop');
+      if(pop && pop.contains(t) && state.expPop){
+        var yb = t.closest && t.closest('[data-expy]');
+        if(yb){ state.expPop.year = parseInt(yb.getAttribute('data-expy'),10); expRememberYear(state.expPop.year);
+          var imp = currentImport(); var ln = imp && (imp.products||[])[state.expPop.idx]; if(ln) expRenderPop(ln); return; }
+        var mb = t.closest && t.closest('[data-expm]');
+        if(mb){ var m = parseInt(mb.getAttribute('data-expm'),10), y = state.expPop.year;
+          var id = state.expPop.impId, ix = state.expPop.idx;
+          expRememberYear(y); expClosePop();
+          expSaveLine(id, ix, y + '-' + (m<10?'0':'') + m); render(); return; }
+        if(t.closest && t.closest('[data-expclear]')){ var id2 = state.expPop.impId, ix2 = state.expPop.idx; expClosePop(); expSaveLine(id2, ix2, ''); render(); return; }
+        return;
+      }
+      if(pop && !(t.closest && t.closest('.imp-exp'))){ expClosePop(); }
+      // carga rápida
+      var qw = document.getElementById('expQuickWrap');
+      if(qw && state.expQuick){
+        if(t === qw){ expCloseQuick(); return; }
+        var q = state.expQuick;
+        var qb = t.closest && t.closest('[data-expq]');
+        if(qb){
+          var act = qb.getAttribute('data-expq');
+          if(act === 'close'){ expCloseQuick(); }
+          else if(act === 'skip'){ q.pos++; expRenderQuick(); }
+          else if(act === 'back'){ if(q.pos > 0){ q.pos--; expRenderQuick(); } }
+          return;
+        }
+        var qy = t.closest && t.closest('#expQuickPicker [data-expy]');
+        if(qy){ q.year = parseInt(qy.getAttribute('data-expy'),10); expRememberYear(q.year); expRenderQuick(); return; }
+        var qm = t.closest && t.closest('#expQuickPicker [data-expm]');
+        if(qm){
+          var mm = parseInt(qm.getAttribute('data-expm'),10);
+          expRememberYear(q.year);
+          expSaveLine(q.impId, q.order[q.pos], q.year + '-' + (mm<10?'0':'') + mm);
+          q.pos++; expRenderQuick(); return;
+        }
+        return;
+      }
+      // lista "por vencer"
+      var lw = document.getElementById('expListWrap');
+      if(lw && (t === lw || (t.closest && t.closest('[data-explist]')))){ lw.remove(); return; }
+    });
+    document.addEventListener('keydown', function(e){
+      if(e.key !== 'Escape') return;
+      if(document.getElementById('expPop')) expClosePop();
+      else if(document.getElementById('expQuickWrap')) expCloseQuick();
+      else { var lw = document.getElementById('expListWrap'); if(lw) lw.remove(); }
+    });
+    window.addEventListener('resize', expClosePop);
+    window.addEventListener('scroll', expClosePop, true);
+  }
+
   function attachImportEvents(imp){
     if(!imp) return;
+    document.querySelectorAll('.imp-exp').forEach(function(el){
+      el.addEventListener('click', function(ev){ ev.stopPropagation(); expOpenPop(el, parseInt(el.getAttribute('data-idx'),10)); });
+    });
     document.querySelectorAll('.imp-input-cajas').forEach(function(el){
       el.addEventListener('change', function(){
         var idx = parseInt(el.getAttribute('data-idx'),10);
