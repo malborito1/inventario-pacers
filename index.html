@@ -2720,7 +2720,7 @@ if ("serviceWorker" in navigator) {
   function computeKpis(){
     var totalSkus = state.products.length;
     var totalUnits = 0, valCost = 0, valPvp = 0, alerts = 0;
-    var costMapK = importUnitCostMap();
+    var costMapK = fcCostMap();
     state.products.forEach(function(p){
       totalUnits += (p.stock||0);
       valCost += (p.stock||0) * ((costMapK[p.id] && costMapK[p.id].uio) || p.costPerUnit || 0);
@@ -6705,7 +6705,7 @@ if ("serviceWorker" in navigator) {
     setPresentationValue(p.presentation || '');
     document.getElementById('editThreshold').value = p.lowThreshold || 0;
     document.getElementById('editUpc').value = p.unitsPerBox || 1;
-    var costAuto = (editModalState.scope !== 'supermaxi') ? importUnitCostMap()[p.id] : null;
+    var costAuto = (editModalState.scope !== 'supermaxi') ? fcCostMap()[p.id] : null;
     document.getElementById('editCost').value = costAuto ? (Math.round(costAuto.uio * 100) / 100) : (p.costPerUnit || 0);
     document.getElementById('editCost').readOnly = !!costAuto;
     var chint = document.getElementById('editCostHint');
