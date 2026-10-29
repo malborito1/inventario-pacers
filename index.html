@@ -1915,6 +1915,7 @@ if ("serviceWorker" in navigator) {
     <div class="field">
       <label for="editCost">Costo FOB/CIF por unidad (USD)</label>
       <input id="editCost" type="number" min="0" step="0.01">
+      <div id="editCostHint" style="display:none; font-size:11px; color:var(--text-muted); margin-top:3px;"></div>
     </div>
     <div class="field">
       <label for="editPvp">PVP total por unidad, con IVA incluido (USD)</label>
@@ -2719,9 +2720,10 @@ if ("serviceWorker" in navigator) {
   function computeKpis(){
     var totalSkus = state.products.length;
     var totalUnits = 0, valCost = 0, valPvp = 0, alerts = 0;
+    var costMapK = importUnitCostMap();
     state.products.forEach(function(p){
       totalUnits += (p.stock||0);
-      valCost += (p.stock||0) * (p.costPerUnit||0);
+      valCost += (p.stock||0) * ((costMapK[p.id] && costMapK[p.id].uio) || p.costPerUnit || 0);
       valPvp += (p.stock||0) * (p.pvpSinIva != null ? p.pvpSinIva : (p.pvpPerUnit||0) / (1 + IVA_RATE));
       if(statusOf(p) === 'critical') alerts++;
     });
@@ -5182,6 +5184,60 @@ if ("serviceWorker" in navigator) {
     window.scrollTo(window.scrollX, y);
   }
 
+  // ================= Costo real por unidad (capas de importaciones) =================
+  // Costo puesto en Quito (UIO = $/unidad x factor de costeo) de lo que HOY tienes en stock.
+  // Las importaciones ya recibidas son capas: el stock actual se asigna a las mas nuevas primero
+  // (lo mas viejo ya se vendio) y se promedia. Se calcula en vivo: si cambia el factor de una
+  // importacion (nuevos costos), el costo cambia solo. No escribe nada.
+  function fcCostLabelDate(imp){
+    var by = {};
+    (imp.milestones || []).forEach(function(m){ by[fcNorm(m.label)] = fcParseDate(m.date); });
+    var t;
+    if(by['llega a bodega']) return {d: by['llega a bodega'], arrived: true};
+    if((t = by['llega a ecuador'])) return {d: FCE.addDays(t, 6), arrived: false};
+    if((t = by['llega a miami'])) return {d: FCE.addDays(t, 22), arrived: false};
+    if((t = by['recoge en origen'])) return {d: FCE.addDays(t, 38), arrived: false};
+    if((t = by['puse la orden'])) return {d: FCE.addDays(t, 61), arrived: false};
+    return {d: null, arrived: false};
+  }
+  function fcCostMap(){
+    var today = fcToday(), layers = {};
+    var list = (state.imports || []).slice().sort(function(a, b){ return String(a.createdAt || '') < String(b.createdAt || '') ? -1 : 1; });
+    list.forEach(function(imp, ix){
+      var st = imp.status || 'creada', isFinal = (st === 'cerrada' || st === 'recibida');
+      var cd = fcCostLabelDate(imp);
+      // cuenta como ya recibida: estado recibida/cerrada, o fecha "Llega a bodega" que ya paso
+      if(!(isFinal || (cd.arrived && cd.d && cd.d <= today))) return;
+      var totals = importTotals(imp), factor = totals.factor || 0;
+      if(!(factor > 0)) return;
+      var when = cd.d ? cd.d.getTime() : 0;      // sin fechas = importacion antigua
+      (imp.products || []).forEach(function(line){
+        var c = importLineCalc(line);
+        if(!(c.cajas > 0) || !(c.porUnidad > 0)) return;
+        var units = c.unidades;
+        if((parseFloat(line.precioVenta) || 0) > 0){          // linea de Supermaxi: solo cuentan las cajas que se quedan en mi bodega
+          var pr = fcPres(line.presentacion);
+          var ex = FC_BODEGA_EXTRA[fcNorm(imp.name)], cj = ex && pr && ex[fcKey(line.linea, pr, line.sabor)];
+          if(!(cj > 0)) return;
+          units = cj * (line.unidadesPorCaja || 1);
+        }
+        var gp = importFindGeneralProduct(line.linea, line.sabor, line.presentacion);
+        if(!gp) return;
+        (layers[gp.id] = layers[gp.id] || []).push({t: when, ix: ix, u: units, c: c.porUnidad * factor, name: imp.name || ''});
+      });
+    });
+    var map = {};
+    (state.products || []).forEach(function(p){
+      var L = layers[p.id]; if(!L || !L.length) return;
+      L = L.slice().sort(function(a, b){ return (a.t - b.t) || (a.ix - b.ix); });
+      var S = Math.max(0, parseFloat(p.stock) || 0), rem = S, tot = 0;
+      for(var i = L.length - 1; i >= 0 && rem > 0; i--){ var t = Math.min(rem, L[i].u); tot += t * L[i].c; rem -= t; }
+      if(rem > 0) tot += rem * L[0].c;                          // sin capa conocida: se valora como la importacion mas antigua
+      map[p.id] = {uio: S > 0 ? tot / S : L[L.length - 1].c, importName: L[L.length - 1].name, layered: true};
+    });
+    return map;
+  }
+
   function renderImportaciones(){
     if(state.impView === 'forecast'){ fcRenderView(); return; }
     var root = document.getElementById('categoriesRoot');
@@ -6649,7 +6705,11 @@ if ("serviceWorker" in navigator) {
     setPresentationValue(p.presentation || '');
     document.getElementById('editThreshold').value = p.lowThreshold || 0;
     document.getElementById('editUpc').value = p.unitsPerBox || 1;
-    document.getElementById('editCost').value = p.costPerUnit || 0;
+    var costAuto = (editModalState.scope !== 'supermaxi') ? importUnitCostMap()[p.id] : null;
+    document.getElementById('editCost').value = costAuto ? (Math.round(costAuto.uio * 100) / 100) : (p.costPerUnit || 0);
+    document.getElementById('editCost').readOnly = !!costAuto;
+    var chint = document.getElementById('editCostHint');
+    if(chint){ chint.style.display = costAuto ? '' : 'none'; chint.textContent = 'Se calcula solo con tus importaciones y tu stock actual.'; }
     document.getElementById('editPvp').value = p.pvpPerUnit || 0;
     updatePvpSinIva();
     document.getElementById('editBarcode').value = p.barcode || '';
@@ -6676,6 +6736,8 @@ if ("serviceWorker" in navigator) {
     document.getElementById('editThreshold').value = 10;
     document.getElementById('editUpc').value = 1;
     document.getElementById('editCost').value = 0;
+    document.getElementById('editCost').readOnly = false;
+    var chint2 = document.getElementById('editCostHint'); if(chint2) chint2.style.display = 'none';
     document.getElementById('editPvp').value = 0;
     updatePvpSinIva();
     document.getElementById('editBarcode').value = '';
@@ -7707,7 +7769,7 @@ if ("serviceWorker" in navigator) {
     html += '<tr class="mgn-total"><td>Total</td><td>' + fmtMoney(tRev) + '</td><td>' + fmtMoney(tCogs) + '</td><td>' + fmtMoney(tMargin) + '</td><td>' + fmtMoney(tCosts) + '</td>'
       + '<td class="' + (tProfit>=0?'mgn-pos':'mgn-neg') + '">' + fmtMoney(tProfit) + '</td><td class="' + (tProfit>=0?'mgn-pos':'mgn-neg') + '">' + fmtPctShort(tRev>0 ? tProfit/tRev*100 : 0) + '</td></tr>';
     html += '</tbody></table></div>';
-    html += '<p class="mgn-note">Costo del producto = costo puesto en Quito (UIO) de tus importaciones. Ganancia real = ventas − costo del producto − gastos de la feria (stand, otros costos y salidas de caja). El % es sobre las ventas.</p>';
+    html += '<p class="mgn-note">Costo del producto = costo real puesto en Quito (UIO) de lo que tienes en stock, calculado con tus importaciones. Ganancia real = ventas − costo del producto − gastos de la feria (stand, otros costos y salidas de caja). El % es sobre las ventas.</p>';
     return html;
   }
 
@@ -9965,6 +10027,11 @@ if ("serviceWorker" in navigator) {
   // factor de costeo). Se toma el de la importacion mas reciente que tenga ese producto,
   // prefiriendo las ya recibidas o cerradas (sus costos ya son definitivos).
   function importUnitCostMap(){
+    var old = importUnitCostMapOld(), nw = fcCostMap();
+    Object.keys(old).forEach(function(k){ if(!nw[k]) nw[k] = old[k]; });
+    return nw;
+  }
+  function importUnitCostMapOld(){
     var map = {};
     function ingest(list, finalOnly){
       list.forEach(function(imp){
@@ -10088,7 +10155,7 @@ if ("serviceWorker" in navigator) {
     html += '<tr class="mgn-total"><td>Total mercadería</td><td></td><td>' + fmtMoney(P.revenue) + '</td><td>' + fmtMoney(P.cogs) + '</td>'
       + '<td class="' + (P.margin >= 0 ? 'mgn-pos' : 'mgn-neg') + '">' + fmtMoney(P.margin) + '</td><td class="' + (P.margin >= 0 ? 'mgn-pos' : 'mgn-neg') + '">' + fmtPctShort(P.marginPct) + '</td></tr>';
     html += '</tbody></table></div>';
-    html += '<p class="mgn-note">Costo = lo que te cuesta cada unidad puesta en Quito (columna UIO de tu importación más reciente de ese producto).</p>';
+    html += '<p class="mgn-note">Costo = lo que te cuesta cada unidad puesta en Quito, promediando las importaciones de lo que tienes en stock (columna UIO, lo más nuevo primero).</p>';
     if(P.invUsed.length) html += '<p class="mgn-note">Sin importación registrada, se usó el costo del Inventario en: ' + P.invUsed.map(esc).join(', ') + '.</p>';
     if(P.noCost.length) html += '<p class="mgn-note" style="color:var(--critical);">Sin costo registrado (no se calcula su margen): ' + P.noCost.map(esc).join(', ') + '.</p>';
     return html;
