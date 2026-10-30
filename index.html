@@ -4437,7 +4437,7 @@ if ("serviceWorker" in navigator) {
     var doc = {
       name: name, cliente: '', status: 'creada',
       createdAt: new Date().toISOString(), createdBy: state.userName||'',
-      freight: null, freightPending: true, pais: 'EEUU', cargaArancelaria: 0,
+      freight: null, freightPending: true, pais: 'EEUU', cargaArancelaria: null,
       volCalc: {largo:122, ancho:102, alto:0, factor:5385},
       milestones: JSON.parse(JSON.stringify(IMPORT_MILESTONES_TEMPLATE)),
       localCosts: JSON.parse(JSON.stringify(IMPORT_COSTS_TEMPLATE)),
@@ -4693,8 +4693,8 @@ if ("serviceWorker" in navigator) {
   }
 
   function importPctText(v){
-    var n = parseFloat(v)||0;
-    if(!n) return '% Ingresar';
+    if(v === null || v === undefined || v === '' || isNaN(parseFloat(v))) return '% Ingresar';
+    var n = parseFloat(v);
     return String(Math.round(n*100)/100).replace('.', ',') + ' %';
   }
 
@@ -4706,8 +4706,8 @@ if ("serviceWorker" in navigator) {
     // imp.localCosts, así que editar/quitar/agregar funciona igual en ambas.
     var html = '<div class="imp-card"><h4>Costos locales</h4>'
       + '<div class="imp-field" style="margin-bottom:10px;"><label>Carga arancelaria</label>'
-      + '<span class="imp-pct-wrap"><button type="button" class="imp-pct-pill' + (imp.cargaArancelaria ? '' : ' empty') + '" id="impCargaPill" title="Clic para editar">' + importPctText(imp.cargaArancelaria) + '</button>'
-      + '<span class="imp-pct-edit" id="impCargaEdit" hidden><input type="number" min="0" step="0.01" id="impCargaArancelaria" value="'+(imp.cargaArancelaria||'')+'" placeholder="0" onfocus="this.select()"><b>%</b></span></span></div>'
+      + '<span class="imp-pct-wrap"><button type="button" class="imp-pct-pill' + ((imp.cargaArancelaria === null || imp.cargaArancelaria === undefined || imp.cargaArancelaria === '') ? ' empty' : '') + '" id="impCargaPill" title="Clic para editar">' + importPctText(imp.cargaArancelaria) + '</button>'
+      + '<span class="imp-pct-edit" id="impCargaEdit" hidden><input type="number" min="0" step="0.01" id="impCargaArancelaria" value="'+((imp.cargaArancelaria === null || imp.cargaArancelaria === undefined) ? '' : imp.cargaArancelaria)+'" placeholder="0" onfocus="this.select()"><b>%</b></span></span></div>'
       + '<div class="imp-costs-list">';
     costs.forEach(function(c, idx){
       if(!c.extra) html += importCostRowHtml(imp.id, c, idx);
@@ -6337,16 +6337,17 @@ if ("serviceWorker" in navigator) {
     if(cargaEl){
       var cargaPill = document.getElementById('impCargaPill'), cargaEdit = document.getElementById('impCargaEdit');
       var cargaDone = function(){
-        var v = parseFloat(cargaEl.value)||0;
+        var isSet = String(cargaEl.value).trim() !== '' && !isNaN(parseFloat(cargaEl.value));
+        var v = isSet ? parseFloat(cargaEl.value) : null;
         cargaPill.textContent = importPctText(v);
-        cargaPill.classList.toggle('empty', !v);
+        cargaPill.classList.toggle('empty', !isSet);
         cargaEdit.hidden = true; cargaPill.hidden = false;
       };
       cargaPill.addEventListener('click', function(){
         if(cargaPill.disabled) return;
         cargaPill.hidden = true; cargaEdit.hidden = false; cargaEl.focus(); cargaEl.select();
       });
-      cargaEl.addEventListener('change', function(){ updateImportField(imp.id, {cargaArancelaria: parseFloat(cargaEl.value)||0}); });
+      cargaEl.addEventListener('change', function(){ var raw = String(cargaEl.value).trim(); updateImportField(imp.id, {cargaArancelaria: (raw === '' || isNaN(parseFloat(raw))) ? null : parseFloat(raw)}); });
       cargaEl.addEventListener('blur', cargaDone);
       cargaEl.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); cargaEl.blur(); } });
     }
