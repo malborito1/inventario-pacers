@@ -5523,7 +5523,7 @@ if ("serviceWorker" in navigator) {
       var by = {};
       (imp.milestones || []).forEach(function(m){ by[fcNorm(m.label)] = fcParseDate(m.date); });
       var cd = fcCostLabelDate(imp);
-      rows.push({imp: imp, t: t, st: st, by: by, noW: (imp.products || []).filter(function(l){ return (parseFloat(l.cajas) || 0) > 0 && !(parseFloat(l.gramosPorCaja) > 0) && fcNorm(l.presentacion) !== 'cajas vacias'; }).length, key: (by['llega a bodega'] || cd.d || new Date(1970, 0, 1)).getTime()});
+      rows.push({imp: imp, t: t, st: st, by: by, noW: (imp.products || []).filter(function(l){ return (parseFloat(l.cajas) || 0) > 0 && !(parseFloat(l.gramosPorCaja) > 0) && String(l.presentacion || '').toLowerCase().indexOf('cajas vac') !== 0; }).length, key: (by['llega a bodega'] || cd.d || new Date(1970, 0, 1)).getTime()});
     });
     rows.sort(function(a, b){ return a.key - b.key; });
     var ST = {cerrada: 'Cerrada', recibida: 'Recibida', creada: 'Planeada', transito_puerto: 'En camino', activa: 'En camino', transito_ecu: 'En camino'};
