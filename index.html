@@ -1708,6 +1708,23 @@ if ("serviceWorker" in navigator) {
   .fc-foot{font-size:11.5px; color:var(--text-muted); margin:12px 2px 0;}
   @media (min-width:760px){ .fc-ob.two{column-count:2; column-gap:28px;} .fc-ob.two .fc-pl{break-inside:avoid;} }
   @media (max-width:760px){ .fc-cards{grid-template-columns:1fr;} }
+  .imp-cellr{display:flex; align-items:center; gap:4px; flex:0 0 auto;}
+  .imp-bod{flex:0 0 auto; border:1px solid transparent; background:transparent; color:var(--text-muted); font-size:10.5px; line-height:14px; padding:0 6px; border-radius:999px; cursor:pointer; font-family:inherit; font-weight:600; white-space:nowrap;}
+  .imp-bod.empty{opacity:.45; padding:0 3px;}
+  .imp-bod:hover{border-color:var(--imports-color); color:var(--imports-color); opacity:1;}
+  .imp-bod.set{border-color:var(--success); background:var(--success-tint); color:var(--success);}
+  .imp-bod.prov{border-style:dashed;}
+  .bod-pop{position:fixed; z-index:1000; width:236px; background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 26px rgba(0,0,0,.22); padding:10px 12px; color:var(--text); font-size:12px;}
+  .bod-pop .cap{font-size:10.5px; color:var(--text-muted); margin:0 0 6px; font-weight:600;}
+  .bod-pop .row{display:flex; align-items:center; gap:8px;}
+  .bod-pop .row input{width:56px; padding:4px 6px; border:1px solid var(--border); border-radius:6px; font-size:13px; background:var(--surface); color:var(--text);}
+  .bod-pop .row span{color:var(--text-muted); line-height:1.3;}
+  .bod-pop .sum{margin-top:8px; color:var(--text-muted); line-height:1.45;}
+  .bod-pop .sum b{color:var(--text);}
+  .bod-pop .sum b.g{color:var(--success);}
+  .bod-pop .act{display:flex; align-items:center; justify-content:space-between; margin-top:10px;}
+  .bod-pop .ok{border:none; background:var(--imports-color); color:var(--on-solid); font-weight:700; font-size:12px; border-radius:8px; padding:5px 12px; cursor:pointer; font-family:inherit;}
+  .bod-pop .clr{font-size:11px; color:var(--text-muted); background:none; border:none; cursor:pointer; padding:0; text-decoration:underline; font-family:inherit;}
 </style>
 
 <div class="pin-gate" id="pinGate">
@@ -4259,9 +4276,10 @@ if ("serviceWorker" in navigator) {
       var c = importLineCalc(line);
       totalCajas += c.cajas; totalKg += c.kg; totalUnidades += c.unidades; totalMercaderia += c.total;
       var pv = parseFloat(line.precioVenta)||0;
-      totalVenta += pv*c.unidades;
+      var smxCj = pv > 0 ? bodSmxCajas(line) : c.cajas;
+      totalVenta += pv*smxCj*(line.unidadesPorCaja||0);
       var esDisplay = (line.linea === IMPORT_DISPLAY_LINE.linea && line.sabor === IMPORT_DISPLAY_LINE.sabor);
-      if(pv > 0){ lineasConPrecio++; mercaderiaMargen += c.total; }
+      if(pv > 0){ lineasConPrecio++; mercaderiaMargen += smxCj*(parseFloat(line.precioPorCaja)||0); }
       else if(esDisplay){ mercaderiaMargen += c.total; }
       else if(c.total > 0){ lineasSinPrecio++; }
     });
@@ -4407,7 +4425,7 @@ if ("serviceWorker" in navigator) {
           var c = importLineCalc(line);
           var uio = c.porUnidad * (totals.factor||0);
           var precioVenta = parseFloat(line.precioVenta)||0;
-          var valorVenta = precioVenta * c.unidades;
+          var valorVenta = precioVenta * (precioVenta>0 ? bodSmxCajas(line) : c.cajas) * (line.unidadesPorCaja||0);
           var photoUrl = importFindPhoto(linea, line.sabor, pk);
           var photoHtml = photoUrl ? ('<img class="imp-row-photo" src="'+photoUrl+'" alt="">') : '<span class="imp-row-photo-placeholder"></span>';
           var hasCajas = c.cajas > 0;
@@ -4418,7 +4436,7 @@ if ("serviceWorker" in navigator) {
             ? ('<span style="color:'+genStockColor+'; font-weight:700;">' + (genStatus==='critical' ? '⚠ ' : '') + fmtInt(genProduct.stock||0) + '</span>')
             : '<span style="color:var(--text-muted);">—</span>';
           html += '<tr data-idx="'+idx+'" style="background:'+shadeBg+';">';
-          html += '<td>'+ (hasCajas ? ('<div class="imp-sabor-cell"><span class="nm">'+photoHtml+esc(line.sabor)+'</span>'+expChipHtml(line, idx)+'</div>') : (photoHtml+esc(line.sabor))) +'</td>';
+          html += '<td>'+ (hasCajas ? ('<div class="imp-sabor-cell"><span class="nm">'+photoHtml+esc(line.sabor)+'</span><span class="imp-cellr">'+bodChipHtml(line, idx, imp)+expChipHtml(line, idx)+'</span></div>') : (photoHtml+esc(line.sabor))) +'</td>';
           html += '<td class="imp-num">'+ genStockHtml +'</td>';
           html += '<td><input type="number" min="0" step="1" class="imp-input-cajas" data-idx="'+idx+'" value="'+(line.cajas||'')+'" onfocus="this.select()"></td>';
           html += '<td class="imp-num">'+ (hasCajas? fmtInt(c.unidades) : '') +'</td>';
@@ -4864,7 +4882,7 @@ if ("serviceWorker" in navigator) {
         var c = importLineCalc(l); if(!(c.unidades > 0)) return;
         var units = c.unidades;
         if((parseFloat(l.precioVenta) || 0) > 0){          // linea con precio = Supermaxi (otro inventario); solo cuenta lo marcado para mi bodega
-          var ex = FC_BODEGA_EXTRA[fcNorm(imp.name)], cj = ex && ex[fcKey(l.linea, pr, l.sabor)];
+          var cj = bodCajasOf(imp, l).n;
           if(!(cj > 0)) return;
           units = cj * (l.unidadesPorCaja || 1);
         }
@@ -5216,8 +5234,7 @@ if ("serviceWorker" in navigator) {
         if(!(c.cajas > 0) || !(c.porUnidad > 0)) return;
         var units = c.unidades;
         if((parseFloat(line.precioVenta) || 0) > 0){          // linea de Supermaxi: solo cuentan las cajas que se quedan en mi bodega
-          var pr = fcPres(line.presentacion);
-          var ex = FC_BODEGA_EXTRA[fcNorm(imp.name)], cj = ex && pr && ex[fcKey(line.linea, pr, line.sabor)];
+          var cj = bodCajasOf(imp, line).n;
           if(!(cj > 0)) return;
           units = cj * (line.unidadesPorCaja || 1);
         }
@@ -5237,6 +5254,102 @@ if ("serviceWorker" in navigator) {
     });
     return map;
   }
+
+  // ================= Cajas de una linea de Supermaxi que se quedan en MI bodega =================
+  // line.cajasBodega = cajas (del total de la linea) que van a mi bodega; el resto es de Supermaxi.
+  // Mientras ninguna linea de la importacion tenga ese dato, se usan los valores provisionales de FC_BODEGA_EXTRA.
+  function bodSmxCajas(line){
+    var c = parseFloat(line.cajas) || 0, b = parseFloat(line.cajasBodega) || 0;
+    return Math.max(0, c - Math.min(b, c));
+  }
+  function bodCajasOf(imp, line){
+    if(line.cajasBodega != null && line.cajasBodega !== '') return {n: Math.max(0, parseFloat(line.cajasBodega) || 0), prov: false};
+    var anyManual = (imp.products || []).some(function(l){ return l.cajasBodega != null && l.cajasBodega !== ''; });
+    if(!anyManual){
+      var pr = fcPres(line.presentacion), ex = FC_BODEGA_EXTRA[fcNorm(imp.name)];
+      var cj = ex && pr && ex[fcKey(line.linea, pr, line.sabor)];
+      if(cj > 0) return {n: cj, prov: true};
+    }
+    return {n: 0, prov: false};
+  }
+  function bodChipHtml(line, idx, imp){
+    if(!((parseFloat(line.precioVenta) || 0) > 0) || !((parseFloat(line.cajas) || 0) > 0)) return '';
+    var b = bodCajasOf(imp, line);
+    if(b.n > 0) return '<button type="button" class="imp-bod set' + (b.prov ? ' prov' : '') + '" data-idx="' + idx + '" title="' + (b.prov ? 'Valor provisional, toca para fijarlo. ' : '') + 'Cajas que se quedan en mi bodega">🏠 ' + b.n + '</button>';
+    return '<button type="button" class="imp-bod empty" data-idx="' + idx + '" title="Cajas que se quedan en mi bodega">🏠</button>';
+  }
+  function bodSummaryHtml(line, n){
+    var cj = parseFloat(line.cajas) || 0; n = Math.max(0, Math.min(isNaN(n) ? 0 : n, cj));
+    return 'Supermaxi: <b>' + (cj - n) + ' cajas</b><br>Mi bodega: <b class="g">' + n + ' cajas (' + fmtInt(n * (line.unidadesPorCaja || 0)) + ' u)</b>';
+  }
+  function bodClosePop(){
+    var el = document.getElementById('bodPop'); if(el) el.remove();
+    state.bodPop = null;
+  }
+  function bodSaveLine(impId, idx, n){
+    var imp = state.imports.filter(function(i){ return i.id === impId; })[0];
+    if(!imp || !state.db) return;
+    var products = (imp.products || []).slice();
+    var line = Object.assign({}, products[idx]);
+    if(n == null) delete line.cajasBodega; else line.cajasBodega = n;
+    products[idx] = line;
+    imp.products = products;
+    state.db.collection('imports').doc(impId).update({products: products}).catch(function(){
+      showStatus('No se pudo guardar las cajas para tu bodega. Intenta de nuevo.', true);
+    });
+  }
+  function bodSaveFromPop(){
+    var s = state.bodPop, inp = document.getElementById('bodInput'); if(!s || !inp) return;
+    var imp = state.imports.filter(function(i){ return i.id === s.impId; })[0];
+    var line = imp && (imp.products || [])[s.idx]; if(!line) { bodClosePop(); return; }
+    var n = Math.round(parseFloat(inp.value));
+    if(isNaN(n) || n < 0) n = 0;
+    n = Math.min(n, parseFloat(line.cajas) || 0);
+    bodClosePop(); bodSaveLine(s.impId, s.idx, n); render();
+  }
+  function bodOpenPop(btn, idx){
+    var imp = currentImport(); if(!imp) return;
+    if(state.bodPop && state.bodPop.idx === idx){ bodClosePop(); return; }
+    bodClosePop();
+    var line = (imp.products || [])[idx]; if(!line) return;
+    var cur = bodCajasOf(imp, line).n;
+    state.bodPop = {impId: imp.id, idx: idx};
+    var pop = document.createElement('div');
+    pop.className = 'bod-pop'; pop.id = 'bodPop';
+    pop.innerHTML = '<p class="cap">' + esc(line.sabor) + ' · ' + esc(line.presentacion) + '</p>'
+      + '<div class="row"><input type="number" id="bodInput" min="0" max="' + (parseFloat(line.cajas) || 0) + '" step="1" value="' + cur + '"><span>de ' + (parseFloat(line.cajas) || 0) + ' cajas se quedan en mi bodega</span></div>'
+      + '<div class="sum" id="bodSum">' + bodSummaryHtml(line, cur) + '</div>'
+      + '<div class="act"><button type="button" class="ok" data-bodok="1">Guardar</button><button type="button" class="clr" data-bodclr="1">Quitar</button></div>';
+    document.body.appendChild(pop);
+    var r = btn.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
+    var left = Math.max(8, Math.min(r.left - 6, window.innerWidth - w - 8));
+    var top = r.bottom + 6;
+    if(top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+    pop.style.left = left + 'px'; pop.style.top = top + 'px';
+    var inp = document.getElementById('bodInput'); if(inp){ inp.focus(); inp.select(); }
+  }
+  document.addEventListener('click', function(e){
+    var pop = document.getElementById('bodPop'); if(!pop || !state.bodPop) return;
+    var t = e.target;
+    if(pop.contains(t)){
+      if(t.closest && t.closest('[data-bodok]')) bodSaveFromPop();
+      else if(t.closest && t.closest('[data-bodclr]')){ var s = state.bodPop; bodClosePop(); bodSaveLine(s.impId, s.idx, null); render(); }
+      return;
+    }
+    if(!(t.closest && t.closest('.imp-bod'))) bodClosePop();
+  });
+  document.addEventListener('keydown', function(e){
+    if(!state.bodPop) return;
+    if(e.key === 'Escape') bodClosePop();
+    else if(e.key === 'Enter' && e.target && e.target.id === 'bodInput'){ e.preventDefault(); bodSaveFromPop(); }
+  });
+  document.addEventListener('input', function(e){
+    if(!(e.target && e.target.id === 'bodInput') || !state.bodPop) return;
+    var imp = state.imports.filter(function(i){ return i.id === state.bodPop.impId; })[0];
+    var line = imp && (imp.products || [])[state.bodPop.idx], sum = document.getElementById('bodSum');
+    if(line && sum) sum.innerHTML = bodSummaryHtml(line, Math.round(parseFloat(e.target.value)));
+  });
+  window.addEventListener('resize', bodClosePop);
 
   function renderImportaciones(){
     if(state.impView === 'forecast'){ fcRenderView(); return; }
@@ -5763,6 +5876,9 @@ if ("serviceWorker" in navigator) {
 
   function attachImportEvents(imp){
     if(!imp) return;
+    document.querySelectorAll('.imp-bod').forEach(function(el){
+      el.addEventListener('click', function(ev){ ev.stopPropagation(); bodOpenPop(el, parseInt(el.getAttribute('data-idx'),10)); });
+    });
     document.querySelectorAll('.imp-exp').forEach(function(el){
       el.addEventListener('click', function(ev){ ev.stopPropagation(); expOpenPop(el, parseInt(el.getAttribute('data-idx'),10)); });
     });
