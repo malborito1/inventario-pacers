@@ -1782,6 +1782,8 @@ if ("serviceWorker" in navigator) {
   .rt-table .bar i.g{background:var(--success);} .rt-table .bar i.a{background:var(--warning);} .rt-table .bar i.r{background:var(--critical);}
   .rt-foot{font-size:11.5px; color:var(--text-muted); margin:8px 0 0; line-height:1.5;}
   .rt-ins{margin-top:8px; padding:9px 12px; border:1px solid var(--border); border-left:4px solid var(--imports-color); border-radius:10px; background:var(--surface); font-size:12.5px; line-height:1.5;}
+
+  .rt-table.cort-table{min-width:520px;} .rt-table.cort-table th:nth-child(-n+4){text-align:left;} .rt-table.cort-table td{white-space:nowrap;}
 </style>
 
 <div class="pin-gate" id="pinGate">
@@ -5654,6 +5656,82 @@ if ("serviceWorker" in navigator) {
   }
   window.__bkp = {run: bkpMaybeRun, chunks: bkpChunks, replacer: bkpReplacer};
 
+  // ================= Ranking > Cortesías (salidas sin venta) =================
+  // Solo lee. Muestra cuántas unidades regalaste, a quién y cuánto te costaron (costo real UIO actual)
+  // y cuánto valdrían a PVP sin IVA. Usa el mismo selector de Periodo del Ranking.
+  var CORT_REASONS = ['cortesia', 'regalo', 'auspicio', 'muestra', 'otro'];
+  function cortState(){ if(!state.cort) state.cort = {reason: 'all', detail: false}; return state.cort; }
+  function cortData(period){
+    var cs = cortState(), costMap = fcCostMap();
+    var moves = movementsInPeriod(period).filter(function(m){
+      if(m.type !== 'salida') return false;
+      var r = m.reason || 'otro';
+      return cs.reason === 'all' ? r !== 'reposicion' : r === cs.reason;
+    });
+    var rows = [], byClient = {}, byProd = {}, T = {u: 0, cost: 0, pvp: 0};
+    moves.forEach(function(m){
+      var u = movementUnits(m), p = m.productId ? findProduct(m.productId) : null;
+      var uio = p ? ((costMap[p.id] && costMap[p.id].uio) || parseFloat(p.costPerUnit) || 0) : 0;
+      var pvp = p ? ((p.pvpSinIva != null ? parseFloat(p.pvpSinIva) : (parseFloat(p.pvpPerUnit) || 0) / RT_IVA) || 0) : 0;
+      var client = (m.client && String(m.client).trim()) || 'Sin nombre';
+      var label = p ? (p.presentation + ' · ' + p.flavor) : (stripGraceTag(m.productLabel) || 'Producto');
+      var cost = u * uio, val = u * pvp;
+      rows.push({at: m.at, client: client, label: label, u: u, reason: m.reason || 'otro', cost: cost, pvp: val});
+      var c = byClient[client] = byClient[client] || {label: client, u: 0, n: 0, cost: 0, pvp: 0};
+      c.u += u; c.n++; c.cost += cost; c.pvp += val;
+      var q = byProd[label] = byProd[label] || {label: label, u: 0, n: 0, cost: 0, pvp: 0, photoUrl: p ? p.photoUrl : null};
+      q.u += u; q.n++; q.cost += cost; q.pvp += val;
+      T.u += u; T.cost += cost; T.pvp += val;
+    });
+    function arr(o){ return Object.keys(o).map(function(k){ return o[k]; }).sort(function(a, b){ return (b.cost - a.cost) || (b.u - a.u); }); }
+    rows.sort(function(a, b){ return new Date(b.at) - new Date(a.at); });
+    return {rows: rows, clients: arr(byClient), prods: arr(byProd), T: T};
+  }
+  function cortList(items, photo){
+    if(!items.length) return '<p class="empty-hint">No hay salidas sin venta en este periodo.</p>';
+    var max = items[0].cost || items[0].u || 1;
+    return '<div class="ranking-list">' + items.map(function(r){
+      var pct = Math.max(4, Math.round((r.cost || r.u) / max * 100));
+      var av = photo ? (r.photoUrl ? '<img class="ranking-photo" src="' + esc(r.photoUrl) + '" alt="">' : '<div class="ranking-photo-placeholder"></div>') : '<div class="ranking-avatar">' + esc(clientInitials(r.label)) + '</div>';
+      return '<div class="ranking-row">' + av
+        + '<div class="ranking-info"><div class="ranking-name">' + esc(r.label) + '</div>'
+        + '<div class="ranking-bar-track"><div class="ranking-bar-fill" style="width:' + pct + '%; background:var(--grace-color, var(--accent))"></div></div>'
+        + '<div class="ranking-sub">' + fmtInt(r.n) + (r.n === 1 ? ' salida' : ' salidas') + ' · valdrían ' + fmtMoney(r.pvp) + ' a PVP</div></div>'
+        + '<div class="ranking-qty-col"><span class="ranking-revenue num">' + fmtMoney(r.cost) + '</span><span class="ranking-client-units num">' + fmtInt(r.u) + ' u</span></div></div>';
+    }).join('') + '</div>';
+  }
+  function fcCortHtml(period){
+    var cs = cortState(), d = cortData(period), T = d.T;
+    var chips = '<div class="years-mode-toggle cort-reason">' + [['all', 'Todas']].concat(CORT_REASONS.map(function(r){ return [r, SALIDA_REASONS[r]]; })).map(function(x){
+      return '<button type="button" class="years-mode-btn' + (cs.reason === x[0] ? ' active' : '') + '" data-cort-reason="' + x[0] + '">' + esc(x[1]) + '</button>';
+    }).join('') + '</div>';
+    var kpis = '<div class="kpis" style="margin-bottom:14px;">'
+      + '<div class="kpi"><div class="label">Unidades regaladas</div><div class="value num">' + fmtInt(T.u) + '</div></div>'
+      + '<div class="kpi"><div class="label">Costo para ti</div><div class="value num">' + fmtMoney(T.cost) + '</div></div>'
+      + '<div class="kpi"><div class="label">Valdrían a PVP (sin IVA)</div><div class="value num">' + fmtMoney(T.pvp) + '</div></div>'
+      + '<div class="kpi"><div class="label">N° de salidas</div><div class="value num">' + fmtInt(d.rows.length) + '</div></div></div>';
+    var note = '<p class="years-note">Costo con tu costo real actual puesto en Quito. Todas incluye cortesías, regalos, auspicios, muestras y otros; no incluye la reposición de Supermaxi.</p>';
+    var detail = '';
+    if(d.rows.length){
+      detail = '<button type="button" class="years-mode-btn cort-detail-btn" data-cort-detail="1" style="margin-top:14px;">' + (cs.detail ? 'Ocultar detalle' : 'Ver detalle (' + d.rows.length + ')') + '</button>';
+      if(cs.detail){
+        detail += '<div class="rt-wrap" style="margin-top:8px;"><table class="rt-table cort-table"><thead><tr><th>Fecha</th><th>Cliente</th><th>Producto</th><th>Motivo</th><th>U.</th><th>Costo</th></tr></thead><tbody>'
+          + d.rows.map(function(r){ var dt = new Date(r.at); return '<tr><td class="mut">' + esc(isNaN(dt) ? '' : dt.toLocaleDateString('es-EC', {day: '2-digit', month: 'short', year: '2-digit'})) + '</td><td class="nm">' + esc(r.client) + '</td><td>' + esc(r.label) + '</td><td class="mut">' + esc(SALIDA_REASONS[r.reason] || r.reason) + '</td><td class="n">' + fmtInt(r.u) + '</td><td class="n">' + esc(fmtMoney(r.cost)) + '</td></tr>'; }).join('')
+          + '</tbody></table></div>';
+      }
+    }
+    return chips + kpis + note + '<h3 class="ranking-subhead">Por cliente</h3>' + cortList(d.clients, false)
+      + '<h3 class="ranking-subhead" style="margin-top:18px;">Por producto</h3>' + cortList(d.prods.slice(0, 10), true) + detail;
+  }
+  document.addEventListener('click', function(e){
+    var b = e.target && e.target.closest ? e.target.closest('[data-cort-reason],[data-cort-detail]') : null;
+    if(!b) return;
+    var cs = cortState();
+    if(b.hasAttribute('data-cort-reason')) cs.reason = b.getAttribute('data-cort-reason');
+    else cs.detail = !cs.detail;
+    render();
+  });
+
   function renderImportaciones(){
     if(state.impView === 'forecast'){ fcRenderView(); return; }
     var root = document.getElementById('categoriesRoot');
@@ -8205,6 +8283,7 @@ if ("serviceWorker" in navigator) {
       '<button type="button" class="ranking-view-btn' + (view==='ventas'?' active':'') + '" data-ranking-view="ventas">Ventas</button>' +
       '<button type="button" class="ranking-view-btn' + (view==='anios'?' active':'') + '" data-ranking-view="anios">Años</button>' +
       '<button type="button" class="ranking-view-btn' + (view==='ferias'?' active':'') + '" data-ranking-view="ferias">Ferias</button>' +
+      '<button type="button" class="ranking-view-btn' + (view==='cortesias'?' active':'') + '" data-ranking-view="cortesias">Cortesías</button>' +
       '</div>';
     // La vista "Años" compara el historial completo agrupado por año calendario, no un
     // periodo puntual -- el selector de Periodo (Hoy/Esta semana/etc.) no aplica ahí.
@@ -8237,6 +8316,8 @@ if ("serviceWorker" in navigator) {
     }
     if(view === 'ferias'){
       html += rankingFairsHtml();
+    } else if(view === 'cortesias'){
+      html += fcCortHtml(period);
     } else if(view === 'clientes'){
       var cdata = computeClientRankingData(period);
       html += '<label class="supermaxi-sales-toggle"><input type="checkbox" id="ventasIncludeSupermaxi"' + (state.includeSupermaxiSales?' checked':'') + '> 🏬 Incluir ventas de Supermaxi</label>';
