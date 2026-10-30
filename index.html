@@ -5549,6 +5549,82 @@ if ("serviceWorker" in navigator) {
       + cards + tbl2 + '<div class="rt-ins">💡 ' + ins2 + '</div>';
   }
 
+  // ================= Respaldo automático diario =================
+  // La primera vez que alguien abre la app cada día, se guarda una foto de todas las
+  // colecciones en 'respaldosDatos' (en trozos) y una ficha en 'respaldos' (id = fecha).
+  // Se conservan los últimos 30 días; el más viejo se elimina solo. No toca ningún dato actual.
+  var BKP_KEEP = 30, BKP_CHUNK = 300000;
+  var BKP_COLS = ['products', 'imports', 'movements', 'supermaxiMovements', 'supermaxiProducts', 'fairs', 'fairSales', 'fairStock', 'fairCosts', 'fairCashOuts', 'fairCustomItems', 'customItemDefaults', 'pendingPayments', 'graceStock'];
+  function bkp2(n){ return (n < 10 ? '0' : '') + n; }
+  function bkpDay(){ var d = new Date(); return d.getFullYear() + '-' + bkp2(d.getMonth() + 1) + '-' + bkp2(d.getDate()); }
+  function bkpReplacer(key, value){
+    var raw = this[key];
+    if(raw && typeof raw === 'object' && typeof raw.toMillis === 'function' && typeof raw.toDate === 'function') return {__ts: raw.toMillis()};
+    return value;
+  }
+  function bkpChunks(str){
+    var out = [], i = 0;
+    while(i < str.length){
+      var end = Math.min(str.length, i + BKP_CHUNK);
+      if(end < str.length){ var c = str.charCodeAt(end - 1); if(c >= 0xD800 && c <= 0xDBFF) end -= 1; }
+      out.push(str.slice(i, end)); i = end;
+    }
+    if(!out.length) out.push('[]');
+    return out;
+  }
+  function bkpSeq(items, size, fn){
+    var p = Promise.resolve();
+    for(var i = 0; i < items.length; i += size){
+      (function(slice){ p = p.then(function(){ return Promise.all(slice.map(fn)); }); })(items.slice(i, i + size));
+    }
+    return p;
+  }
+  function bkpRotate(db){
+    return db.collection('respaldos').get().then(function(snap){
+      var ids = snap.docs.map(function(d){ return d.id; }).filter(function(id){ return /^\d{4}-\d{2}-\d{2}$/.test(id); }).sort().reverse();
+      var old = ids.slice(BKP_KEEP);
+      return bkpSeq(old, 1, function(day){
+        return db.collection('respaldosDatos').where('day', '==', day).get().then(function(s2){
+          return bkpSeq(s2.docs, 5, function(d){ return db.collection('respaldosDatos').doc(d.id).delete(); });
+        }).then(function(){ return db.collection('respaldos').doc(day).delete(); });
+      });
+    });
+  }
+  function bkpRun(db, day){
+    return Promise.all(BKP_COLS.map(function(c){
+      return db.collection(c).get().then(function(snap){ return {c: c, docs: snap.docs.map(function(d){ return {id: d.id, d: d.data()}; })}; });
+    })).then(function(res){
+      var counts = {}, parts = {}, docs = [];
+      res.forEach(function(r){
+        counts[r.c] = r.docs.length;
+        var ch = bkpChunks(JSON.stringify(r.docs, bkpReplacer));
+        parts[r.c] = ch.length;
+        ch.forEach(function(s, i){ docs.push({id: day + '__' + r.c + '__' + i, data: {day: day, col: r.c, part: i, total: ch.length, json: s}}); });
+      });
+      return bkpSeq(docs, 5, function(x){ return db.collection('respaldosDatos').doc(x.id).set(x.data); }).then(function(){
+        return db.collection('respaldos').doc(day).set({day: day, createdAt: firebase.firestore.FieldValue.serverTimestamp(), counts: counts, parts: parts, version: 1});
+      });
+    }).then(function(){ return bkpRotate(db); });
+  }
+  function bkpMaybeRun(){
+    if(window.__fcToday && !window.__bkpForce) return;
+    var db = state.db; if(!db || window.__bkpBusy) return;
+    var day = bkpDay();
+    try{ if(localStorage.getItem('pacers_bkp_day') === day) return; }catch(e){}
+    window.__bkpBusy = true;
+    db.collection('respaldos').doc(day).get().then(function(doc){
+      if(doc && doc.exists) return true;
+      return bkpRun(db, day).then(function(){ return true; });
+    }).then(function(){
+      try{ localStorage.setItem('pacers_bkp_day', day); }catch(e){}
+      window.__bkpBusy = false;
+    }).catch(function(e){
+      window.__bkpBusy = false;
+      try{ console.warn('Respaldo automático no se pudo guardar:', e && e.message ? e.message : e); }catch(x){}
+    });
+  }
+  window.__bkp = {run: bkpMaybeRun, chunks: bkpChunks, replacer: bkpReplacer};
+
   function renderImportaciones(){
     if(state.impView === 'forecast'){ fcRenderView(); return; }
     var root = document.getElementById('categoriesRoot');
@@ -11534,6 +11610,7 @@ if ("serviceWorker" in navigator) {
     }
     firebase.auth().signInAnonymously().then(function(){
       startListening(firebase.firestore());
+      setTimeout(function(){ try{ bkpMaybeRun(); }catch(e){} }, 30000);
     }).catch(function(err){
       showConnBanner(false);
       showStatus('No se pudo conectar al almacenamiento de datos en vivo.', true);
