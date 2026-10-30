@@ -1726,6 +1726,13 @@ if ("serviceWorker" in navigator) {
   .bod-pop .act{display:flex; align-items:center; justify-content:space-between; margin-top:10px;}
   .bod-pop .ok{border:none; background:var(--imports-color); color:var(--on-solid); font-weight:700; font-size:12px; border-radius:8px; padding:5px 12px; cursor:pointer; font-family:inherit;}
   .bod-pop .clr{font-size:11px; color:var(--text-muted); background:none; border:none; cursor:pointer; padding:0; text-decoration:underline; font-family:inherit;}
+  /* Costos locales: nota discreta debajo de la fila y valor en azul cuando ya se ingreso */
+  .imp-cost-row-wrap.has-note{border-left:none; background:none; padding:0; margin:0;}
+  .imp-cost-note-row{padding-left:24px;}
+  .imp-cost-note-tag{display:none;}
+  .imp-cost-note-row textarea{border:1px solid transparent; background:var(--surface-2); border-radius:6px; font-size:11.5px; color:var(--text-muted); padding:3px 8px;}
+  .imp-cost-note-row textarea:focus{border-color:var(--link); background:var(--surface); color:var(--text); outline:none;}
+  .imp-cost-row .imp-cost-amount.filled{color:var(--link); font-weight:700;}
 </style>
 
 <div class="pin-gate" id="pinGate">
@@ -4587,7 +4594,7 @@ if ("serviceWorker" in navigator) {
     html += '<div class="imp-cost-row'+(c.extra?' extra':'')+'">'
       + '<input type="checkbox" class="imp-cost-check" data-cidx="'+idx+'" '+(c.pagado?'checked':'')+' title="Pagado">'
       + '<input type="text" class="imp-cost-name" data-cidx="'+idx+'" value="'+esc(c.concepto||'')+'" placeholder="Concepto" onfocus="this.select()">'
-      + '<input type="number" step="0.01" class="imp-cost-amount" data-cidx="'+idx+'" value="'+(c.monto||0)+'" onfocus="this.select()">'
+      + '<input type="number" step="0.01" class="imp-cost-amount'+((parseFloat(c.monto)||0) > 0 ? ' filled' : '')+'" data-cidx="'+idx+'" value="'+(c.monto||0)+'" onfocus="this.select()">'
       + '<button type="button" class="imp-cost-smx-btn'+(c.soloSupermaxi?' on':'')+'" data-cidx="'+idx+'" title="'+(c.soloSupermaxi?'Solo Supermaxi: va completo al margen de Supermaxi (clic para quitar)':'Marcar como costo solo de Supermaxi (va completo al margen de Supermaxi)')+'">S</button>'
       + '<button type="button" class="imp-cost-note-btn'+(hasNote?' has-note':'')+'" data-cidx="'+idx+'" title="'+(hasNote?'Ver/editar nota':'Agregar nota')+'">📝</button>'
       + '<button type="button" class="imp-cost-remove" data-cidx="'+idx+'" title="Quitar">✕</button>'
@@ -6003,6 +6010,7 @@ if ("serviceWorker" in navigator) {
       });
     });
     document.querySelectorAll('.imp-cost-amount').forEach(function(el){
+      el.addEventListener('input', function(){ el.classList.toggle('filled', (parseFloat(el.value)||0) > 0); });
       el.addEventListener('change', function(){
         var idx = parseInt(el.getAttribute('data-cidx'),10);
         var costs = (imp.localCosts||[]).slice();
