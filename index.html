@@ -1765,6 +1765,8 @@ if ("serviceWorker" in navigator) {
   .rt-table th:first-child{text-align:left;}
   .rt-table td{padding:5px 8px; border-top:1px solid var(--border);}
   .rt-table td.nm{font-weight:600;}
+  .rt-table .rt-ph{width:22px; height:22px; margin:-3px 8px -3px 0; border-radius:5px; object-fit:cover; vertical-align:middle; display:inline-block; border:1px solid var(--border); background:var(--surface-2);}
+  .rt-table .rt-ph0{border-style:dashed; opacity:.6;}
   .rt-table td.nm small{display:block; font-weight:500; color:var(--text-muted); font-size:11px;}
   .rt-table td.n{text-align:right; white-space:nowrap;}
   .rt-table .mut{color:var(--text-muted);}
@@ -5464,7 +5466,8 @@ if ("serviceWorker" in navigator) {
       var g = (CATEGORY_LABEL[p.category] || p.category) + ' · ' + p.presentation;
       if(g !== last){ body += '<tr class="grp"><td colspan="9">' + esc(g) + '</td></tr>'; last = g; }
       if(cost > 0){ invC += stock * cost; invP += stock * net; var m35 = (net * 0.65 - cost) / (net * 0.65) * 100; if(!worst || m35 < worst.m){ worst = {m: m35, n: p.flavor + ' · ' + p.presentation}; } }
-      body += '<tr><td class="nm">' + esc(p.flavor) + '</td><td class="n mut">' + fmtInt(stock) + '</td>'
+      var ph = p.photoUrl ? '<img class="rt-ph" src="' + esc(p.photoUrl) + '" alt="" loading="lazy">' : '<span class="rt-ph rt-ph0"></span>';
+      body += '<tr><td class="nm">' + ph + esc(p.flavor) + '</td><td class="n mut">' + fmtInt(stock) + '</td>'
         + '<td class="n">' + (cost > 0 ? esc(fmtMoney(cost)) : '<span class="mut">sin costo</span>') + '</td><td class="n">' + esc(fmtMoney(net)) + '</td>'
         + cell(pvp, cost) + cell(net * 0.75, cost) + cell(net * 0.70, cost) + cell(net * 0.65, cost) + cell(smx[p.id], cost) + '</tr>';
     });
