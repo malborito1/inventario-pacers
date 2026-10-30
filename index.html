@@ -1733,6 +1733,46 @@ if ("serviceWorker" in navigator) {
   .imp-cost-note-row textarea{border:1px solid transparent; background:var(--surface-2); border-radius:6px; font-size:11.5px; color:var(--text-muted); padding:3px 8px;}
   .imp-cost-note-row textarea:focus{border-color:var(--link); background:var(--surface); color:var(--text); outline:none;}
   .imp-cost-row .imp-cost-amount.filled{color:var(--link); font-weight:700;}
+
+  /* Análisis: subpestañas, Rentabilidad y Comparador */
+  .ana-sub{display:flex; gap:6px; background:var(--surface-2); padding:4px; border-radius:12px; margin:0 0 12px; width:fit-content; max-width:100%; overflow-x:auto;}
+  .ana-sub button{border:none; background:transparent; color:var(--text-muted); font-weight:700; font-size:13px; padding:8px 14px; border-radius:9px; cursor:pointer; white-space:nowrap; font-family:inherit;}
+  .ana-sub button.active{background:var(--surface); color:var(--imports-color); box-shadow:var(--shadow);}
+  .ana-sub button:not(.active):hover{color:var(--text);}
+  .rt-cards{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:12px;}
+  .rt-cards.three{grid-template-columns:repeat(3,1fr); margin-top:8px;}
+  @media (max-width:760px){ .rt-cards, .rt-cards.three{grid-template-columns:repeat(2,1fr);} }
+  .rt-cards .fc-card b{font-size:19px; display:block; line-height:1.25;}
+  .rt-tools{display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; margin-bottom:10px; font-size:12px; color:var(--text-muted);}
+  .rt-mode{display:inline-flex; gap:6px;}
+  .rt-mode button{border:1px solid var(--border); background:var(--surface); color:var(--text); border-radius:999px; padding:3px 11px; font-size:12px; cursor:pointer; font-family:inherit;}
+  .rt-mode button.on{background:var(--imports-color); color:var(--on-solid); border-color:var(--imports-color);}
+  .rt-leg{margin-left:auto; display:inline-flex; align-items:center; gap:5px;}
+  .rt-leg i{width:12px; height:12px; border-radius:3px; display:inline-block; margin-left:6px;}
+  .rt-leg i.g2, td.g2{background:color-mix(in srgb, var(--success-tint) 45%, var(--surface));}
+  .rt-leg i.g, td.g{background:var(--success-tint);}
+  .rt-leg i.a, td.a{background:var(--warning-tint);}
+  .rt-leg i.r, td.r{background:var(--critical-tint);}
+  .rt-leg i.g2{border:1px solid var(--success);} 
+  .rt-wrap{overflow-x:auto; background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow);}
+  .rt-table{width:100%; border-collapse:collapse; font-size:12.5px; min-width:760px;}
+  .rt-table th{background:var(--surface-2); font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); padding:7px 8px; text-align:right; white-space:nowrap;}
+  .rt-table th:first-child{text-align:left;}
+  .rt-table td{padding:5px 8px; border-top:1px solid var(--border);}
+  .rt-table td.nm{font-weight:600;}
+  .rt-table td.nm small{display:block; font-weight:500; color:var(--text-muted); font-size:11px;}
+  .rt-table td.n{text-align:right; white-space:nowrap;}
+  .rt-table .mut{color:var(--text-muted);}
+  .rt-table td.n b{margin-right:5px;}
+  .rt-table td.n i{font-style:normal; font-size:11px; color:var(--text-muted);}
+  .rt-table tr.grp td{background:var(--success-tint); font-weight:800; font-size:12px; color:var(--success); padding:5px 8px;}
+  .rt-table tr.avg td{background:var(--surface-2); font-weight:700;}
+  .rt-table td.fx b{font-size:14px; margin:0;}
+  .rt-table .bar{height:6px; background:var(--surface-2); border-radius:4px; margin:4px 0 0 auto; width:110px;}
+  .rt-table .bar i{display:block; height:6px; border-radius:4px;}
+  .rt-table .bar i.g{background:var(--success);} .rt-table .bar i.a{background:var(--warning);} .rt-table .bar i.r{background:var(--critical);}
+  .rt-foot{font-size:11.5px; color:var(--text-muted); margin:8px 0 0; line-height:1.5;}
+  .rt-ins{margin-top:8px; padding:9px 12px; border:1px solid var(--border); border-left:4px solid var(--imports-color); border-radius:10px; background:var(--surface); font-size:12.5px; line-height:1.5;}
 </style>
 
 <div class="pin-gate" id="pinGate">
@@ -1780,7 +1820,7 @@ if ("serviceWorker" in navigator) {
     <div class="mode-switch" id="modeSwitch">
       <button class="mode-btn active" id="modeInvBtn" type="button">📦 Inventario</button>
       <button class="mode-btn" id="modeImportsBtn" type="button">🚢 Importaciones</button>
-      <button class="mode-btn" id="modeFcBtn" type="button">📈 Pronóstico</button>
+      <button class="mode-btn" id="modeFcBtn" type="button">📊 Análisis</button>
     </div>
 
     <div class="supermaxi-modebar" id="supermaxiModeBar"><span class="emoji">🏬</span> MODO SUPERMAXI · bodega aparte, no es el inventario general</div>
@@ -4818,6 +4858,7 @@ if ("serviceWorker" in navigator) {
   var FC_MES_L = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
   var FC_CAT = {endurance:'Endurance', hcf:'HCF', recovery:'Recovery'};
   var FC_DAYS = 1800;
+  var FC_LEAD_DAYS = 52;   // dias desde que haces el pedido hasta que llega a tu bodega
 
   // Cajas de lineas con precio (Supermaxi) que en realidad llegan a MI bodega, por importacion.
   // Para importaciones nuevas: agrega esas cajas como una linea aparte SIN precio y se cuentan solas.
@@ -4843,8 +4884,8 @@ if ("serviceWorker" in navigator) {
     if(!d && (t = by['llega a ecuador'])) d = FCE.addDays(t, 6);
     if(!d && (t = by['llega a miami'])) d = FCE.addDays(t, 22);
     if(!d && (t = by['recoge en origen'])) d = FCE.addDays(t, 38);
-    if(!d && (t = by['puse la orden'])) d = FCE.addDays(t, 61);
-    if(!d) d = FCE.addDays(today, 61);
+    if(!d && (t = by['puse la orden'])) d = FCE.addDays(t, FC_LEAD_DAYS);
+    if(!d) d = FCE.addDays(today, FC_LEAD_DAYS);
     if(d <= today) d = FCE.addDays(today, 1);
     return d;
   }
@@ -4951,7 +4992,7 @@ if ("serviceWorker" in navigator) {
   function fcSavePrefs(){ try{ var S = fcState(); localStorage.setItem('fcPrefs', JSON.stringify({growth:S.growth, cushion:S.cushion, n:S.n})); }catch(e){} }
 
   function fcOpts(today, S, fixed){
-    return {today: today, growth: S.growth, growthFrom: new Date(today.getFullYear() + 1, 0, 1), lead: 2, cushion: S.cushion, lastCover: 12,
+    return {today: today, growth: S.growth, growthFrom: new Date(today.getFullYear() + 1, 0, 1), lead: FC_LEAD_DAYS / FCE.MONTH, cushion: S.cushion, lastCover: 12,
       window: 12, horizonMonths: 24, newUpc30: 8, newUpc30Date: new Date(2027, 0, 1), fixed: fixed || []};
   }
   function fcFmtD(d){ return d.getDate() + ' ' + FC_MES[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2); }
@@ -5187,17 +5228,30 @@ if ("serviceWorker" in navigator) {
     var root = document.getElementById('categoriesRoot');
     var slot = document.getElementById('impTotalsCompact'); if(slot) slot.innerHTML = '';
     var y = window.scrollY;
-    var bar = '<div class="fc-bar"><h2>📈 Pronóstico de pedidos</h2><span>según tu stock, lo que viene y tus ventas</span></div>';
+    var A = state.ana = state.ana || {sub: 'forecast', mode: 'margen'};
     var html;
-    if(!state.extMovements && !state.extMovementsFailed){
-      html = '<div class="imp-empty">Cargando el historial de ventas…</div>';
-      ensureExtendedMovements(function(){ if(state.activeTab === 'IMPORTACIONES' && state.impView === 'forecast') render(); });
-    } else if(state.extMovementsFailed){
-      html = '<div class="imp-empty">No se pudo cargar el historial de ventas completo, así que el pronóstico no se muestra para no darte números incompletos. Recarga la página.</div>';
+    if(A.sub === 'rent' || A.sub === 'comp'){
+      try{ html = (A.sub === 'rent') ? fcRentHtml() : fcCompHtml(); }catch(e){ html = '<div class="imp-empty">No se pudo calcular esta vista: ' + esc(e && e.message) + '</div>'; if(window.console) console.error(e); }
     } else {
-      try{ html = fcHtml(); }catch(e){ html = '<div class="imp-empty">No se pudo calcular el pronóstico: ' + esc(e && e.message) + '</div>'; if(window.console) console.error(e); }
+      var bar = '<div class="fc-bar"><h2>📈 Pronóstico de pedidos</h2><span>según tu stock, lo que viene y tus ventas</span></div>';
+      var inner;
+      if(!state.extMovements && !state.extMovementsFailed){
+        inner = '<div class="imp-empty">Cargando el historial de ventas…</div>';
+        ensureExtendedMovements(function(){ if(state.activeTab === 'IMPORTACIONES' && state.impView === 'forecast') render(); });
+      } else if(state.extMovementsFailed){
+        inner = '<div class="imp-empty">No se pudo cargar el historial de ventas completo, así que el pronóstico no se muestra para no darte números incompletos. Recarga la página.</div>';
+      } else {
+        try{ inner = fcHtml(); }catch(e){ inner = '<div class="imp-empty">No se pudo calcular el pronóstico: ' + esc(e && e.message) + '</div>'; if(window.console) console.error(e); }
+      }
+      html = bar + inner;
     }
-    root.innerHTML = bar + html;
+    root.innerHTML = fcSubBarHtml(A.sub) + html;
+    document.querySelectorAll('.ana-sub button').forEach(function(b){
+      b.addEventListener('click', function(){ A.sub = b.getAttribute('data-sub'); render(); window.scrollTo(0, 0); });
+    });
+    document.querySelectorAll('.rt-mode button').forEach(function(b){
+      b.addEventListener('click', function(){ A.mode = b.getAttribute('data-mode'); render(); });
+    });
     document.querySelectorAll('.fc-seg button').forEach(function(b){
       b.addEventListener('click', function(){
         var S = fcState(), k = b.getAttribute('data-k'), v = parseFloat(b.getAttribute('data-v'));
@@ -5223,7 +5277,7 @@ if ("serviceWorker" in navigator) {
     if((t = by['llega a ecuador'])) return {d: FCE.addDays(t, 6), arrived: false};
     if((t = by['llega a miami'])) return {d: FCE.addDays(t, 22), arrived: false};
     if((t = by['recoge en origen'])) return {d: FCE.addDays(t, 38), arrived: false};
-    if((t = by['puse la orden'])) return {d: FCE.addDays(t, 61), arrived: false};
+    if((t = by['puse la orden'])) return {d: FCE.addDays(t, FC_LEAD_DAYS), arrived: false};
     return {d: null, arrived: false};
   }
   function fcCostMap(){
@@ -5359,6 +5413,133 @@ if ("serviceWorker" in navigator) {
     if(line && sum) sum.innerHTML = bodSummaryHtml(line, Math.round(parseFloat(e.target.value)));
   });
   window.addEventListener('resize', bodClosePop);
+
+  // ================= Análisis: Rentabilidad y Comparador de importaciones =================
+  // Solo lee (state.products, state.imports). No escribe nada.
+  var RT_IVA = 1.15;
+  var RT_CAT_RANK = {ENDURANCE: 0, HCF: 1, RECOVERY: 2};
+  function rtPresRank(p){ var n = fcNorm(p); return n === '30 servings' ? 0 : (n.indexOf('15') === 0 ? 1 : (n.indexOf('20') === 0 ? 2 : (n === 'sachets' ? 9 : 5))); }
+  function rtBandCls(m){ return m >= 71 ? 'g2' : (m >= 55 ? 'g' : (m >= 40 ? 'a' : 'r')); }
+  function rtPct(v){ return Math.round(v) + '%'; }
+  function fcSubBarHtml(sub){
+    var tabs = [['forecast', '📈 Pronóstico'], ['rent', '💰 Rentabilidad'], ['comp', '🚢 Comparador y entregas']];
+    return '<div class="ana-sub">' + tabs.map(function(t){ return '<button type="button" data-sub="' + t[0] + '" class="' + (sub === t[0] ? 'active' : '') + '">' + t[1] + '</button>'; }).join('') + '</div>';
+  }
+
+  function fcRentHtml(){
+    var A = state.ana, markup = A.mode === 'markup';
+    var costMap = fcCostMap();
+    var smx = {};
+    (state.imports || []).slice().sort(function(a, b){ return String(a.createdAt || '') < String(b.createdAt || '') ? -1 : 1; }).forEach(function(imp){
+      (imp.products || []).forEach(function(l){
+        var pv = parseFloat(l.precioVenta) || 0;
+        if(!(pv > 0) || !((parseFloat(l.cajas) || 0) > 0)) return;
+        var gp = importFindGeneralProduct(l.linea, l.sabor, l.presentacion);
+        if(gp) smx[gp.id] = pv;
+      });
+    });
+    var list = (state.products || []).filter(function(p){ return (parseFloat(p.pvpPerUnit) || 0) > 0; });
+    list.sort(function(a, b){
+      var ca = RT_CAT_RANK[a.category] != null ? RT_CAT_RANK[a.category] : 9, cb = RT_CAT_RANK[b.category] != null ? RT_CAT_RANK[b.category] : 9;
+      if(ca !== cb) return ca - cb;
+      var pa = rtPresRank(a.presentation), pb = rtPresRank(b.presentation);
+      if(pa !== pb) return pa - pb;
+      if(fcNorm(a.presentation) !== fcNorm(b.presentation)) return fcNorm(a.presentation) < fcNorm(b.presentation) ? -1 : 1;
+      return (parseFloat(a.order) || 9000) - (parseFloat(b.order) || 9000);
+    });
+    function cell(price, cost){
+      if(!(price > 0) || !(cost > 0)) return '<td class="n mut">-</td>';
+      var m = (price - cost) / price * 100, shown = markup ? (price - cost) / cost * 100 : m;
+      return '<td class="n ' + rtBandCls(m) + '"><b>' + rtPct(shown) + '</b><i>' + esc(fmtMoney(price - cost)) + '</i></td>';
+    }
+    var body = '', last = '', invC = 0, invP = 0, worst = null;
+    list.forEach(function(p){
+      var pvp = parseFloat(p.pvpPerUnit) || 0, net = pvp / RT_IVA, stock = Math.max(0, parseFloat(p.stock) || 0);
+      var cost = costMap[p.id] ? costMap[p.id].uio : ((parseFloat(p.costPerUnit) || 0) > 0 ? parseFloat(p.costPerUnit) : null);
+      var g = (CATEGORY_LABEL[p.category] || p.category) + ' · ' + p.presentation;
+      if(g !== last){ body += '<tr class="grp"><td colspan="9">' + esc(g) + '</td></tr>'; last = g; }
+      if(cost > 0){ invC += stock * cost; invP += stock * net; var m35 = (net * 0.65 - cost) / (net * 0.65) * 100; if(!worst || m35 < worst.m){ worst = {m: m35, n: p.flavor + ' · ' + p.presentation}; } }
+      body += '<tr><td class="nm">' + esc(p.flavor) + '</td><td class="n mut">' + fmtInt(stock) + '</td>'
+        + '<td class="n">' + (cost > 0 ? esc(fmtMoney(cost)) : '<span class="mut">sin costo</span>') + '</td><td class="n">' + esc(fmtMoney(net)) + '</td>'
+        + cell(pvp, cost) + cell(net * 0.75, cost) + cell(net * 0.70, cost) + cell(net * 0.65, cost) + cell(smx[p.id], cost) + '</tr>';
+    });
+    var cards = '<div class="rt-cards">'
+      + '<div class="fc-card"><small>Inventario a costo</small><b>' + esc(fmtMoney(invC)) + '</b><span>lo que pagaste por lo que tienes</span></div>'
+      + '<div class="fc-card"><small>Inventario a precio consumidor</small><b>' + esc(fmtMoney(invP)) + '</b><span>sin IVA</span></div>'
+      + '<div class="fc-card"><small>Margen potencial del stock</small><b>' + esc(fmtMoney(invP - invC)) + '</b><span>' + (invP > 0 ? Math.round((invP - invC) / invP * 100) : 0) + '% sobre precio consumidor</span></div>'
+      + '<div class="fc-card"><small>Menor margen con descuento B2B de 35%</small><b>' + (worst ? esc(worst.n) : '-') + '</b><span>' + (worst ? rtPct(worst.m) + ' de margen' : '') + '</span></div>'
+      + '</div>';
+    var tools = '<div class="rt-tools"><span>Ver margen sobre:</span><span class="rt-mode"><button type="button" data-mode="margen" class="' + (markup ? '' : 'on') + '">Precio (% sobre venta)</button><button type="button" data-mode="markup" class="' + (markup ? 'on' : '') + '">Markup (% sobre costo)</button></span>'
+      + '<span class="rt-leg"><i class="g2"></i>71% o más<i class="g"></i>55 a 70%<i class="a"></i>40 a 54%<i class="r"></i>menos de 40%</span></div>';
+    var table = '<div class="rt-wrap"><table class="rt-table"><thead><tr><th>Producto</th><th>Stock</th><th>Costo real</th><th>PVP sin IVA</th><th>Consumidor</th><th>B2B -25%</th><th>B2B -30%</th><th>B2B -35%</th><th>Supermaxi</th></tr></thead><tbody>' + body + '</tbody></table></div>';
+    var foot = '<p class="rt-foot">Costo real = costo puesto en Quito (UIO) de las importaciones que forman tu stock actual, el mismo que ves en el umbral. Consumidor se calcula sobre el PVP con IVA. B2B aplica el descuento sobre el PVP sin IVA. Supermaxi usa el precio de venta de tu importación. Los colores siempre se calculan sobre el margen sobre venta.</p>';
+    return '<div class="fc-bar"><h2>💰 Rentabilidad</h2><span>margen real de cada producto con tu costo puesto en Quito</span></div>' + cards + tools + table + foot;
+  }
+
+  function fcCompHtml(){
+    var today = fcToday();
+    var rows = [];
+    (state.imports || []).forEach(function(imp){
+      var t = importTotals(imp), st = imp.status || 'creada';
+      if(!(t.totalMercaderia > 0)) return;
+      if(st === 'creada' && !(t.freight > 0) && !(t.totalCostosLocales > 0)) return;   // planeada sin costos: no aporta
+      var by = {};
+      (imp.milestones || []).forEach(function(m){ by[fcNorm(m.label)] = fcParseDate(m.date); });
+      var cd = fcCostLabelDate(imp);
+      rows.push({imp: imp, t: t, st: st, by: by, key: (by['llega a bodega'] || cd.d || new Date(1970, 0, 1)).getTime()});
+    });
+    rows.sort(function(a, b){ return a.key - b.key; });
+    var ST = {cerrada: 'Cerrada', recibida: 'Recibida', creada: 'Planeada', transito_puerto: 'En camino', activa: 'En camino', transito_ecu: 'En camino'};
+    var maxExtra = 0.01; rows.forEach(function(r){ maxExtra = Math.max(maxExtra, r.t.factor - 1); });
+    var body = rows.map(function(r){
+      var t = r.t, f = t.factor, cls = f < 1.3 ? 'g' : (f < 1.6 ? 'a' : 'r'), w = Math.max(6, Math.round((f - 1) / maxExtra * 100));
+      return '<tr><td class="nm">' + esc(r.imp.name || '') + '<small>' + (ST[r.st] || r.st) + '</small></td><td class="n">' + esc(fmtMoney(t.totalMercaderia)) + '</td><td class="n">' + esc(fmtMoney(t.freight)) + '</td><td class="n">' + esc(fmtMoney(t.totalCostosLocales)) + '</td><td class="n">' + esc(fmtMoney(t.granTotal)) + '</td>'
+        + '<td class="n fx"><b>' + String(f.toFixed(2)).replace('.', ',') + '</b><div class="bar"><i class="' + cls + '" style="width:' + w + '%"></i></div></td>'
+        + '<td class="n">' + Math.round((f - 1) * 100) + '%</td><td class="n">' + Math.round(t.freight / t.totalMercaderia * 100) + '% / ' + Math.round(t.totalCostosLocales / t.totalMercaderia * 100) + '%</td></tr>';
+    }).join('');
+    var ins1 = '';
+    var sized = rows.filter(function(r){ return r.t.factor > 1; }).slice().sort(function(a, b){ return a.t.totalMercaderia - b.t.totalMercaderia; });
+    if(sized.length >= 2){
+      var sm = sized[0], bg = sized[sized.length - 1];
+      if(bg.t.factor < sm.t.factor - 0.05){
+        ins1 = 'Mientras más grande la importación, menor el factor: los costos fijos se reparten entre más unidades. Con ' + fmtMoney(sm.t.totalMercaderia) + ' de mercadería el factor fue ' + String(sm.t.factor.toFixed(2)).replace('.', ',') + ' y con ' + fmtMoney(bg.t.totalMercaderia) + ' fue ' + String(bg.t.factor.toFixed(2)).replace('.', ',') + '.';
+      }
+    }
+    rows.filter(function(r){ return r.st !== 'cerrada' && r.st !== 'recibida'; }).forEach(function(r){
+      ins1 += (ins1 ? ' ' : '') + esc(r.imp.name) + ' va en ' + String(r.t.factor.toFixed(2)).replace('.', ',') + ' y puede subir si registras más costos.';
+    });
+    // tiempos reales
+    function dd(a, b){ return (a && b) ? Math.round((b - a) / 86400000) : null; }
+    var tr = rows.map(function(r){
+      var b = r.by, s = [dd(b['puse la orden'], b['recoge en origen']), dd(b['recoge en origen'], b['llega a miami']), dd(b['llega a miami'], b['llega a ecuador']), dd(b['llega a ecuador'], b['llega a bodega'])];
+      var total = dd(b['puse la orden'], b['llega a bodega']);
+      return {name: r.imp.name || '', s: s, total: total, any: s.some(function(x){ return x != null && x >= 0; })};
+    }).filter(function(x){ return x.any; });
+    var avgs = [0, 1, 2, 3].map(function(i){ var v = tr.map(function(x){ return x.s[i]; }).filter(function(n){ return n != null && n >= 0; }); return v.length ? Math.round(v.reduce(function(a, c){ return a + c; }, 0) / v.length) : null; });
+    var totals = tr.map(function(x){ return x.total; }).filter(function(n){ return n != null && n >= 0; });
+    var avgT = totals.length ? Math.round(totals.reduce(function(a, c){ return a + c; }, 0) / totals.length) : null;
+    var trBody = tr.map(function(x){
+      return '<tr><td class="nm">' + esc(x.name) + '</td>' + x.s.map(function(v){ return '<td class="n' + (v == null || v < 0 ? ' mut' : '') + '">' + (v == null || v < 0 ? '-' : v) + '</td>'; }).join('')
+        + '<td class="n">' + (x.total != null && x.total >= 0 ? '<b>' + x.total + ' días</b>' : '<span class="mut">en curso</span>') + '</td></tr>';
+    }).join('');
+    var cards = '', ins2 = '';
+    if(avgT != null){
+      var mn = Math.min.apply(null, totals), mx = Math.max.apply(null, totals), diff = FC_LEAD_DAYS - avgT;
+      cards = '<div class="rt-cards three"><div class="fc-card"><small>Promedio real</small><b>' + avgT + ' días</b><span>de ' + totals.length + (totals.length === 1 ? ' importación' : ' importaciones') + ' con todas las fechas</span></div>'
+        + '<div class="fc-card"><small>Lo que usa el pronóstico</small><b>' + FC_LEAD_DAYS + ' días</b><span>desde que haces el pedido hasta tu bodega</span></div>'
+        + '<div class="fc-card"><small>Diferencia</small><b>' + (diff >= 0 ? '+' : '') + diff + ' días</b><span>' + (diff >= 0 ? 'de margen de seguridad' : 'el pronóstico es más optimista que lo real') + '</span></div></div>';
+      ins2 = 'Tus importaciones completas tardaron entre ' + mn + ' y ' + mx + ' días (promedio ' + avgT + '). ' + (diff >= 0 ? 'El pronóstico usa ' + FC_LEAD_DAYS + ' días, así que ya cuenta con un margen por si alguna se atrasa.' : 'El pronóstico usa ' + FC_LEAD_DAYS + ' días, menos que tu promedio real: conviene revisarlo.');
+    } else {
+      ins2 = 'Todavía no hay una importación con todas las fechas (desde "Puse la orden" hasta "Llega a bodega") para calcular el tiempo real.';
+    }
+    var tbl2 = tr.length ? '<div class="rt-wrap"><table class="rt-table"><thead><tr><th>Importación</th><th>Orden a recogida</th><th>Recogida a Miami</th><th>Miami a Ecuador</th><th>Ecuador a bodega</th><th>Total</th></tr></thead><tbody>' + trBody
+      + '<tr class="avg"><td class="nm">Promedio</td>' + avgs.map(function(v){ return '<td class="n">' + (v == null ? '-' : v) + '</td>'; }).join('') + '<td class="n"><b>' + (avgT == null ? '-' : avgT + ' días') + '</b></td></tr></tbody></table></div>' : '';
+    return '<div class="fc-bar"><h2>🚢 Comparador de importaciones</h2><span>cuánto te cuesta realmente traer cada importación</span></div>'
+      + (rows.length ? '<div class="rt-wrap"><table class="rt-table"><thead><tr><th>Importación</th><th>Mercadería</th><th>Flete</th><th>Costos locales</th><th>Total pagado</th><th>Factor de costeo</th><th>Extra sobre mercadería</th><th>Flete / locales</th></tr></thead><tbody>' + body + '</tbody></table></div>' : '<div class="imp-empty">Aún no hay importaciones con costos para comparar.</div>')
+      + (ins1 ? '<div class="rt-ins">💡 ' + ins1 + '</div>' : '')
+      + '<div class="fc-bar" style="margin-top:22px;"><h2>⏱ Tiempo real de entrega</h2><span>días de cada tramo, desde "Puse la orden" hasta "Llega a bodega"</span></div>'
+      + cards + tbl2 + '<div class="rt-ins">💡 ' + ins2 + '</div>';
+  }
 
   function renderImportaciones(){
     if(state.impView === 'forecast'){ fcRenderView(); return; }
