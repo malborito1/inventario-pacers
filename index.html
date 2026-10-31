@@ -1819,6 +1819,27 @@ if ("serviceWorker" in navigator) {
   :root[data-theme="dark"] .fc-pick.sel{background:var(--surface-2);}
   :root[data-theme="dark"] .fc-beyond{background:rgba(24,34,49,.72);}
   :root[data-theme="dark"] .fc-seg-grn,:root[data-theme="dark"] .fc-seg-amb,:root[data-theme="dark"] .fc-seg-red{opacity:1;}
+
+  /* ===== Pestaña Supermaxi (facturas, bodega, comision) ===== */
+  .smx-cards{grid-template-columns:repeat(3,1fr);}
+  @media (max-width:760px){ .smx-cards{grid-template-columns:1fr;} }
+  .smx-pend{text-decoration:none; color:var(--warning); font-weight:800;}
+  .smx-sec-h{display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 10px; margin:18px 0 8px;}
+  .smx-sec-h h3{margin:0; font-size:15px;} .smx-sec-h span{color:var(--text-muted); font-size:12.5px;}
+  .smx-table{min-width:560px;}
+  .smx-table td:first-child{text-align:left;}
+  .smx-fac td{font-weight:600; cursor:pointer;} .smx-fac:hover td{background:var(--surface-2);}
+  .smx-det td{font-size:12px; color:var(--text-muted); background:var(--surface-2);} .smx-det td:first-child{padding-left:24px;}
+  .smx-pill{border:1px solid transparent; border-radius:999px; font-family:inherit; font-size:12px; font-weight:800; padding:2px 11px; cursor:pointer;}
+  .smx-pill.pend{background:var(--warning-tint); color:var(--warning); border-color:var(--warning);}
+  .smx-pill.paid{background:var(--success-tint); color:var(--success); border-color:var(--success);}
+  .smx-payrow td{background:var(--surface-2); padding:10px 12px; text-align:left;}
+  .smx-payrow label{display:inline-flex; align-items:center; gap:6px; margin:0 12px 0 14px; font-size:12px; color:var(--text-muted); font-weight:700;}
+  .smx-payrow input{font-family:inherit; font-size:13px; padding:5px 8px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text);}
+  .smx-payrow input[type=text]{width:240px;}
+  .smx-save,.smx-sec{font-family:inherit; font-size:12.5px; font-weight:800; border-radius:8px; padding:6px 14px; cursor:pointer; margin-right:6px;}
+  .smx-save{background:var(--accent); color:var(--on-solid); border:1px solid var(--accent);}
+  .smx-sec{background:var(--surface); color:var(--text-muted); border:1px solid var(--border);}
 </style>
 
 <div class="pin-gate" id="pinGate">
@@ -4423,8 +4444,8 @@ if ("serviceWorker" in navigator) {
 
   function importSocioHtml(totals){
     if(!(totals.totalVentaProyectada > 0)) return '';
-    return '<div class="imp-kv"><span>Comisión socio <input type="number" id="impSocioPct" min="0" max="100" step="0.5" value="' + (totals.socioPct) + '" style="width:58px;padding:2px 4px;" onfocus="this.select()"> % del margen</span><b>−' + fmtMoney(totals.comisionSocio) + '</b></div>'
-      + '<div class="imp-kv imp-grand"><span>Tu ganancia neta</span><b style="color:' + (totals.gananciaNeta >= 0 ? 'var(--success)' : 'var(--critical)') + ';">' + fmtMoney(totals.gananciaNeta) + '</b></div>';
+    return '<div class="imp-kv"><span>Comisión estimada <input type="number" id="impSocioPct" min="0" max="100" step="0.5" value="' + (totals.socioPct) + '" style="width:58px;padding:2px 4px;" onfocus="this.select()"> % del margen</span><b>−' + fmtMoney(totals.comisionSocio) + '</b></div>'
+      + '<div class="imp-kv imp-grand"><span>Ganancia neta estimada</span><b style="color:' + (totals.gananciaNeta >= 0 ? 'var(--success)' : 'var(--critical)') + ';">' + fmtMoney(totals.gananciaNeta) + '</b></div>';
   }
 
   function importMarginNoteHtml(totals){
@@ -5276,8 +5297,8 @@ if ("serviceWorker" in navigator) {
     var y = window.scrollY;
     var A = state.ana = state.ana || {sub: 'forecast', mode: 'margen'};
     var html;
-    if(A.sub === 'rent' || A.sub === 'comp'){
-      try{ html = (A.sub === 'rent') ? fcRentHtml() : fcCompHtml(); }catch(e){ html = '<div class="imp-empty">No se pudo calcular esta vista: ' + esc(e && e.message) + '</div>'; if(window.console) console.error(e); }
+    if(A.sub === 'rent' || A.sub === 'comp' || A.sub === 'smx'){
+      try{ html = (A.sub === 'rent') ? fcRentHtml() : (A.sub === 'smx' ? fcSmxHtml() : fcCompHtml()); }catch(e){ html = '<div class="imp-empty">No se pudo calcular esta vista: ' + esc(e && e.message) + '</div>'; if(window.console) console.error(e); }
     } else {
       var bar = '<div class="fc-bar"><h2>📈 Pronóstico de pedidos</h2><span>según tu stock, lo que viene y tus ventas</span></div>';
       var inner;
@@ -5468,7 +5489,7 @@ if ("serviceWorker" in navigator) {
   function rtBandCls(m){ return m >= 65 ? 'g2' : (m >= 55 ? 'g' : (m >= 40 ? 'a' : 'r')); }
   function rtPct(v){ return Math.round(v) + '%'; }
   function fcSubBarHtml(sub){
-    var tabs = [['forecast', '📈 Pronóstico'], ['rent', '💰 Rentabilidad'], ['comp', '🚢 Comparador y entregas']];
+    var tabs = [['forecast', '📈 Pronóstico'], ['rent', '💰 Rentabilidad'], ['comp', '🚢 Comparador y entregas'], ['smx', '🧾 Supermaxi']];
     return '<div class="ana-sub">' + tabs.map(function(t){ return '<button type="button" data-sub="' + t[0] + '" class="' + (sub === t[0] ? 'active' : '') + '">' + t[1] + '</button>'; }).join('') + '</div>';
   }
 
@@ -5496,6 +5517,13 @@ if ("serviceWorker" in navigator) {
         if(r.received && factor > 0 && c.porUnidad > 0) cost[gp.id] = {v: c.porUnidad * factor, src: r.imp.name || 'Supermaxi'};
       });
     });
+    try{
+      var SM = smxCompute();
+      (state.products || []).forEach(function(p){
+        var q = SM.byKey[smxKey(p.category, p.presentation, p.flavor)], st = q && SM.stock[q.id];
+        if(st && st.avg > 0 && (parseFloat(q.stock) || 0) > 0) cost[p.id] = {v: st.avg, src: 'promedio de tu bodega Supermaxi'};
+      });
+    }catch(e){ if(window.console) console.error(e); }
     (state.products || []).forEach(function(p){
       if(price[p.id]) return;
       var cat = (state.supermaxiProducts || []).filter(function(q){ return q.category === p.category && fcNorm(q.presentation) === fcNorm(p.presentation) && fcNorm(q.flavor) === fcNorm(p.flavor); })[0];
@@ -5765,6 +5793,168 @@ if ("serviceWorker" in navigator) {
     if(b.hasAttribute('data-cort-reason')) cs.reason = b.getAttribute('data-cort-reason');
     else cs.detail = !cs.detail;
     render();
+  });
+  // ================= Supermaxi: bodega con costo promedio, facturas y comision del socio =================
+  var SMX_ST = {open: {}, pay: null};
+  function smxPad(n){ return (n < 10 ? '0' : '') + n; }
+  function smxDay(d){ return d.getFullYear() + '-' + smxPad(d.getMonth() + 1) + '-' + smxPad(d.getDate()); }
+  function smxDayText(day){ var p = day.split('-'); var d = new Date(+p[0], +p[1] - 1, +p[2]); return d.toLocaleDateString('es-EC', {day: 'numeric', month: 'short', year: 'numeric'}); }
+  function smxKey(c, p, f){ return c + '|' + fcNorm(p) + '|' + fcNorm(f); }
+
+  // Costo promedio ponderado: cada importacion de Supermaxi que llega suma unidades a su costo,
+  // cada salida (venta o ajuste) se costea con el promedio que habia ese dia.
+  function smxCompute(){
+    var today = fcToday(), now = Date.now();
+    var cats = state.supermaxiProducts || [], byKey = {}, byId = {};
+    cats.forEach(function(q){ byKey[smxKey(q.category, q.presentation, q.flavor)] = q; byId[q.id] = q; });
+    var imps = [];
+    (state.imports || []).forEach(function(imp){
+      var lines = imp.products || [];
+      var isSmx = /supermaxi/i.test(String(imp.cliente || '') + ' ' + String(imp.name || '')) || lines.some(function(l){ return (parseFloat(l.precioVenta) || 0) > 0; });
+      if(!isSmx) return;
+      var cd = fcCostLabelDate(imp), st = imp.status || 'creada';
+      var received = (st === 'cerrada' || st === 'recibida') || !!(cd.arrived && cd.d && cd.d <= today);
+      var t = cd.d ? cd.d.getTime() : (Date.parse(imp.createdAt || '') || 0);
+      imps.push({imp: imp, received: received, t: t, planned: st === 'creada'});
+    });
+    imps.sort(function(a, b){ return a.t - b.t; });
+    var ev = {}, incoming = {};
+    imps.forEach(function(r){
+      var factor = importTotals(r.imp).factor || 0;
+      (r.imp.products || []).forEach(function(l){
+        if(!((parseFloat(l.cajas) || 0) > 0)) return;
+        var gp = importFindGeneralProduct(l.linea, l.sabor, l.presentacion); if(!gp) return;
+        var q = byKey[smxKey(gp.category, gp.presentation, gp.flavor)]; if(!q) return;
+        var c = importLineCalc(l), u = c.unidades, cost = c.porUnidad * factor;
+        if(!(u > 0) || !(cost > 0)) return;
+        if(r.received){ (ev[q.id] = ev[q.id] || []).push({t: Math.min(r.t, now), k: 0, u: u, c: cost, src: r.imp.name || 'Supermaxi'}); }
+        else if(!r.planned){
+          var o = incoming[q.id] = incoming[q.id] || {u: 0, v: 0, src: r.imp.name || 'Supermaxi'};
+          o.u += u; o.v += u * cost;
+        }
+      });
+    });
+    (state.supermaxiMovements || []).forEach(function(m){
+      var d = parseFloat(m.deltaStock) || 0;
+      if(m.reversed || !(d < 0) || !m.productId) return;
+      (ev[m.productId] = ev[m.productId] || []).push({t: Date.parse(m.at) || 0, k: 1, u: -d, id: m.id});
+    });
+    var unitCost = {}, stock = {};
+    Object.keys(ev).forEach(function(pid){
+      var list = ev[pid].sort(function(a, b){ return a.t - b.t || a.k - b.k; });
+      var firstArr = list.filter(function(e){ return e.k === 0; })[0];
+      var qty = 0, avg = 0, last = null, src = '';
+      list.forEach(function(e){
+        if(e.k === 0){ avg = (qty * avg + e.u * e.c) / (qty + e.u); qty += e.u; last = e.c; src = e.src; }
+        else { unitCost[e.id] = qty > 0 ? avg : (last != null ? last : (firstArr ? firstArr.c : null)); qty = Math.max(0, qty - e.u); }
+      });
+      if(last != null) stock[pid] = {qty: qty, avg: qty > 0 ? avg : last, src: src};
+    });
+    var latest = imps.length ? imps[imps.length - 1].imp : null;
+    var pct = latest && latest.socioPct != null && !isNaN(parseFloat(latest.socioPct)) ? parseFloat(latest.socioPct) : 15;
+    // Facturas: ventas del mismo dia, nota y cliente
+    var groups = {}, order = [];
+    (state.supermaxiMovements || []).forEach(function(m){
+      if(m.type !== 'venta' || m.reversed) return;
+      var day = smxDay(new Date(m.at)), k = day + '|' + (m.note || '') + '|' + (m.client || '');
+      var g = groups[k];
+      if(!g){ g = groups[k] = {key: k, day: day, note: m.note || '', client: m.client || '', lines: [], ids: [], rev: 0, cost: 0, noCost: 0, paid: null}; order.push(g); }
+      var q = byId[m.productId], units = Math.abs(parseFloat(m.deltaStock) || parseFloat(m.qty) || 0);
+      var rev = (parseFloat(m.revenue) || 0) / RT_IVA;
+      if(!(rev > 0) && q) rev = units * ((parseFloat(q.pvpSinIva) || 0) > 0 ? parseFloat(q.pvpSinIva) : (parseFloat(q.pvpPerUnit) || 0) / RT_IVA);
+      var uc = unitCost[m.id], cost = uc != null ? uc * units : 0;
+      if(uc == null) g.noCost++;
+      g.lines.push({label: m.productLabel || (q ? q.presentation + ' · ' + q.flavor : ''), units: units, rev: rev, cost: cost, uc: uc});
+      g.ids.push(m.id); g.rev += rev; g.cost += cost;
+      if(m.comPago) g.paid = m.comPago;
+    });
+    order.sort(function(a, b){ return a.day < b.day ? 1 : (a.day > b.day ? -1 : 0); });
+    var tot = {rev: 0, margin: 0, com: 0, paid: 0};
+    order.forEach(function(g){
+      g.margin = g.rev - g.cost;
+      g.pct = g.paid ? (parseFloat(g.paid.pct) || pct) : pct;
+      g.com = g.paid ? (parseFloat(g.paid.monto) || 0) : (g.margin > 0 ? Math.round(g.margin * g.pct) / 100 : 0);
+      tot.rev += g.rev; tot.margin += g.margin; tot.com += g.com; if(g.paid) tot.paid += g.com;
+    });
+    return {groups: order, tot: tot, pct: pct, stock: stock, incoming: incoming, byId: byId, byKey: byKey};
+  }
+
+  function smxStockRows(S){
+    var rows = [];
+    (state.supermaxiProducts || []).forEach(function(q){
+      var st = S.stock[q.id], inc = S.incoming[q.id], have = parseFloat(q.stock) || 0;
+      if(!(have > 0) && !inc) return;
+      rows.push({q: q, have: have, cost: st ? st.avg : null, src: st ? st.src : '', inc: inc});
+    });
+    var rank = {ENDURANCE: 0, HCF: 1, RECOVERY: 2};
+    rows.sort(function(a, b){
+      if((a.have > 0) !== (b.have > 0)) return a.have > 0 ? -1 : 1;
+      var ca = rank[a.q.category] != null ? rank[a.q.category] : 9, cb = rank[b.q.category] != null ? rank[b.q.category] : 9;
+      if(ca !== cb) return ca - cb;
+      if(fcNorm(a.q.presentation) !== fcNorm(b.q.presentation)) return fcNorm(a.q.presentation) === '30 servings' ? -1 : 1;
+      return String(a.q.flavor).localeCompare(String(b.q.flavor));
+    });
+    return rows;
+  }
+
+  function fcSmxHtml(){
+    var S = smxCompute(), T = S.tot, nf = function(n){ return Math.round(n).toLocaleString('es-EC'); };
+    var cards = '<div class="fc-cards smx-cards">'
+      + '<div class="fc-card"><small>Facturado a Supermaxi</small><b>' + esc(fmtMoney(T.rev)) + '</b><span>' + S.groups.length + (S.groups.length === 1 ? ' pedido, sin IVA' : ' pedidos, sin IVA') + '</span></div>'
+      + '<div class="fc-card"><small>Comisión a tu socio (' + String(S.pct).replace('.', ',') + ' %)</small><b>' + esc(fmtMoney(T.com)) + '</b><span>pagada ' + esc(fmtMoney(T.paid)) + ' · pendiente <u class="smx-pend">' + esc(fmtMoney(T.com - T.paid)) + '</u></span></div>'
+      + '<div class="fc-card fc-sug"><small>Tu ganancia neta</small><b>' + esc(fmtMoney(T.margin - T.com)) + '</b><span>margen ' + esc(fmtMoney(T.margin)) + ' menos comisión</span></div></div>';
+    var rows = '';
+    if(!S.groups.length) rows = '<tr><td colspan="5" class="mut" style="text-align:center;padding:14px;">Aún no hay ventas registradas en la sección Supermaxi.</td></tr>';
+    S.groups.forEach(function(g){
+      var open = !!SMX_ST.open[g.key];
+      var title = smxDayText(g.day) + (g.note ? ' · ' + esc(g.note) : '') + (g.client ? ' · ' + esc(g.client) : '');
+      var tip = g.paid ? ('Pagada el ' + smxDayText(g.paid.fecha || g.day) + (g.paid.nota ? ' · ' + g.paid.nota : '')) : 'Clic para marcar como pagada';
+      var pill = '<button type="button" class="smx-pill ' + (g.paid ? 'paid' : 'pend') + '" data-smx-pay="' + esc(g.key) + '" title="' + esc(tip) + '">' + (g.paid ? '✓ Pagada ' + esc(smxDayText(g.paid.fecha || g.day).replace(/ \d{4}$/, '')) : 'Pendiente') + '</button>';
+      rows += '<tr class="smx-fac" data-smx-row="' + esc(g.key) + '"><td>' + (open ? '▾ ' : '▸ ') + title + '</td><td class="n">' + esc(fmtMoney(g.rev)) + '</td><td class="n">' + esc(fmtMoney(g.margin)) + (g.noCost ? ' <span title="Falta el costo de alguna línea">⚠</span>' : '') + '</td><td class="n"><b>' + esc(fmtMoney(g.com)) + '</b></td><td class="n">' + pill + '</td></tr>';
+      if(open){
+        g.lines.forEach(function(l){
+          rows += '<tr class="smx-det"><td>' + esc(l.label) + ' · ' + nf(l.units) + ' u</td><td class="n">' + esc(fmtMoney(l.rev)) + '</td><td class="n">' + esc(fmtMoney(l.rev - l.cost)) + '</td><td class="n" colspan="2">costo ' + (l.uc != null ? esc(fmtMoney(l.uc)) + ' por unidad' : 'sin dato') + '</td></tr>';
+        });
+      }
+      if(SMX_ST.pay === g.key){
+        var today = smxDay(fcToday());
+        rows += '<tr class="smx-payrow"><td colspan="5"><b>Comisión ' + esc(fmtMoney(g.com)) + '</b> ' + (g.paid ? '(pagada)' : '') + '<label>Fecha <input type="date" id="smxDate" value="' + esc((g.paid && g.paid.fecha) || today) + '"></label><label>Nota <input type="text" id="smxNote" placeholder="Ej: transferencia Produbanco" value="' + esc((g.paid && g.paid.nota) || '') + '"></label>'
+          + '<button type="button" class="smx-save" data-smx-save="' + esc(g.key) + '">Guardar</button>' + (g.paid ? '<button type="button" class="smx-sec" data-smx-unpay="' + esc(g.key) + '">Quitar pago</button>' : '') + '<button type="button" class="smx-sec" data-smx-cancel="1">Cancelar</button></td></tr>';
+      }
+    });
+    var facs = '<div class="sec smx-sec-h"><h3>Facturas a Supermaxi</h3></div><div class="rt-wrap"><table class="rt-table smx-table"><thead><tr><th>Pedido</th><th>Venta</th><th>Margen</th><th>Comisión</th><th>Estado</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    var srows = smxStockRows(S).map(function(r){
+      var inc = r.inc ? nf(r.inc.u) + ' u a ' + esc(fmtMoney(r.inc.v / r.inc.u)) : '-';
+      return '<tr><td>' + esc(r.q.presentation + ' · ' + r.q.flavor) + '</td><td class="n">' + (r.have > 0 ? nf(r.have) + ' u' : '<span class="mut">0</span>') + '</td><td class="n">' + (r.cost != null && r.have > 0 ? '<b>' + esc(fmtMoney(r.cost)) + '</b>' : '<span class="mut">-</span>') + '</td><td class="n mut">' + inc + '</td></tr>';
+    }).join('');
+    var bod = '<div class="sec smx-sec-h"><h3>Bodega Supermaxi</h3><span>el costo promedio se recalcula solo cuando llega una importación</span></div><div class="rt-wrap"><table class="rt-table smx-table"><thead><tr><th>Producto</th><th>En bodega</th><th>Costo promedio</th><th>Viene en camino</th></tr></thead><tbody>' + (srows || '<tr><td colspan="4" class="mut" style="text-align:center;padding:14px;">No hay productos en la bodega Supermaxi.</td></tr>') + '</tbody></table></div>';
+    return '<div class="fc-wrap"><div class="fc-bar"><h2>🧾 Supermaxi</h2><span>lo que te compran, tu costo real y la comisión</span></div>' + cards + facs + bod + '</div>';
+  }
+
+  function smxFind(key){ var S = smxCompute(), g = S.groups.filter(function(x){ return x.key === key; })[0]; return {S: S, g: g}; }
+  document.addEventListener('click', function(ev){
+    var t = ev.target; if(!t || !t.closest) return;
+    var el;
+    if((el = t.closest('[data-smx-save]'))){
+      var f = smxFind(el.getAttribute('data-smx-save')); if(!f.g || !state.db) return;
+      var fecha = (document.getElementById('smxDate') || {}).value || smxDay(fcToday()), nota = ((document.getElementById('smxNote') || {}).value || '').trim();
+      var pago = {fecha: fecha, nota: nota, monto: f.g.com, pct: f.g.pct};
+      Promise.all(f.g.ids.map(function(id){ return state.db.doc('supermaxiMovements/' + id).update({comPago: pago}); }))
+        .then(function(){ SMX_ST.pay = null; showStatus('Comisión marcada como pagada.'); render(); })
+        .catch(function(){ showStatus('No se pudo guardar el pago. Intenta de nuevo.', true); });
+      return;
+    }
+    if((el = t.closest('[data-smx-unpay]'))){
+      var f2 = smxFind(el.getAttribute('data-smx-unpay')); if(!f2.g || !state.db) return;
+      Promise.all(f2.g.ids.map(function(id){ return state.db.doc('supermaxiMovements/' + id).update({comPago: firebase.firestore.FieldValue.delete()}); }))
+        .then(function(){ SMX_ST.pay = null; showStatus('Pago quitado: la comisión vuelve a pendiente.'); render(); })
+        .catch(function(){ showStatus('No se pudo quitar el pago.', true); });
+      return;
+    }
+    if(t.closest('[data-smx-cancel]')){ SMX_ST.pay = null; render(); return; }
+    if((el = t.closest('[data-smx-pay]'))){ SMX_ST.pay = (SMX_ST.pay === el.getAttribute('data-smx-pay')) ? null : el.getAttribute('data-smx-pay'); render(); return; }
+    if(t.closest('.smx-payrow')) return;
+    if((el = t.closest('[data-smx-row]'))){ var k = el.getAttribute('data-smx-row'); SMX_ST.open[k] = !SMX_ST.open[k]; render(); }
   });
 
   function renderImportaciones(){
