@@ -5511,13 +5511,13 @@ if ("serviceWorker" in navigator) {
     });
     imps.sort(function(a, b){ return a.key - b.key; });
     imps.forEach(function(r){
-      var factor = importTotals(r.imp).factor || 0;
+      var factor = importTotals(r.imp).factor || 0; r.lc = smxLineCosts(r.imp);
       (r.imp.products || []).forEach(function(l){
         if(!((parseFloat(l.cajas) || 0) > 0)) return;
         var gp = importFindGeneralProduct(l.linea, l.sabor, l.presentacion); if(!gp) return;
         var pv = parseFloat(l.precioVenta) || 0, c = importLineCalc(l);
         if(pv > 0) price[gp.id] = {v: pv, src: r.imp.name || 'Supermaxi'};
-        if(r.received && factor > 0 && c.porUnidad > 0) cost[gp.id] = {v: c.porUnidad * factor, src: r.imp.name || 'Supermaxi'};
+        if(r.received && factor > 0 && c.porUnidad > 0) cost[gp.id] = {v: r.lc(l), src: r.imp.name || 'Supermaxi'};
       });
     });
     try{
@@ -5804,6 +5804,25 @@ if ("serviceWorker" in navigator) {
   function smxDayText(day){ var p = day.split('-'); var d = new Date(+p[0], +p[1] - 1, +p[2]); return d.toLocaleDateString('es-EC', {day: 'numeric', month: 'short', year: 'numeric'}); }
   function smxKey(c, p, f){ return c + '|' + fcNorm(p) + '|' + fcNorm(f); }
 
+  // Costo por unidad de cada linea de una importacion, igual que el margen proyectado de la importacion:
+  // todo el costo (menos los gastos "solo Supermaxi") se reparte por valor FOB, y los gastos "solo Supermaxi"
+  // (y las cajas display) recaen completos en las lineas con precio de venta.
+  function smxLineCosts(imp){
+    var T = importTotals(imp), lines = imp.products || [], solo = T.costoSoloSmx || 0;
+    var f0 = T.totalMercaderia > 0 ? (T.granTotal - solo) / T.totalMercaderia : 0;
+    var pricedTotal = 0, dispFob = 0;
+    lines.forEach(function(l){
+      var c = importLineCalc(l), pv = parseFloat(l.precioVenta) || 0;
+      if(pv > 0) pricedTotal += c.total;
+      else if(l.linea === IMPORT_DISPLAY_LINE.linea && l.sabor === IMPORT_DISPLAY_LINE.sabor) dispFob += c.total;
+    });
+    var extra = solo + dispFob * f0;
+    return function(l){
+      var c = importLineCalc(l), pv = parseFloat(l.precioVenta) || 0;
+      var u = c.unidades; if(!(u > 0)) return 0;
+      return c.porUnidad * f0 + ((pv > 0 && pricedTotal > 0) ? extra * (c.total / pricedTotal) / u : 0);
+    };
+  }
   // Costo promedio ponderado: cada importacion de Supermaxi que llega suma unidades a su costo,
   // cada salida (venta o ajuste) se costea con el promedio que habia ese dia.
   function smxCompute(){
@@ -5823,12 +5842,12 @@ if ("serviceWorker" in navigator) {
     imps.sort(function(a, b){ return a.t - b.t; });
     var ev = {}, incoming = {};
     imps.forEach(function(r){
-      var factor = importTotals(r.imp).factor || 0;
+      var lineCost = smxLineCosts(r.imp);
       (r.imp.products || []).forEach(function(l){
         if(!((parseFloat(l.cajas) || 0) > 0)) return;
         var gp = importFindGeneralProduct(l.linea, l.sabor, l.presentacion); if(!gp) return;
         var q = byKey[smxKey(gp.category, gp.presentation, gp.flavor)]; if(!q) return;
-        var c = importLineCalc(l), u = c.unidades, cost = c.porUnidad * factor;
+        var c = importLineCalc(l), u = c.unidades, cost = lineCost(l);
         if(!(u > 0) || !(cost > 0)) return;
         if(r.received){ (ev[q.id] = ev[q.id] || []).push({t: Math.min(r.t, now), k: 0, u: u, c: cost, src: r.imp.name || 'Supermaxi'}); }
         else if(!r.planned){
