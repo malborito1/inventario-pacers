@@ -5894,6 +5894,10 @@ if ("serviceWorker" in navigator) {
     var todayStr = smxDay(fcToday());
     order.forEach(function(g){
       var pg = (state.payments || []).filter(function(x){ return g.note && x.name === g.note && x.origin !== 'retencion' && (parseFloat(x.amount) || 0) > 0; })[0];
+      var rel = (state.payments || []).filter(function(x){ return g.note && x.name === g.note; });
+      var fact = 0, ret = 0, otros = 0;
+      rel.forEach(function(x){ var a = parseFloat(x.amount) || 0; if(a > 0) fact += a; else if(x.origin === 'retencion') ret += -a; else otros += -a; });
+      g.pagos = pg ? {fact: fact, ret: ret, otros: otros, net: fact - ret - otros} : null;
       g.cobro = pg ? {paid: pg.status === 'paid', at: pg.paidAt ? smxDay(new Date(pg.paidAt)) : '', due: pg.dueDate || '', over: pg.status !== 'paid' && !!pg.dueDate && pg.dueDate < todayStr} : null;
     });
     var tot = {rev: 0, margin: 0, com: 0, paid: 0, now: 0, wait: 0};
@@ -5942,6 +5946,9 @@ if ("serviceWorker" in navigator) {
       var pill = '<button type="button" class="smx-pill ' + (g.paid ? 'paid' : ((g.cobro && g.cobro.paid) ? 'pend' : 'wait')) + '" data-smx-pay="' + esc(g.key) + '" title="' + esc(tip) + '">' + (g.paid ? '✓ Pagada ' + esc(short(g.paid.fecha || g.day)) : ((g.cobro && g.cobro.paid) ? 'Por pagar' : 'Espera cobro')) + '</button>';
       rows += '<tr class="smx-fac" data-smx-row="' + esc(g.key) + '"><td>' + (open ? '▾ ' : '▸ ') + title + '</td><td class="n">' + esc(fmtMoney(g.rev)) + '</td><td class="n">' + esc(fmtMoney(g.margin)) + (g.noCost ? ' <span title="Falta el costo de alguna línea">⚠</span>' : '') + '</td><td class="n"><b>' + esc(fmtMoney(g.com)) + '</b></td><td class="n">' + cob + '</td><td class="n">' + pill + '</td></tr>';
       if(open){
+        if(g.pagos){
+          rows += '<tr class="smx-det smx-pg"><td colspan="6">Según Pagos: factura ' + esc(fmtMoney(g.pagos.fact)) + ' con IVA · retención −' + esc(fmtMoney(g.pagos.ret)) + (g.pagos.otros > 0 ? ' · abonos −' + esc(fmtMoney(g.pagos.otros)) : '') + ' · <b>' + (g.cobro && g.cobro.paid ? 'Supermaxi pagó ' : 'Supermaxi debe pagar ') + esc(fmtMoney(g.pagos.net)) + '</b></td></tr>';
+        }
         g.lines.forEach(function(l){
           rows += '<tr class="smx-det"><td>' + esc(l.label) + ' · ' + nf(l.units) + ' u</td><td class="n">' + esc(fmtMoney(l.rev)) + '</td><td class="n">' + esc(fmtMoney(l.rev - l.cost)) + '</td><td class="n" colspan="3">costo ' + (l.uc != null ? esc(fmtMoney(l.uc)) + ' por unidad' : 'sin dato') + '</td></tr>';
         });
