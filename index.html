@@ -1840,6 +1840,9 @@ if ("serviceWorker" in navigator) {
   .smx-save,.smx-sec{font-family:inherit; font-size:12.5px; font-weight:800; border-radius:8px; padding:6px 14px; cursor:pointer; margin-right:6px;}
   .smx-save{background:var(--accent); color:var(--on-solid); border:1px solid var(--accent);}
   .smx-sec{background:var(--surface); color:var(--text-muted); border:1px solid var(--border);}
+  .smx-pill.over{background:var(--critical-tint); color:var(--critical); border-color:var(--critical); cursor:default;}
+  .smx-pill.wait{background:var(--surface-2); color:var(--text-muted); border-color:var(--border);}
+  .smx-pill.paid:not(button){cursor:default;}
 </style>
 
 <div class="pin-gate" id="pinGate">
@@ -5868,13 +5871,20 @@ if ("serviceWorker" in navigator) {
       g.ids.push(m.id); g.rev += rev; g.cost += cost;
       if(m.comPago) g.paid = m.comPago;
     });
-    order.sort(function(a, b){ return a.day < b.day ? 1 : (a.day > b.day ? -1 : 0); });
-    var tot = {rev: 0, margin: 0, com: 0, paid: 0};
+    var nat = function(a, b){ var x = String(a).match(/\d+/g) || [], y = String(b).match(/\d+/g) || []; for(var i = 0; i < Math.max(x.length, y.length); i++){ var d = (+x[i] || 0) - (+y[i] || 0); if(d) return d; } return 0; };
+    order.sort(function(a, b){ return a.day < b.day ? 1 : (a.day > b.day ? -1 : (nat(a.note, b.note) || (a.note < b.note ? -1 : 1))); });
+    var todayStr = smxDay(fcToday());
+    order.forEach(function(g){
+      var pg = (state.payments || []).filter(function(x){ return g.note && x.name === g.note && x.origin !== 'retencion' && (parseFloat(x.amount) || 0) > 0; })[0];
+      g.cobro = pg ? {paid: pg.status === 'paid', at: pg.paidAt ? smxDay(new Date(pg.paidAt)) : '', due: pg.dueDate || '', over: pg.status !== 'paid' && !!pg.dueDate && pg.dueDate < todayStr} : null;
+    });
+    var tot = {rev: 0, margin: 0, com: 0, paid: 0, now: 0, wait: 0};
     order.forEach(function(g){
       g.margin = g.rev - g.cost;
       g.pct = g.paid ? (parseFloat(g.paid.pct) || pct) : pct;
       g.com = g.paid ? (parseFloat(g.paid.monto) || 0) : (g.margin > 0 ? Math.round(g.margin * g.pct) / 100 : 0);
-      tot.rev += g.rev; tot.margin += g.margin; tot.com += g.com; if(g.paid) tot.paid += g.com;
+      tot.rev += g.rev; tot.margin += g.margin; tot.com += g.com;
+      if(g.paid) tot.paid += g.com; else if(g.cobro && g.cobro.paid) tot.now += g.com; else tot.wait += g.com;
     });
     return {groups: order, tot: tot, pct: pct, stock: stock, incoming: incoming, byId: byId, byKey: byKey};
   }
@@ -5900,29 +5910,31 @@ if ("serviceWorker" in navigator) {
   function fcSmxHtml(){
     var S = smxCompute(), T = S.tot, nf = function(n){ return Math.round(n).toLocaleString('es-EC'); };
     var cards = '<div class="fc-cards smx-cards">'
-      + '<div class="fc-card"><small>Facturado a Supermaxi</small><b>' + esc(fmtMoney(T.rev)) + '</b><span>' + S.groups.length + (S.groups.length === 1 ? ' pedido, sin IVA' : ' pedidos, sin IVA') + '</span></div>'
-      + '<div class="fc-card"><small>Comisión a tu socio (' + String(S.pct).replace('.', ',') + ' %)</small><b>' + esc(fmtMoney(T.com)) + '</b><span>pagada ' + esc(fmtMoney(T.paid)) + ' · pendiente <u class="smx-pend">' + esc(fmtMoney(T.com - T.paid)) + '</u></span></div>'
+      + '<div class="fc-card"><small>Facturado a Supermaxi</small><b>' + esc(fmtMoney(T.rev)) + '</b><span>' + S.groups.length + (S.groups.length === 1 ? ' factura, sin IVA' : ' facturas, sin IVA') + '</span></div>'
+      + '<div class="fc-card"><small>Comisión por pagar ahora (' + String(S.pct).replace('.', ',') + ' %)</small><b>' + esc(fmtMoney(T.now)) + '</b><span>ya pagada ' + esc(fmtMoney(T.paid)) + ' · cuando Supermaxi pague: ' + esc(fmtMoney(T.wait)) + '</span></div>'
       + '<div class="fc-card fc-sug"><small>Tu ganancia neta</small><b>' + esc(fmtMoney(T.margin - T.com)) + '</b><span>margen ' + esc(fmtMoney(T.margin)) + ' menos comisión</span></div></div>';
     var rows = '';
-    if(!S.groups.length) rows = '<tr><td colspan="5" class="mut" style="text-align:center;padding:14px;">Aún no hay ventas registradas en la sección Supermaxi.</td></tr>';
+    if(!S.groups.length) rows = '<tr><td colspan="6" class="mut" style="text-align:center;padding:14px;">Aún no hay ventas registradas en la sección Supermaxi.</td></tr>';
     S.groups.forEach(function(g){
       var open = !!SMX_ST.open[g.key];
-      var title = smxDayText(g.day) + (g.note ? ' · ' + esc(g.note) : '') + (g.client ? ' · ' + esc(g.client) : '');
-      var tip = g.paid ? ('Pagada el ' + smxDayText(g.paid.fecha || g.day) + (g.paid.nota ? ' · ' + g.paid.nota : '')) : 'Clic para marcar como pagada';
-      var pill = '<button type="button" class="smx-pill ' + (g.paid ? 'paid' : 'pend') + '" data-smx-pay="' + esc(g.key) + '" title="' + esc(tip) + '">' + (g.paid ? '✓ Pagada ' + esc(smxDayText(g.paid.fecha || g.day).replace(/ \d{4}$/, '')) : 'Pendiente') + '</button>';
-      rows += '<tr class="smx-fac" data-smx-row="' + esc(g.key) + '"><td>' + (open ? '▾ ' : '▸ ') + title + '</td><td class="n">' + esc(fmtMoney(g.rev)) + '</td><td class="n">' + esc(fmtMoney(g.margin)) + (g.noCost ? ' <span title="Falta el costo de alguna línea">⚠</span>' : '') + '</td><td class="n"><b>' + esc(fmtMoney(g.com)) + '</b></td><td class="n">' + pill + '</td></tr>';
+      var title = (g.note ? esc(g.note) + ' · ' : '') + smxDayText(g.day) + ((g.client && String(g.note).indexOf(g.client) < 0) ? ' · ' + esc(g.client) : '');
+      var tip = g.paid ? ('Pagada el ' + smxDayText(g.paid.fecha || g.day) + (g.paid.nota ? ' · ' + g.paid.nota : '')) : 'Clic para marcar la comisión como pagada';
+      var short = function(d){ return smxDayText(d).replace(/ \d{4}$/, ''); };
+      var cob = !g.cobro ? '<span class="mut">-</span>' : (g.cobro.paid ? '<span class="smx-pill paid">✓ Pagó ' + esc(g.cobro.at ? short(g.cobro.at) : '') + '</span>' : (g.cobro.over ? '<span class="smx-pill over">Vencida ' + esc(short(g.cobro.due)) + '</span>' : '<span class="smx-pill wait">' + (g.cobro.due ? 'Vence ' + esc(short(g.cobro.due)) : 'Pendiente') + '</span>'));
+      var pill = '<button type="button" class="smx-pill ' + (g.paid ? 'paid' : ((g.cobro && g.cobro.paid) ? 'pend' : 'wait')) + '" data-smx-pay="' + esc(g.key) + '" title="' + esc(tip) + '">' + (g.paid ? '✓ Pagada ' + esc(short(g.paid.fecha || g.day)) : ((g.cobro && g.cobro.paid) ? 'Por pagar' : 'Espera cobro')) + '</button>';
+      rows += '<tr class="smx-fac" data-smx-row="' + esc(g.key) + '"><td>' + (open ? '▾ ' : '▸ ') + title + '</td><td class="n">' + esc(fmtMoney(g.rev)) + '</td><td class="n">' + esc(fmtMoney(g.margin)) + (g.noCost ? ' <span title="Falta el costo de alguna línea">⚠</span>' : '') + '</td><td class="n"><b>' + esc(fmtMoney(g.com)) + '</b></td><td class="n">' + cob + '</td><td class="n">' + pill + '</td></tr>';
       if(open){
         g.lines.forEach(function(l){
-          rows += '<tr class="smx-det"><td>' + esc(l.label) + ' · ' + nf(l.units) + ' u</td><td class="n">' + esc(fmtMoney(l.rev)) + '</td><td class="n">' + esc(fmtMoney(l.rev - l.cost)) + '</td><td class="n" colspan="2">costo ' + (l.uc != null ? esc(fmtMoney(l.uc)) + ' por unidad' : 'sin dato') + '</td></tr>';
+          rows += '<tr class="smx-det"><td>' + esc(l.label) + ' · ' + nf(l.units) + ' u</td><td class="n">' + esc(fmtMoney(l.rev)) + '</td><td class="n">' + esc(fmtMoney(l.rev - l.cost)) + '</td><td class="n" colspan="3">costo ' + (l.uc != null ? esc(fmtMoney(l.uc)) + ' por unidad' : 'sin dato') + '</td></tr>';
         });
       }
       if(SMX_ST.pay === g.key){
         var today = smxDay(fcToday());
-        rows += '<tr class="smx-payrow"><td colspan="5"><b>Comisión ' + esc(fmtMoney(g.com)) + '</b> ' + (g.paid ? '(pagada)' : '') + '<label>Fecha <input type="date" id="smxDate" value="' + esc((g.paid && g.paid.fecha) || today) + '"></label><label>Nota <input type="text" id="smxNote" placeholder="Ej: transferencia Produbanco" value="' + esc((g.paid && g.paid.nota) || '') + '"></label>'
+        rows += '<tr class="smx-payrow"><td colspan="6"><b>Comisión ' + esc(fmtMoney(g.com)) + '</b> ' + (g.paid ? '(pagada)' : '') + '<label>Fecha <input type="date" id="smxDate" value="' + esc((g.paid && g.paid.fecha) || today) + '"></label><label>Nota <input type="text" id="smxNote" placeholder="Ej: transferencia Produbanco" value="' + esc((g.paid && g.paid.nota) || '') + '"></label>'
           + '<button type="button" class="smx-save" data-smx-save="' + esc(g.key) + '">Guardar</button>' + (g.paid ? '<button type="button" class="smx-sec" data-smx-unpay="' + esc(g.key) + '">Quitar pago</button>' : '') + '<button type="button" class="smx-sec" data-smx-cancel="1">Cancelar</button></td></tr>';
       }
     });
-    var facs = '<div class="sec smx-sec-h"><h3>Facturas a Supermaxi</h3></div><div class="rt-wrap"><table class="rt-table smx-table"><thead><tr><th>Pedido</th><th>Venta</th><th>Margen</th><th>Comisión</th><th>Estado</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    var facs = '<div class="sec smx-sec-h"><h3>Facturas a Supermaxi</h3></div><div class="rt-wrap"><table class="rt-table smx-table"><thead><tr><th>Factura</th><th>Venta sin IVA</th><th>Margen</th><th>Comisión</th><th>Supermaxi</th><th>Comisión pagada</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
     var srows = smxStockRows(S).map(function(r){
       var inc = r.inc ? nf(r.inc.u) + ' u a ' + esc(fmtMoney(r.inc.v / r.inc.u)) : '-';
       return '<tr><td>' + esc(r.q.presentation + ' · ' + r.q.flavor) + '</td><td class="n">' + (r.have > 0 ? nf(r.have) + ' u' : '<span class="mut">0</span>') + '</td><td class="n">' + (r.cost != null && r.have > 0 ? '<b>' + esc(fmtMoney(r.cost)) + '</b>' : '<span class="mut">-</span>') + '</td><td class="n mut">' + inc + '</td></tr>';
