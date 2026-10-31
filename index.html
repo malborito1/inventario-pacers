@@ -4447,8 +4447,7 @@ if ("serviceWorker" in navigator) {
 
   function importSocioHtml(totals){
     if(!(totals.totalVentaProyectada > 0)) return '';
-    return '<div class="imp-kv"><span>Comisión estimada <input type="number" id="impSocioPct" min="0" max="100" step="0.5" value="' + (totals.socioPct) + '" style="width:58px;padding:2px 4px;" onfocus="this.select()"> % del margen</span><b>−' + fmtMoney(totals.comisionSocio) + '</b></div>'
-      + '<div class="imp-kv imp-grand"><span>Ganancia neta estimada</span><b style="color:' + (totals.gananciaNeta >= 0 ? 'var(--success)' : 'var(--critical)') + ';">' + fmtMoney(totals.gananciaNeta) + '</b></div>';
+    return '<div class="imp-kv"><span>Comisión socio <input type="number" id="impSocioPct" min="0" max="100" step="0.5" value="' + (totals.socioPct) + '" style="width:58px;padding:2px 4px;" onfocus="this.select()"> % sobre lo ya facturado a Supermaxi</span><b style="color:var(--text-muted);font-weight:600;">se ve en Análisis › Supermaxi</b></div>';
   }
 
   function importMarginNoteHtml(totals){
@@ -5955,7 +5954,7 @@ if ("serviceWorker" in navigator) {
     });
     var facs = '<div class="sec smx-sec-h"><h3>Facturas a Supermaxi</h3></div><div class="rt-wrap"><table class="rt-table smx-table"><thead><tr><th>Factura</th><th>Venta sin IVA</th><th>Margen</th><th>Comisión</th><th>Supermaxi</th><th>Comisión pagada</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
     var srows = smxStockRows(S).map(function(r){
-      var inc = r.inc ? nf(r.inc.u) + ' u a ' + esc(fmtMoney(r.inc.v / r.inc.u)) : '-';
+      var inc = r.inc ? nf(r.inc.u) + ' u a ~' + esc(fmtMoney(r.inc.v / r.inc.u)) : '-';
       return '<tr><td>' + esc(r.q.presentation + ' · ' + r.q.flavor) + '</td><td class="n">' + (r.have > 0 ? nf(r.have) + ' u' : '<span class="mut">0</span>') + '</td><td class="n">' + (r.cost != null && r.have > 0 ? '<b>' + esc(fmtMoney(r.cost)) + '</b>' : '<span class="mut">-</span>') + '</td><td class="n mut">' + inc + '</td></tr>';
     }).join('');
     var bod = '<div class="sec smx-sec-h"><h3>Bodega Supermaxi</h3><span>el costo promedio se recalcula solo cuando llega una importación</span></div><div class="rt-wrap"><table class="rt-table smx-table"><thead><tr><th>Producto</th><th>En bodega</th><th>Costo promedio</th><th>Viene en camino</th></tr></thead><tbody>' + (srows || '<tr><td colspan="4" class="mut" style="text-align:center;padding:14px;">No hay productos en la bodega Supermaxi.</td></tr>') + '</tbody></table></div>';
