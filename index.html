@@ -1843,6 +1843,7 @@ if ("serviceWorker" in navigator) {
   .smx-pill.over{background:var(--critical-tint); color:var(--critical); border-color:var(--critical); cursor:default;}
   .smx-pill.wait{background:var(--surface-2); color:var(--text-muted); border-color:var(--border);}
   .smx-pill.paid:not(button){cursor:default;}
+  .smx-table .rt-ph{width:20px; height:20px; margin:-6px 8px -6px 0;}
 </style>
 
 <div class="pin-gate" id="pinGate">
@@ -5885,7 +5886,7 @@ if ("serviceWorker" in navigator) {
       if(!(rev > 0) && q) rev = units * ((parseFloat(q.pvpSinIva) || 0) > 0 ? parseFloat(q.pvpSinIva) : (parseFloat(q.pvpPerUnit) || 0) / RT_IVA);
       var uc = unitCost[m.id], cost = uc != null ? uc * units : 0;
       if(uc == null) g.noCost++;
-      g.lines.push({label: m.productLabel || (q ? q.presentation + ' · ' + q.flavor : ''), units: units, rev: rev, cost: cost, uc: uc});
+      g.lines.push({q: q, label: m.productLabel || (q ? q.presentation + ' · ' + q.flavor : ''), units: units, rev: rev, cost: cost, uc: uc});
       g.ids.push(m.id); g.rev += rev; g.cost += cost;
       if(m.comPago) g.paid = m.comPago;
     });
@@ -5911,6 +5912,13 @@ if ("serviceWorker" in navigator) {
     return {groups: order, tot: tot, pct: pct, stock: stock, incoming: incoming, byId: byId, byKey: byKey};
   }
 
+  // Foto del producto (la misma de Rentabilidad), buscada en el inventario general
+  function smxPh(q){
+    if(!q) return '';
+    var list = state.products || [], gp = null;
+    list.forEach(function(p){ if(!gp && p.category === q.category && fcNorm(p.presentation) === fcNorm(q.presentation) && fcNorm(p.flavor) === fcNorm(q.flavor)) gp = p; });
+    return (gp && gp.photoUrl) ? '<img class="rt-ph" src="' + esc(gp.photoUrl) + '" alt="" loading="lazy">' : '<span class="rt-ph rt-ph0"></span>';
+  }
   function smxStockRows(S){
     var rows = [];
     (state.supermaxiProducts || []).forEach(function(q){
@@ -5950,7 +5958,7 @@ if ("serviceWorker" in navigator) {
           rows += '<tr class="smx-det smx-pg"><td colspan="6">Según Pagos: factura ' + esc(fmtMoney(g.pagos.fact)) + ' con IVA · retención −' + esc(fmtMoney(g.pagos.ret)) + (g.pagos.otros > 0 ? ' · abonos −' + esc(fmtMoney(g.pagos.otros)) : '') + ' · <b>' + (g.cobro && g.cobro.paid ? 'Supermaxi pagó ' : 'Supermaxi debe pagar ') + esc(fmtMoney(g.pagos.net)) + '</b></td></tr>';
         }
         g.lines.forEach(function(l){
-          rows += '<tr class="smx-det"><td>' + esc(l.label) + ' · ' + nf(l.units) + ' u</td><td class="n">' + esc(fmtMoney(l.rev)) + '</td><td class="n">' + esc(fmtMoney(l.rev - l.cost)) + '</td><td class="n" colspan="3">costo ' + (l.uc != null ? esc(fmtMoney(l.uc)) + ' por unidad' : 'sin dato') + '</td></tr>';
+          rows += '<tr class="smx-det"><td>' + smxPh(l.q) + esc(l.label) + ' · ' + nf(l.units) + ' u</td><td class="n">' + esc(fmtMoney(l.rev)) + '</td><td class="n">' + esc(fmtMoney(l.rev - l.cost)) + '</td><td class="n" colspan="3">costo ' + (l.uc != null ? esc(fmtMoney(l.uc)) + ' por unidad' : 'sin dato') + '</td></tr>';
         });
       }
       if(SMX_ST.pay === g.key){
@@ -5963,7 +5971,7 @@ if ("serviceWorker" in navigator) {
     var cj = function(u, q){ var b = parseFloat(q && q.unitsPerBox) || 0; if(!(b > 0)) return ''; var n = u / b; return ' · ' + (Math.abs(n - Math.round(n)) < 0.005 ? Math.round(n).toLocaleString('es-EC') : n.toLocaleString('es-EC', {maximumFractionDigits: 1})) + (Math.round(n * 10) / 10 === 1 ? ' caja' : ' cajas'); };
     var srows = smxStockRows(S).map(function(r){
       var inc = r.inc ? nf(r.inc.u) + ' u · ' + nf(r.inc.cj) + (r.inc.cj === 1 ? ' caja' : ' cajas') + ' a ~' + esc(fmtMoney(r.inc.v / r.inc.u)) : '-';
-      return '<tr><td>' + esc(r.q.presentation + ' · ' + r.q.flavor) + '</td><td class="n">' + (r.have > 0 ? nf(r.have) + ' u' + cj(r.have, r.q) : '<span class="mut">0</span>') + '</td><td class="n">' + (r.cost != null && r.have > 0 ? '<b>' + esc(fmtMoney(r.cost)) + '</b>' : '<span class="mut">-</span>') + '</td><td class="n mut">' + inc + '</td></tr>';
+      return '<tr><td>' + smxPh(r.q) + esc(r.q.presentation + ' · ' + r.q.flavor) + '</td><td class="n">' + (r.have > 0 ? nf(r.have) + ' u' + cj(r.have, r.q) : '<span class="mut">0</span>') + '</td><td class="n">' + (r.cost != null && r.have > 0 ? '<b>' + esc(fmtMoney(r.cost)) + '</b>' : '<span class="mut">-</span>') + '</td><td class="n mut">' + inc + '</td></tr>';
     }).join('');
     var bod = '<div class="sec smx-sec-h"><h3>Bodega Supermaxi</h3><span>el costo promedio se recalcula solo cuando llega una importación</span></div><div class="rt-wrap"><table class="rt-table smx-table"><thead><tr><th>Producto</th><th>En bodega</th><th>Costo promedio</th><th>Viene en camino</th></tr></thead><tbody>' + (srows || '<tr><td colspan="4" class="mut" style="text-align:center;padding:14px;">No hay productos en la bodega Supermaxi.</td></tr>') + '</tbody></table></div>';
     return '<div class="fc-wrap"><div class="fc-bar"><h2>🧾 Supermaxi</h2><span>lo que te compran, tu costo real y la comisión</span></div>' + cards + facs + bod + '</div>';
