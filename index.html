@@ -5850,8 +5850,8 @@ if ("serviceWorker" in navigator) {
         if(!(u > 0) || !(cost > 0)) return;
         if(r.received){ (ev[q.id] = ev[q.id] || []).push({t: Math.min(r.t, now), k: 0, u: u, c: cost, src: r.imp.name || 'Supermaxi'}); }
         else if(!r.planned){
-          var o = incoming[q.id] = incoming[q.id] || {u: 0, v: 0, src: r.imp.name || 'Supermaxi'};
-          o.u += u; o.v += u * cost;
+          var o = incoming[q.id] = incoming[q.id] || {u: 0, v: 0, cj: 0, src: r.imp.name || 'Supermaxi'};
+          o.u += u; o.v += u * cost; o.cj += parseFloat(l.cajas) || 0;
         }
       });
     });
@@ -5960,9 +5960,10 @@ if ("serviceWorker" in navigator) {
       }
     });
     var facs = '<div class="sec smx-sec-h"><h3>Facturas a Supermaxi</h3></div><div class="rt-wrap"><table class="rt-table smx-table"><thead><tr><th>Factura</th><th>Venta sin IVA</th><th>Margen</th><th>Comisión</th><th>Supermaxi</th><th>Comisión pagada</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    var cj = function(u, q){ var b = parseFloat(q && q.unitsPerBox) || 0; if(!(b > 0)) return ''; var n = u / b; return ' · ' + (Math.abs(n - Math.round(n)) < 0.005 ? Math.round(n).toLocaleString('es-EC') : n.toLocaleString('es-EC', {maximumFractionDigits: 1})) + (Math.round(n * 10) / 10 === 1 ? ' caja' : ' cajas'); };
     var srows = smxStockRows(S).map(function(r){
-      var inc = r.inc ? nf(r.inc.u) + ' u a ~' + esc(fmtMoney(r.inc.v / r.inc.u)) : '-';
-      return '<tr><td>' + esc(r.q.presentation + ' · ' + r.q.flavor) + '</td><td class="n">' + (r.have > 0 ? nf(r.have) + ' u' : '<span class="mut">0</span>') + '</td><td class="n">' + (r.cost != null && r.have > 0 ? '<b>' + esc(fmtMoney(r.cost)) + '</b>' : '<span class="mut">-</span>') + '</td><td class="n mut">' + inc + '</td></tr>';
+      var inc = r.inc ? nf(r.inc.u) + ' u · ' + nf(r.inc.cj) + (r.inc.cj === 1 ? ' caja' : ' cajas') + ' a ~' + esc(fmtMoney(r.inc.v / r.inc.u)) : '-';
+      return '<tr><td>' + esc(r.q.presentation + ' · ' + r.q.flavor) + '</td><td class="n">' + (r.have > 0 ? nf(r.have) + ' u' + cj(r.have, r.q) : '<span class="mut">0</span>') + '</td><td class="n">' + (r.cost != null && r.have > 0 ? '<b>' + esc(fmtMoney(r.cost)) + '</b>' : '<span class="mut">-</span>') + '</td><td class="n mut">' + inc + '</td></tr>';
     }).join('');
     var bod = '<div class="sec smx-sec-h"><h3>Bodega Supermaxi</h3><span>el costo promedio se recalcula solo cuando llega una importación</span></div><div class="rt-wrap"><table class="rt-table smx-table"><thead><tr><th>Producto</th><th>En bodega</th><th>Costo promedio</th><th>Viene en camino</th></tr></thead><tbody>' + (srows || '<tr><td colspan="4" class="mut" style="text-align:center;padding:14px;">No hay productos en la bodega Supermaxi.</td></tr>') + '</tbody></table></div>';
     return '<div class="fc-wrap"><div class="fc-bar"><h2>🧾 Supermaxi</h2><span>lo que te compran, tu costo real y la comisión</span></div>' + cards + facs + bod + '</div>';
