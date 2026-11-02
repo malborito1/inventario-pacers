@@ -1844,6 +1844,11 @@ if ("serviceWorker" in navigator) {
   .smx-pill.wait{background:var(--surface-2); color:var(--text-muted); border-color:var(--border);}
   .smx-pill.paid:not(button){cursor:default;}
   .smx-table .rt-ph{width:20px; height:20px; margin:-6px 8px -6px 0;}
+  .fc-name .rt-ph, .fc-pl .rt-ph{width:18px; height:18px; margin:-6px 6px -6px 0; border-radius:5px; object-fit:cover; vertical-align:middle; display:inline-block; border:1px solid var(--border); background:var(--surface-2);}
+  .fc-name .rt-ph0, .fc-pl .rt-ph0{border-style:dashed; opacity:.6;}
+  .fc-name:has(.rt-ph){padding-right:3px;}
+  .fc-wrap .fc-name{flex-basis:212px;}
+  @media (max-width:640px){ .fc-wrap .fc-name{flex-basis:190px;} .fc-name .rt-ph{display:none;} .fc-name:has(.rt-ph){padding-right:8px;} }
 </style>
 
 <div class="pin-gate" id="pinGate">
@@ -5070,6 +5075,16 @@ if ("serviceWorker" in navigator) {
   var FC_CAT_RANK = {Endurance: 0, HCF: 1, Recovery: 2}, FC_PRES_RANK = {'30 servings': 0, 'Sachets': 1};
   function fcInvCmp(a, b){ return (FC_CAT_RANK[a.l] - FC_CAT_RANK[b.l]) || (FC_PRES_RANK[a.pres] - FC_PRES_RANK[b.pres]) || (a.ord - b.ord); }
   function fcName(p){ return p.n + (p.pres === 'Sachets' ? '' : ' · funda 30'); }
+  // Foto del producto (la misma de Rentabilidad), buscada en el inventario general
+  function fcPh(p){
+    var url = '';
+    (state.products || []).forEach(function(q){
+      if(url || !q.photoUrl) return;
+      var pr = fcPres(q.presentation); if(!pr) return;
+      if(fcKey(q.category, pr, q.flavor) === p.key) url = q.photoUrl;
+    });
+    return url ? '<img class="rt-ph" src="' + esc(url) + '" alt="" loading="lazy">' : '<span class="rt-ph rt-ph0"></span>';
+  }
   function fcMonthsText(m){ return m >= 24 ? 'más de 24 meses' : (m < 1 ? 'menos de 1 mes' : (Math.round(m) + (Math.round(m) === 1 ? ' mes' : ' meses'))); }
 
   function fcHtml(){
@@ -5254,7 +5269,7 @@ if ("serviceWorker" in navigator) {
         if(a.planned && a.date < chartEnd) chips += '<div class="fc-chip plan" style="left:' + pct(a.date) + '%" title="' + esc(a.imp) + ': llegan ' + Math.round(a.units / it.p.upc) + ' cajas">+' + Math.round(a.units / it.p.upc) + '</div>';
       });
       var ro = it.runout ? 'se acaba ' + fcFmtD(it.runout) : 'dura más de 5 años';
-      body += '<div class="fc-row fc-pick' + (S.sel === it.p.key ? ' sel' : '') + '" data-key="' + esc(it.p.key) + '" title="' + esc(ro) + '"><div class="fc-name' + (it.p.est ? ' est' : '') + '">' + esc(fcName(it.p)) + (it.p.est ? ' ~' : '') + '</div><div class="fc-track">' + segs + chips + '</div></div>';
+      body += '<div class="fc-row fc-pick' + (S.sel === it.p.key ? ' sel' : '') + '" data-key="' + esc(it.p.key) + '" title="' + esc(ro) + '"><div class="fc-name' + (it.p.est ? ' est' : '') + '">' + fcPh(it.p) + esc(fcName(it.p)) + (it.p.est ? ' ~' : '') + '</div><div class="fc-track">' + segs + chips + '</div></div>';
     });
     var beyond = '';
     var lastFixed = fixedG[fixedG.length - 1];
@@ -5283,7 +5298,7 @@ if ("serviceWorker" in navigator) {
     // ---- tarjetas de pedidos
     var cardsG = shown.map(function(g){
       var gl = g.lines.slice().sort(function(a, b2){ return fcInvCmp(a.p, b2.p); }).map(function(l){
-        return '<div class="fc-pl"><span>' + esc(fcName(l.p)) + ' <small>' + esc(l.p.l) + '</small></span><b>' + l.boxes + ' caja' + (l.boxes > 1 ? 's' : '') + '</b></div>';
+        return '<div class="fc-pl"><span>' + fcPh(l.p) + esc(fcName(l.p)) + ' <small>' + esc(l.p.l) + '</small></span><b>' + l.boxes + ' caja' + (l.boxes > 1 ? 's' : '') + '</b></div>';
       }).join('');
       var title = g.fixed ? '📌 ' + (fixedG.length > 1 ? 'Pedido ' + (fixedG.indexOf(g) + 1) : 'Tu pedido') : '💡 Pedido sugerido';
       var when = g.fixed && g.date.getDate() <= 7 ? 'pedir la 1ª semana de <b>' + FC_MES_L[g.date.getMonth()] + ' ' + g.date.getFullYear() + '</b>' : 'pedir antes del <b>' + fcFmtD(g.date) + '</b>';
