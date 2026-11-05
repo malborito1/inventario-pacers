@@ -7349,7 +7349,7 @@ if ("serviceWorker" in navigator) {
           if(payPend && payRef){
             notePayPendUsed(true);
             moveDone.then(function(){
-              var dn = client + (note ? (' ' + note) : '');
+              var dn = client + (note ? (' - ' + note) : '');
               var pdoc = {name: dn, amount: simpleAmt, createdAt: new Date().toISOString(), addedBy: state.userName, origin: 'venta', productId: p.id, productLabel: p.presentation + ' · ' + p.flavor, qty: qty};
               if(discountPct > 0) pdoc.discountPct = discountPct;
               return payRef.set(pdoc).then(function(){ showStatus('Agregado a Pagos pendientes: ' + fmtMoney(simpleAmt) + ' de ' + dn + '.'); });
