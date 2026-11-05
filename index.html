@@ -1877,6 +1877,9 @@ if ("serviceWorker" in navigator) {
 
 /* Clientes: total de la factura */
 .cliente-total{font-weight:800; color:var(--text);}
+  .mini-field label.disc-pvp{display:flex; align-items:center; gap:5px; margin-top:5px; font-size:11px; font-weight:500; color:var(--text-muted); text-transform:none; letter-spacing:0; cursor:pointer;}
+  .mini-field label.disc-pvp input{width:auto; margin:0; padding:0;}
+  .mini-field label.disc-pvp b{margin-left:auto; color:var(--text); font-weight:700;}
 </style>
 
 <div class="pin-gate" id="pinGate">
@@ -2641,8 +2644,9 @@ if ("serviceWorker" in navigator) {
     }
     return '';
   }
-  function noteDiscountUsed(pct){
+  function noteDiscountUsed(pct, mode){
     if(pct == null || isNaN(pct)) return;
+    state.lastDiscountMode = (mode === 'pvp') ? 'pvp' : '';
     state.lastDiscountPct = pct;
     state.lastDiscountPctAt = Date.now();
   }
@@ -2697,7 +2701,7 @@ if ("serviceWorker" in navigator) {
     var parts = [];
     if(v) parts.push('Último cliente: ' + v);
     if(due) parts.push('vence ' + fmtDateOnly(due));
-    if(disc) parts.push(disc + '% desc.');
+    if(disc) parts.push(disc + '% desc.' + (state.lastDiscountMode === 'pvp' ? ' PVP' : ''));
     document.getElementById('clientLabel').textContent = parts.join(' · ') + ' (' + agoText + ')';
   }
   // allMovements(): usa state.extMovements (historial COMPLETO, sin el límite de
@@ -3114,9 +3118,10 @@ if ("serviceWorker" in navigator) {
           + '</div>';
         html += '<div class="mini-field-row">'
           + '<div class="mini-field"><label>Vencimiento de factura (opcional)</label><input type="date" id="dueDateInput-' + p.id + '" value="' + esc(activeDueDateValue()) + '"></div>'
-          + '<div class="mini-field"><label>Margen de descuento % (opcional)</label><input type="number" id="discountInput-' + p.id + '" min="0" max="100" step="1" placeholder="0" value="' + (activeDiscountValue()===''?'':activeDiscountValue()) + '"></div>'
+          + '<div class="mini-field"><label>Descuento % (opcional)</label><input type="number" id="discountInput-' + p.id + '" min="0" max="100" step="1" placeholder="0" value="' + (activeDiscountValue()===''?'':activeDiscountValue()) + '">'
+          + '<label class="disc-pvp"><input type="checkbox" id="discPvp-' + p.id + '"' + (state.lastDiscountMode === 'pvp' && activeDiscountValue() !== '' ? ' checked' : '') + '> Sobre PVP (cliente)<b id="discHint-' + p.id + '">' + esc(pvpDiscHint(p, state.lastDiscountMode === 'pvp' && activeDiscountValue() !== '', parseFloat(activeDiscountValue()) || 0)) + '</b></label></div>'
           + '</div>';
-        html += '<p class="hint" style="margin:-6px 0 0;">Pon una fecha solo si esta venta es a un distribuidor a crédito: aparecerá en Pagos como cuenta por cobrar y se marcará "VENCIDO" cuando llegue esa fecha. El % de descuento se resta del precio normal para calcular el monto a cobrar.</p>';
+        html += '<p class="hint" style="margin:-6px 0 0;">Pon una fecha solo si esta venta es a un distribuidor a crédito: aparecerá en Pagos como cuenta por cobrar y se marcará "VENCIDO" cuando llegue esa fecha. Con "Sobre PVP" el % se resta del PVP con IVA (cliente); sin marcar es margen de distribuidor.</p>';
       }
       html += '<button class="confirm-btn" data-action="confirm-move" data-id="' + p.id + '" data-mode="' + openMode + '">' + (isVenta?'Registrar venta':'Registrar ingreso') + '</button>';
       html += '<button class="cancel-btn" data-action="cancel-move" data-id="' + p.id + '">Cancelar</button>';
@@ -7257,6 +7262,9 @@ if ("serviceWorker" in navigator) {
       var dueDate = (mode === 'venta' && dueDateInput) ? dueDateInput.value : '';
       var discountInput = document.getElementById('discountInput-' + id);
       var discountPct = (mode === 'venta' && discountInput) ? Math.min(100, Math.max(0, parseFloat(discountInput.value) || 0)) : 0;
+      var pvpEl = document.getElementById('discPvp-' + id);
+      var pvpMode = (mode === 'venta' && !!pvpEl && pvpEl.checked && discountPct > 0);
+      if(pvpMode && dueDate){ showStatus('El descuento sobre PVP es para clientes. Para un distribuidor a crédito desmarca "Sobre PVP" y usa el margen.', true); return; }
       if(dueDate && !client){ showStatus('Si pones fecha de vencimiento, ingresa también el nombre del distribuidor en "Cliente".', true); return; }
       function runMove(kind){
         ensureUser(function(){
@@ -7274,7 +7282,11 @@ if ("serviceWorker" in navigator) {
           // igual que en la factura electrónica (precio unitario sin IVA redondeado a
           // centavos x unidades + IVA), para que Pagos y Ranking cuadren con la factura.
           var invExtra;
-          if(mode === 'venta' && (dueDate || discountPct > 0)){
+          if(pvpMode){
+            var pvpUnit = pvpDiscUnit(p, discountPct);
+            invExtra = {revenue: cents2(pvpUnit * qty), discountPct: discountPct, discountBase: 'pvp', unitPrice: pvpUnit};
+            noteDiscountUsed(discountPct, 'pvp');
+          } else if(mode === 'venta' && (dueDate || discountPct > 0)){
             invExtra = {revenue: distribLineTotals(p, qty, discountPct).total};
             if(discountPct > 0) invExtra.discountPct = discountPct;
           }
@@ -7292,7 +7304,7 @@ if ("serviceWorker" in navigator) {
               showStatus('La venta se registró, pero no se pudo crear la cuenta por cobrar en Pagos. Agrégala ahí manualmente.', true);
             });
             noteDueDateUsed(dueDate);
-            noteDiscountUsed(discountPct);
+            noteDiscountUsed(discountPct, '');
           }
           if(mode === 'venta' && client) noteClientUsed(client);
           if(mode === 'venta' && note) noteNoteUsed(note);
@@ -7322,6 +7334,25 @@ if ("serviceWorker" in navigator) {
   // Monto de una línea de venta a distribuidor, calculado como la factura electrónica:
   // precio de lista sin IVA con el descuento aplicado y redondeado a centavos (ej. 3,22),
   // por las unidades = base; IVA 15 % sobre esa base; total = base + IVA.
+  // Descuento de CLIENTE: se resta del PVP con IVA (no es margen de distribuidor).
+  // Precio unitario a 2 decimales, cortando el tercero (4,25 - 30 % = 2,975 -> 2,97).
+  function pvpDiscUnit(product, pct){
+    var pvp = parseFloat(product.pvpPerUnit) || 0;
+    return Math.floor(pvp * (1 - (pct || 0) / 100) * 100 + 1e-9) / 100;
+  }
+  function pvpDiscHint(product, on, pct){
+    return (on && pct > 0 && pct <= 100) ? (fmtMoney(pvpDiscUnit(product, pct)) + ' c/u') : '';
+  }
+  document.addEventListener('input', function(ev){ discHintRefresh(ev.target); });
+  document.addEventListener('change', function(ev){ discHintRefresh(ev.target); });
+  function discHintRefresh(t){
+    if(!t || !t.id) return;
+    var m = /^(discountInput|discPvp)-(.+)$/.exec(t.id);
+    if(!m) return;
+    var id = m[2], di = document.getElementById('discountInput-' + id), cb = document.getElementById('discPvp-' + id), h = document.getElementById('discHint-' + id);
+    var pr = findProduct(id);
+    if(h && di && cb && pr) h.textContent = pvpDiscHint(pr, cb.checked, parseFloat(di.value) || 0);
+  }
   function distribLineTotals(product, qty, discountPct){
     var list = (product.pvpSinIva != null) ? product.pvpSinIva : ((product.pvpPerUnit||0) / (1 + IVA_RATE));
     var unit = cents2(list * (1 - (discountPct||0)/100));
