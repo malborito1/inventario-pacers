@@ -1880,6 +1880,7 @@ if ("serviceWorker" in navigator) {
   .mini-field label.disc-pvp{display:flex; align-items:center; gap:5px; margin-top:5px; font-size:11px; font-weight:500; color:var(--text-muted); text-transform:none; letter-spacing:0; cursor:pointer;}
   .mini-field label.disc-pvp input{width:auto; margin:0; padding:0;}
   .mini-field label.disc-pvp b{margin-left:auto; color:var(--text); font-weight:700;}
+  .smx-days{font-size:11px; font-weight:600; color:var(--text-muted); margin-left:6px; white-space:nowrap;}
 </style>
 
 <div class="pin-gate" id="pinGate">
@@ -5880,6 +5881,10 @@ if ("serviceWorker" in navigator) {
   var SMX_ST = {open: {}, pay: null, sel: {}};
   function smxPad(n){ return (n < 10 ? '0' : '') + n; }
   function smxDay(d){ return d.getFullYear() + '-' + smxPad(d.getMonth() + 1) + '-' + smxPad(d.getDate()); }
+  // Dias entre dos fechas 'AAAA-MM-DD'. La emision de la factura es su vencimiento menos 30 dias
+  // (plazo de pago de Supermaxi); si no hay vencimiento se usa el dia de la venta.
+  function smxDayDiff(a, b){ var x = a.split('-'), y = b.split('-'); return Math.round((Date.UTC(+y[0], +y[1] - 1, +y[2]) - Date.UTC(+x[0], +x[1] - 1, +x[2])) / 864e5); }
+  function smxEmitDay(due, fallback){ if(!due) return fallback; var p = due.split('-'); return smxDay(new Date(Date.UTC(+p[0], +p[1] - 1, +p[2] - 30))); }
   function smxDayText(day){ var p = day.split('-'); var d = new Date(+p[0], +p[1] - 1, +p[2]); return d.toLocaleDateString('es-EC', {day: 'numeric', month: 'short', year: 'numeric'}); }
   function smxKey(c, p, f){ return c + '|' + fcNorm(p) + '|' + fcNorm(f); }
 
@@ -5979,6 +5984,7 @@ if ("serviceWorker" in navigator) {
       rel.forEach(function(x){ var a = parseFloat(x.amount) || 0; if(a > 0) fact += a; else if(x.origin === 'retencion') ret += -a; else otros += -a; });
       g.pagos = pg ? {fact: fact, ret: ret, otros: otros, net: fact - ret - otros} : null;
       g.cobro = pg ? {paid: pg.status === 'paid', at: pg.paidAt ? smxDay(new Date(pg.paidAt)) : '', due: pg.dueDate || '', over: pg.status !== 'paid' && !!pg.dueDate && pg.dueDate < todayStr} : null;
+      if(g.cobro && g.cobro.paid && g.cobro.at){ g.cobro.emit = smxEmitDay(g.cobro.due, g.day); g.cobro.days = smxDayDiff(g.cobro.emit, g.cobro.at); }
     });
     var tot = {rev: 0, margin: 0, com: 0, paid: 0, now: 0, wait: 0};
     order.forEach(function(g){
@@ -6029,7 +6035,7 @@ if ("serviceWorker" in navigator) {
       var title = (g.note ? esc(g.note) + ' · ' : '') + smxDayText(g.day) + ((g.client && String(g.note).indexOf(g.client) < 0) ? ' · ' + esc(g.client) : '');
       var tip = g.paid ? ('Pagada el ' + smxDayText(g.paid.fecha || g.day) + (g.paid.nota ? ' · ' + g.paid.nota : '')) : 'Clic para marcar la comisión como pagada';
       var short = function(d){ return smxDayText(d).replace(/ \d{4}$/, ''); };
-      var cob = !g.cobro ? '<span class="mut">-</span>' : (g.cobro.paid ? '<span class="smx-pill paid">✓ Pagó ' + esc(g.cobro.at ? short(g.cobro.at) : '') + '</span>' : (g.cobro.over ? '<span class="smx-pill over">Vencida ' + esc(short(g.cobro.due)) + '</span>' : '<span class="smx-pill wait">' + (g.cobro.due ? 'Vence ' + esc(short(g.cobro.due)) : 'Pendiente') + '</span>'));
+      var cob = !g.cobro ? '<span class="mut">-</span>' : (g.cobro.paid ? '<span class="smx-pill paid">✓ Pagó ' + esc(g.cobro.at ? short(g.cobro.at) : '') + '</span>' + (g.cobro.days != null && g.cobro.days >= 0 ? '<span class="smx-days" title="Emitida el ' + esc(short(g.cobro.emit)) + ', pagó el ' + esc(short(g.cobro.at)) + '">' + g.cobro.days + (g.cobro.days === 1 ? ' día' : ' días') + '</span>' : '') : (g.cobro.over ? '<span class="smx-pill over">Vencida ' + esc(short(g.cobro.due)) + '</span>' : '<span class="smx-pill wait">' + (g.cobro.due ? 'Vence ' + esc(short(g.cobro.due)) : 'Pendiente') + '</span>'));
       var pill = '<button type="button" class="smx-pill ' + (g.paid ? 'paid' : ((g.cobro && g.cobro.paid) ? 'pend' : 'wait')) + '" data-smx-pay="' + esc(g.key) + '" title="' + esc(tip) + '">' + (g.paid ? '✓ Pagada ' + esc(short(g.paid.fecha || g.day)) : ((g.cobro && g.cobro.paid) ? 'Por pagar' : 'Espera cobro')) + '</button>';
       rows += '<tr class="smx-fac" data-smx-row="' + esc(g.key) + '"><td>' + (open ? '▾ ' : '▸ ') + title + '</td><td class="n"><input type="checkbox" class="smx-sel" data-smx-sel="' + esc(g.key) + '" title="Incluir esta factura en el total"' + (SMX_ST.sel[g.key] === false ? '' : ' checked') + '>' + esc(fmtMoney(g.rev)) + '</td><td class="n">' + esc(fmtMoney(g.margin)) + (g.noCost ? ' <span title="Falta el costo de alguna línea">⚠</span>' : '') + '</td><td class="n smx-com' + (g.paid ? ' smx-com-paid' : '') + '"><b>' + esc(fmtMoney(g.com)) + '</b></td><td class="n">' + cob + '</td><td class="n">' + pill + '</td></tr>';
       if(open){
