@@ -5884,7 +5884,7 @@ if ("serviceWorker" in navigator) {
   // Dias entre dos fechas 'AAAA-MM-DD'. La emision de la factura es su vencimiento menos 30 dias
   // (plazo de pago de Supermaxi); si no hay vencimiento se usa el dia de la venta.
   function smxDayDiff(a, b){ var x = a.split('-'), y = b.split('-'); return Math.round((Date.UTC(+y[0], +y[1] - 1, +y[2]) - Date.UTC(+x[0], +x[1] - 1, +x[2])) / 864e5); }
-  function smxEmitDay(due, fallback){ if(!due) return fallback; var p = due.split('-'); return smxDay(new Date(Date.UTC(+p[0], +p[1] - 1, +p[2] - 30))); }
+  function smxEmitDay(due, fallback){ if(!due) return fallback; var p = due.split('-'); var e = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2] - 30)); return e.getUTCFullYear() + '-' + smxPad(e.getUTCMonth() + 1) + '-' + smxPad(e.getUTCDate()); }
   function smxDayText(day){ var p = day.split('-'); var d = new Date(+p[0], +p[1] - 1, +p[2]); return d.toLocaleDateString('es-EC', {day: 'numeric', month: 'short', year: 'numeric'}); }
   function smxKey(c, p, f){ return c + '|' + fcNorm(p) + '|' + fcNorm(f); }
 
