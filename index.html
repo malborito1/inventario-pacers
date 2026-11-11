@@ -746,7 +746,9 @@ if ("serviceWorker" in navigator) {
   .pagos-distrib-block{text-align:right;}
   .pagos-distrib-label{font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.03em; white-space:nowrap;}
   .pagos-distrib-amt{font-size:22px; font-weight:800;}
-  .pagos-distrib-amt.upcoming{color:var(--warning);}
+  .pagos-distrib-amt.upcoming{color:#e0b000;}
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .pagos-distrib-amt.upcoming{color:#ffd400;} }
+  :root[data-theme="dark"] .pagos-distrib-amt.upcoming{color:#ffd400;}
   .pagos-distrib-amt.overdue{color:var(--critical);}
   .pago-item-distrib{flex-wrap:wrap;}
   .pago-item-distrib.overdue{border-color:var(--critical); background:var(--critical-tint);}
@@ -1919,6 +1921,8 @@ if ("serviceWorker" in navigator) {
 
 /* Clientes: total de la factura */
 .cliente-total{font-weight:800; color:var(--text);}
+.cli-gift .cli-br-h{color:var(--success);}
+.cli-gift .cli-chip{border-color:var(--success);}
   .mini-field label.disc-pvp{display:flex; align-items:center; gap:5px; margin-top:5px; font-size:11px; font-weight:500; color:var(--text-muted); text-transform:none; letter-spacing:0; cursor:pointer;}
   .mini-field label.disc-pvp input{width:auto; margin:0; padding:0;}
   .mini-field label.disc-pvp b{margin-left:auto; color:var(--text); font-weight:700;}
@@ -3924,7 +3928,17 @@ if ("serviceWorker" in navigator) {
       flavor: (p && p.flavor) || parts.slice(1).join(' · ') || m.productLabel || ''
     };
   }
-  function clienteGroupsHtml(items){
+  function clienteGiftsHtml(gifts){
+    var by = {}, order = [], nU = 0;
+    gifts.slice().reverse().forEach(function(m){
+      var lab = clienteInfo(m); var name = (lab.flavor || m.productLabel || '') + (lab.pres ? ' · ' + lab.pres : '');
+      if(!(name in by)){ by[name] = 0; order.push(name); }
+      by[name] += (m.qty||0); nU += (m.qty||0);
+    });
+    return '<div class="cli-groups"><div class="cli-br cli-gift"><div class="cli-br-h">🎁 Cortesía <span>' + fmtInt(nU) + ' u</span></div><div class="cli-chips">'
+      + order.map(function(n){ return '<span class="cli-chip">' + esc(n) + '<b>' + fmtInt(by[n]) + '</b></span>'; }).join('') + '</div></div></div>';
+  }
+  function clienteGroupsHtml(items, gifts){
     var cats = {};
     items.slice().reverse().forEach(function(m){
       var inf = clienteInfo(m);
@@ -3949,7 +3963,8 @@ if ("serviceWorker" in navigator) {
       });
       html += '</div>';
     });
-    return html + '</div>';
+    html += '</div>';
+    return html + (gifts && gifts.length ? clienteGiftsHtml(gifts) : '');
   }
 
   function renderCliente(){
@@ -3967,6 +3982,9 @@ if ("serviceWorker" in navigator) {
     // movimiento original queda marcado como revertido y no debe seguir
     // apareciendo aquí como si esa cantidad se le hubiese vendido al cliente.
     var entries = source.filter(function(m){ return m.client && m.client.trim() && m.type === 'venta' && !m.reversed; });
+    // Cortesías con nombre (regalos): no suman dinero, pero se muestran dentro de la venta del mismo
+    // cliente de ese día; si ese día no hubo venta, aparecen en su propia tarjeta.
+    var gifts = source.filter(function(m){ return m.client && m.client.trim() && m.type === 'salida' && m.reason === 'cortesia' && !m.reversed; });
     var searchHtml = '<div class="hist-search-wrap"><input type="text" class="hist-search" id="clienteSearch" placeholder="Buscar cliente, nota (#17) o producto" autocomplete="off" value="' + esc(state.clienteSearch||'') + '">' +
       '<button type="button" class="hist-search-clear" id="clienteSearchClear" title="Borrar búsqueda"' + (state.clienteSearch ? '' : ' hidden') + '>×</button></div>';
     function finish(html){
@@ -4020,30 +4038,53 @@ if ("serviceWorker" in navigator) {
         }
       });
     });
-    groups.sort(function(a,b){ return new Date(b.items[0].at) - new Date(a.items[0].at); });
-    var totalGroups = groups.length;
+    groups.forEach(function(g){ g.gifts = []; });
+    function dayKey(iso){ var d = new Date(iso); return d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); }
+    gifts.slice().sort(function(a,b){ return new Date(a.at) - new Date(b.at); }).forEach(function(gm){
+      var cn = gm.client.trim().toLowerCase(), gt = new Date(gm.at).getTime(), best = null, bestD = Infinity;
+      groups.forEach(function(g){
+        if(g.client.trim().toLowerCase() !== cn || !g.items.length) return;
+        if(!g.items.some(function(m){ return dayKey(m.at) === dayKey(gm.at); })) return;
+        var d = Math.abs(new Date(g.items[0].at).getTime() - gt);
+        if(d < bestD){ bestD = d; best = g; }
+      });
+      if(best){ best.gifts.push(gm); return; }
+      var alone = groups.filter(function(g){ return !g.items.length && g.client.trim().toLowerCase() === cn && dayKey(g.gifts[0].at) === dayKey(gm.at); })[0];
+      if(alone) alone.gifts.push(gm);
+      else groups.push({client: gm.client.trim(), note: '', items: [], gifts: [gm], lastAt: gt});
+    });
+    function gAt(g){ return (g.items[0] || g.gifts[0]).at; }
+    groups.sort(function(a,b){ return new Date(gAt(b)) - new Date(gAt(a)); });
+    var totalGroups = groups.filter(function(g){ return g.items.length; }).length;
     var q = historyNorm((state.clienteSearch||'').trim());
     if(q){
       var terms = q.split(/\s+/).filter(Boolean);
       groups = groups.filter(function(g){
-        var hay = historyNorm(g.client + ' ' + g.note + ' ' + g.items.map(function(m){ var i = clienteInfo(m); return (m.productLabel||'') + ' ' + i.cat + ' ' + i.pres; }).join(' '));
+        var hay = historyNorm(g.client + ' ' + g.note + ' ' + g.items.concat(g.gifts).map(function(m){ var i = clienteInfo(m); return (m.productLabel||'') + ' ' + i.cat + ' ' + i.pres; }).join(' '));
         return terms.every(function(t){ return hay.indexOf(t) !== -1; });
       });
     }
-    var countTxt = q ? (groups.length + ' de ' + totalGroups + ' ventas') : (groups.length + ' ventas con nombre registrado');
+    var shownSales = groups.filter(function(g){ return g.items.length; }).length;
+    var countTxt = q ? (shownSales + ' de ' + totalGroups + ' ventas') : (shownSales + ' ventas con nombre registrado');
     var html = searchHtml + '<div class="category" data-cat="CLIENTE"><div class="category-head"><h2>Clientes</h2><span class="count">' + countTxt + '</span></div>';
     html += '<div class="cliente-list">';
     if(!groups.length) html += '<p class="empty-hint">No se encontró nada con esa búsqueda.</p>';
     groups.forEach(function(g){
-      var mostRecent = g.items[0];
+      var mostRecent = g.items[0] || g.gifts[0];
       var dateHtml = fmtDateDMY(mostRecent.at) + ' (' + relTime(mostRecent.at) + ')';
       var noteHtml = g.note ? (' <span class="cliente-note">' + esc(g.note) + '</span>') : '';
-      if(g.items.length === 1){
+      var giftU = g.gifts.reduce(function(s2,m3){ return s2 + (m3.qty||0); }, 0);
+      var giftTag = g.gifts.length ? (' · +' + fmtInt(giftU) + ' de cortesía') : '';
+      if(!g.items.length){
+        html += '<div class="cliente-item"><div class="cliente-item-head"><span class="cliente-name">' + esc(g.client) + ' <span class="cliente-count">(solo cortesía)</span></span><span class="cliente-detail">' + dateHtml + '</span></div>' + clienteGiftsHtml(g.gifts) + '</div>';
+        return;
+      }
+      if(g.items.length === 1 && !g.gifts.length){
         var m = g.items[0];
         html += '<div class="cliente-item"><div class="cliente-item-head"><span class="cliente-name">' + esc(g.client) + noteHtml + '</span><span class="cliente-detail">' + esc(m.productLabel||'') + ' · ' + fmtInt(m.qty) + ' u' + clienteTotalHtml(g.items) + ' · ' + dateHtml + '</span></div></div>';
       } else {
         var totalQty = g.items.reduce(function(s,m2){ return s + (m2.qty||0); }, 0);
-        html += '<div class="cliente-item"><div class="cliente-item-head"><span class="cliente-name">' + esc(g.client) + noteHtml + ' <span class="cliente-count">(' + g.items.length + ' productos · ' + fmtInt(totalQty) + ' u)</span>' + clienteTotalHtml(g.items) + '</span><span class="cliente-detail">' + dateHtml + '</span></div>' + clienteGroupsHtml(g.items) + '</div>';
+        html += '<div class="cliente-item"><div class="cliente-item-head"><span class="cliente-name">' + esc(g.client) + noteHtml + ' <span class="cliente-count">(' + g.items.length + ' productos · ' + fmtInt(totalQty) + ' u' + giftTag + ')</span>' + clienteTotalHtml(g.items) + '</span><span class="cliente-detail">' + dateHtml + '</span></div>' + clienteGroupsHtml(g.items, g.gifts) + '</div>';
       }
     });
     html += '</div></div>';
