@@ -613,6 +613,9 @@ if ("serviceWorker" in navigator) {
   .grace-cortesia{flex:1 1 100%; display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted); margin:2px 0 0; cursor:pointer;}
   .grace-cortesia input{margin:0; width:14px; height:14px; accent-color:var(--grace-color); cursor:pointer;}
   .grace-cortesia span b{color:var(--text); font-weight:600;}
+  .grace-cortesia.main-cortesia input{accent-color:var(--success);}
+  .sale-opts[hidden]{display:none;}
+  .sale-opts{display:contents;}
   .tag-grace{
     font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
     padding:2px 7px; border-radius:999px; background:var(--grace-tint); color:var(--grace-color); margin-left:6px;
@@ -3170,6 +3173,8 @@ if ("serviceWorker" in navigator) {
           + '<div class="mini-field"><label>Cliente (opcional)</label><input type="text" id="clientInput-' + p.id + '" list="clientNamesList" value="' + esc(activeClientValue()) + '" placeholder="Nombre del comprador" maxlength="60"></div>'
           + '<div class="mini-field"><label>Notas (opcional)</label><input type="text" id="noteInput-' + p.id + '" value="' + esc(activeNoteValue()) + '" placeholder="Ej. evento, pedido especial…" maxlength="120"></div>'
           + '</div>';
+        html += '<label class="grace-cortesia main-cortesia"><input type="checkbox" id="cortesiaInput-' + p.id + '"><span><b>Cortesía</b> (regalo): descuenta stock pero no suma venta</span></label>';
+        html += '<div class="sale-opts" id="saleOpts-' + p.id + '">';
         html += '<div class="mini-field-row">'
           + '<div class="mini-field"><label>Vencimiento de factura (opcional)</label><input type="date" id="dueDateInput-' + p.id + '" value="' + esc(activeDueDateValue()) + '">'
           + '<label class="disc-pvp pay-pend" title="La venta queda en Pagos, en Total pendiente, hasta que la marques como cobrada"><input type="checkbox" id="payPend-' + p.id + '"' + (activePayPend() ? ' checked' : '') + '> A Pagos pendientes</label></div>'
@@ -3177,6 +3182,7 @@ if ("serviceWorker" in navigator) {
           + '<label class="disc-pvp"><input type="checkbox" id="discPvp-' + p.id + '"' + (state.lastDiscountMode === 'pvp' && activeDiscountValue() !== '' ? ' checked' : '') + '> Sobre PVP (cliente)<b id="discHint-' + p.id + '">' + esc(pvpDiscHint(p, state.lastDiscountMode === 'pvp' && activeDiscountValue() !== '', parseFloat(activeDiscountValue()) || 0)) + '</b></label></div>'
           + '</div>';
         html += '<p class="hint" style="margin:-6px 0 0;">Pon una fecha solo si esta venta es a un distribuidor a crédito: aparecerá en Pagos como cuenta por cobrar y se marcará "VENCIDO" cuando llegue esa fecha. Con "Sobre PVP" el % se resta del PVP con IVA (cliente); sin marcar es margen de distribuidor.</p>';
+        html += '</div>';
       }
       html += '<button class="confirm-btn" data-action="confirm-move" data-id="' + p.id + '" data-mode="' + openMode + '">' + (isVenta?'Registrar venta':'Registrar ingreso') + '</button>';
       html += '<button class="cancel-btn" data-action="cancel-move" data-id="' + p.id + '">Cancelar</button>';
@@ -7607,6 +7613,19 @@ if ("serviceWorker" in navigator) {
       var client = clientInput ? clientInput.value.trim() : '';
       var noteInput = document.getElementById('noteInput-' + id);
       var note = noteInput ? noteInput.value.trim() : '';
+      var cortEl = document.getElementById('cortesiaInput-' + id);
+      if(mode === 'venta' && cortEl && cortEl.checked){
+        // Cortesía (regalo): descuenta stock pero NO es venta (type 'salida', motivo cortesía): no suma
+        // al Ranking, Reportes ni Clientes, y queda en Ranking > Cortesías con el nombre de quien la recibió.
+        ensureUser(function(){
+          applyMovement(p, 'salida', qty, client, note, {reason: 'cortesia'}, true).then(function(moved){
+            showStatus('Cortesía registrada: ' + fmtInt(moved) + ' u. de ' + p.flavor + (client ? ' para ' + client : '') + '.');
+          }).catch(function(){ showStatus('No se pudo registrar la cortesía. Intenta de nuevo.', true); });
+          state.openRow = null;
+          render();
+        });
+        return;
+      }
       var dueDateInput = document.getElementById('dueDateInput-' + id);
       var dueDate = (mode === 'venta' && dueDateInput) ? dueDateInput.value : '';
       var discountInput = document.getElementById('discountInput-' + id);
@@ -7716,6 +7735,14 @@ if ("serviceWorker" in navigator) {
   }
   document.addEventListener('input', function(ev){ discHintRefresh(ev.target); });
   document.addEventListener('change', function(ev){ discHintRefresh(ev.target); });
+  // Casilla "Cortesía": oculta las opciones de cobro (vencimiento, descuento, Pagos) y cambia el botón.
+  document.addEventListener('change', function(ev){
+    var t = ev.target; if(!t || !t.id || t.id.indexOf('cortesiaInput-') !== 0) return;
+    var pid = t.id.slice('cortesiaInput-'.length), form = t.closest('.inline-form'); if(!form) return;
+    var opts = document.getElementById('saleOpts-' + pid); if(opts) opts.hidden = !!t.checked;
+    var btn = form.querySelector('[data-action="confirm-move"]'); if(btn) btn.textContent = t.checked ? 'Registrar cortesía' : 'Registrar venta';
+    var ci = document.getElementById('clientInput-' + pid); if(ci) ci.placeholder = t.checked ? 'Quién recibe la cortesía' : 'Nombre del comprador';
+  });
   function discHintRefresh(t){
     if(!t || !t.id) return;
     var m = /^(discountInput|discPvp)-(.+)$/.exec(t.id);
