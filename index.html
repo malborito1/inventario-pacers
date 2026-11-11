@@ -1634,7 +1634,7 @@ if ("serviceWorker" in navigator) {
   .ing-card .ing-sub{margin:0 0 10px; font-size:12px; color:var(--text-muted); line-height:1.4;}
   .ing-scroll{overflow-x:auto; border:1px solid var(--border); border-radius:10px;}
   .ing-table{width:100%; border-collapse:collapse; font-size:12.5px;}
-  @media (max-width:520px){ .ing-card{padding:12px;} .ing-table th, .ing-table td{padding:6px 4px;} .ing-table input[type=number]{width:60px;} .ing-table select{max-width:100%; width:100%;} .ing-table th{font-size:9.5px;} }
+  @media (max-width:520px){ .ing-table{table-layout:fixed;} .ing-table th:first-child{width:46%;} .ing-card .ing-ph{width:38px; height:38px; border-radius:8px;} .ing-card .ing-prod{gap:6px;} .ing-table td b{font-size:12.5px; overflow-wrap:anywhere;} .ing-table td small{font-size:10.5px;} .ing-table input[type=number]{width:100%; max-width:62px;} .ing-card .ing-pres{padding:1px 6px; font-size:10px;} .ing-card{padding:12px;} .ing-table th, .ing-table td{padding:6px 4px;} .ing-table input[type=number]{width:60px;} .ing-table select{max-width:100%; width:100%;} .ing-table th{font-size:9.5px;} }
   .ing-table th{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); padding:6px 8px; border-bottom:2px solid var(--border); background:var(--surface-2);}
   .ing-table th.n, .ing-table td.n{text-align:center;}
   .ing-table td{padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:middle;}
@@ -1645,6 +1645,12 @@ if ("serviceWorker" in navigator) {
   .ing-table select{max-width:210px; margin-top:4px; padding:4px 6px; font-size:11.5px; border:1px solid var(--warning); border-radius:6px; background:var(--surface); color:var(--text); font-family:inherit;}
   .ing-table td.n small{margin-top:2px;}
   .ing-table .ing-dash{color:var(--text-muted);}
+  .ing-prod{display:flex; align-items:center; gap:10px; min-width:0;}
+  .ing-ph{width:56px; height:56px; flex:0 0 auto; object-fit:contain; border-radius:10px; background:#fff; border:1px solid var(--border);}
+  .ing-ph0{display:inline-block; background:var(--surface-2); border-style:dashed;}
+  .ing-prod-t{min-width:0;}
+  .ing-pres{display:inline-block; margin-top:3px; padding:1px 8px; border-radius:99px; font-size:10.5px; font-weight:800; border:1px solid var(--sky); color:var(--sky); background:var(--sky-tint); white-space:nowrap;}
+  .ing-pres.big{border-color:var(--imports-color); color:var(--imports-color); background:var(--imports-tint);}
   .ing-table tr.ing-warn td:first-child{border-left:3px solid var(--warning);}
   .ing-table .ing-prov{color:var(--warning); font-weight:700;}
   .ing-total{display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:10px 2px 0; font-size:12.5px; color:var(--text-muted);}
@@ -6771,10 +6777,15 @@ if ("serviceWorker" in navigator) {
     else {
       var rows = ingRowsFor(imp);
       if(!rows.length){ wrap.remove(); showStatus('Esta importación no tiene productos con cajas.', true); return; }
-      var vals = rows.map(function(r){ return {g: r.mineU, s: r.smxU, gid: r.gid, sid: r.sid}; });
+      var vals = rows.map(function(r){ return {g: r.mineU, s: r.smxU, gid: r.gid, sid: r.sid, gidAuto: !!r.gid, sidAuto: !!r.sid}; });
       state.ing = {impId: imp.id, mode: 'new', rows: rows, vals: vals, busy: false};
     }
     ingRender();
+  }
+  // Foto del producto exacto (misma presentación), para no confundir una funda con un sachet.
+  function ingPhotoUrl(v){
+    var g = v && v.gid ? findProduct(v.gid) : null, s = v && v.sid ? findSupermaxiProduct(v.sid) : null;
+    return (g && g.photoUrl) || (s && s.photoUrl) || '';
   }
   function ingProdOptions(list, selectedId){
     var sorted = (list || []).slice().sort(function(a,b){
@@ -6802,6 +6813,7 @@ if ("serviceWorker" in navigator) {
   function ingRender(){
     var st = state.ing, wrap = document.getElementById('ingWrap'); if(!st || !wrap) return;
     var imp = state.imports.filter(function(i){ return i.id === st.impId; })[0]; if(!imp){ ingClose(); return; }
+    var prevCard = wrap.querySelector('.ing-card'), prevScroll = prevCard ? prevCard.scrollTop : 0;
     var html = '<div class="ing-card">';
     if(st.mode === 'new'){
       html += '<h3>📦 Pasar ' + esc(imp.name || 'la importación') + ' al inventario</h3>'
@@ -6810,9 +6822,11 @@ if ("serviceWorker" in navigator) {
       st.rows.forEach(function(r, i){
         var v = st.vals[i];
         var warn = (r.mine > 0 && !v.gid) || (r.smx > 0 && !v.sid);
-        html += '<tr class="' + (warn ? 'ing-warn' : '') + '"><td><b>' + esc(r.sabor) + '</b><small>' + esc(CATEGORY_LABEL[r.linea] || CATEGORY_LABEL[String(r.linea||'').toUpperCase()] || r.linea) + ' · ' + esc(r.pres) + '</small>';
-        if(r.mine > 0 && !r.gid) html += '<select data-ingsel="g" data-i="' + i + '">' + ingProdOptions(state.products, v.gid) + '</select>';
-        html += '</td>';
+        var ph = ingPhotoUrl(v), big = /serving/i.test(r.pres || '');
+        html += '<tr class="' + (warn ? 'ing-warn' : '') + '"><td><div class="ing-prod">' + (ph ? '<img class="ing-ph" src="' + esc(ph) + '" alt="">' : '<span class="ing-ph ing-ph0"></span>')
+          + '<div class="ing-prod-t"><b>' + esc(r.sabor) + '</b><small>' + esc(CATEGORY_LABEL[r.linea] || CATEGORY_LABEL[String(r.linea||'').toUpperCase()] || r.linea) + '</small><span class="ing-pres' + (big ? ' big' : '') + '">' + esc(r.pres) + '</span>';
+        if(r.mine > 0 && !v.gidAuto) html += '<select data-ingsel="g" data-i="' + i + '">' + ingProdOptions(state.products, v.gid) + '</select>';
+        html += '</div></div></td>';
         if(r.mine > 0){
           html += '<td class="n"><input type="number" min="0" step="1" inputmode="numeric" data-ing="g" data-i="' + i + '" value="' + (v.g || 0) + '">'
             + '<small>' + fmtInt(r.mine) + ' ' + (r.mine === 1 ? 'caja' : 'cajas') + (r.prov ? ' <span class="ing-prov" title="Valor provisional de cajas a tu bodega">(provisional)</span>' : '') + '</small></td>';
@@ -6820,7 +6834,7 @@ if ("serviceWorker" in navigator) {
         if(r.smx > 0){
           html += '<td class="n"><input type="number" min="0" step="1" inputmode="numeric" data-ing="s" data-i="' + i + '" value="' + (v.s || 0) + '">'
             + '<small>' + fmtInt(r.smx) + ' ' + (r.smx === 1 ? 'caja' : 'cajas') + '</small>'
-            + (!r.sid ? '<select data-ingsel="s" data-i="' + i + '">' + ingProdOptions(state.supermaxiProducts, v.sid) + '</select>' : '') + '</td>';
+            + (!v.sidAuto ? '<select data-ingsel="s" data-i="' + i + '">' + ingProdOptions(state.supermaxiProducts, v.sid) + '</select>' : '') + '</td>';
         } else html += '<td class="n"><span class="ing-dash">—</span></td>';
         html += '</tr>';
       });
@@ -6845,6 +6859,7 @@ if ("serviceWorker" in navigator) {
     }
     html += '</div>';
     wrap.innerHTML = html;
+    var newCard = wrap.querySelector('.ing-card'); if(newCard && prevScroll) newCard.scrollTop = prevScroll;
   }
   function ingWrite(item, product, qty, note, imp){
     var prodCol = item.col === 's' ? 'supermaxiProducts' : 'products', movCol = item.col === 's' ? 'supermaxiMovements' : 'movements';
@@ -6955,7 +6970,7 @@ if ("serviceWorker" in navigator) {
       var k = t.getAttribute('data-ingsel'); if(!k) return;
       var i = parseInt(t.getAttribute('data-i'), 10); if(isNaN(i) || !st.vals[i]) return;
       st.vals[i][k === 'g' ? 'gid' : 'sid'] = t.value;
-      var tot = document.getElementById('ingTotal'); if(tot) tot.innerHTML = ingTotalHtml();
+      ingRender();
     });
     document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && state.ing && !state.ing.busy) ingClose(); });
   }
