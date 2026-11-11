@@ -1627,6 +1627,35 @@ if ("serviceWorker" in navigator) {
   .exp-quick .acts button{border:1px solid var(--border); background:var(--surface-2); color:var(--text); border-radius:8px; padding:6px 12px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit;}
   .exp-quick .exp-pop{position:static; width:auto; box-shadow:none; border:none; padding:0; background:transparent;}
   .exp-quick .done{text-align:center; padding:18px 0 8px; font-weight:700;}
+
+  /* ---- Pasar importación al inventario ---- */
+  .ing-card{width:720px; max-width:100%; max-height:92vh; overflow-y:auto; background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:0 10px 30px rgba(0,0,0,.3); padding:16px; color:var(--text);}
+  .ing-card h3{margin:0 0 4px; font-size:16px;}
+  .ing-card .ing-sub{margin:0 0 10px; font-size:12px; color:var(--text-muted); line-height:1.4;}
+  .ing-scroll{overflow-x:auto; border:1px solid var(--border); border-radius:10px;}
+  .ing-table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  @media (max-width:520px){ .ing-card{padding:12px;} .ing-table th, .ing-table td{padding:6px 4px;} .ing-table input[type=number]{width:60px;} .ing-table select{max-width:100%; width:100%;} .ing-table th{font-size:9.5px;} }
+  .ing-table th{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); padding:6px 8px; border-bottom:2px solid var(--border); background:var(--surface-2);}
+  .ing-table th.n, .ing-table td.n{text-align:center;}
+  .ing-table td{padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:middle;}
+  .ing-table tr:last-child td{border-bottom:none;}
+  .ing-table td b{display:block; font-size:13px;}
+  .ing-table td small{display:block; color:var(--text-muted); font-size:11px;}
+  .ing-table input[type=number]{width:72px; padding:5px 6px; border:1px solid var(--border); border-radius:6px; font-size:13px; text-align:center; background:var(--surface); color:var(--text); font-family:inherit;}
+  .ing-table select{max-width:210px; margin-top:4px; padding:4px 6px; font-size:11.5px; border:1px solid var(--warning); border-radius:6px; background:var(--surface); color:var(--text); font-family:inherit;}
+  .ing-table td.n small{margin-top:2px;}
+  .ing-table .ing-dash{color:var(--text-muted);}
+  .ing-table tr.ing-warn td:first-child{border-left:3px solid var(--warning);}
+  .ing-table .ing-prov{color:var(--warning); font-weight:700;}
+  .ing-total{display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:10px 2px 0; font-size:12.5px; color:var(--text-muted);}
+  .ing-total b{color:var(--text);}
+  .ing-acts{display:flex; justify-content:flex-end; gap:8px; margin-top:12px; flex-wrap:wrap;}
+  .ing-acts button{border:1px solid var(--border); background:var(--surface-2); color:var(--text); border-radius:8px; padding:8px 14px; font-size:12.5px; font-weight:700; cursor:pointer; font-family:inherit;}
+  .ing-acts button.ok{border-color:var(--imports-color); background:var(--imports-color); color:var(--on-solid);}
+  .ing-acts button.bad{border-color:var(--critical); color:var(--critical);}
+  .ing-acts button:disabled{opacity:.55; cursor:default;}
+  .ing-note{margin:10px 0 0; padding:8px 10px; border-radius:8px; background:var(--warning-tint); color:var(--text); font-size:12px; line-height:1.4;}
+  .exp-launch.imp-ing-done{border-color:var(--success); background:var(--success-tint); color:var(--success);}
   .exp-launch{border:1px solid var(--imports-color); background:var(--imports-tint); color:var(--imports-color); font-weight:800; font-size:12px; border-radius:9px; padding:7px 12px; cursor:pointer; font-family:inherit;}
   .exp-soon-pill{font-size:12px; font-weight:800; padding:6px 12px; border-radius:9px; border:1px solid var(--warning); background:var(--warning-tint); color:var(--warning); cursor:pointer; font-family:inherit;}
   .exp-list{width:420px; max-width:100%; background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:0 10px 30px rgba(0,0,0,.3); padding:14px; color:var(--text); max-height:80vh; overflow:auto;}
@@ -6189,6 +6218,12 @@ if ("serviceWorker" in navigator) {
       html += '<input type="text" class="imp-select" id="impClienteInput" placeholder="Cliente / destino (opcional)" value="'+esc(imp.cliente||'')+'" style="width:200px;">';
       html += '<button class="btn-history" id="impAddLineBtn" type="button">+ Agregar línea</button>';
       html += '<button class="exp-launch exp-keep" id="impExpQuickBtn" type="button">📅 Poner vencimientos</button>';
+      if(imp.ingreso){
+        var __ia = imp.ingreso.at ? new Date(imp.ingreso.at) : null;
+        html += '<button class="exp-launch exp-keep imp-ing-done" id="impIngBtn" type="button" title="Ya se pasó al inventario. Toca para ver el detalle o deshacer.">✔ En inventario' + (__ia && !isNaN(__ia) ? ' · ' + __ia.getDate() + ' ' + MESES_ES[__ia.getMonth()] : '') + '</button>';
+      } else {
+        html += '<button class="exp-launch exp-keep" id="impIngBtn" type="button" title="Suma lo que llegó a tu inventario general y al de Supermaxi">📦 Pasar a inventario</button>';
+      }
       var __expN = expiryAlerts().length;
       if(__expN > 0){ html += '<button class="exp-soon-pill exp-keep" id="impExpSoonBtn" type="button">⏳ ' + __expN + ' por vencer</button>'; }
       html += '<button class="btn-history btn-danger" id="impDeleteBtn" type="button">Eliminar</button>';
@@ -6305,6 +6340,8 @@ if ("serviceWorker" in navigator) {
   }
 
   function attachImportToolbarEvents(){
+    var ingBtn = document.getElementById('impIngBtn');
+    if(ingBtn) ingBtn.addEventListener('click', function(){ ingOpen(); });
     var expQuickBtn = document.getElementById('impExpQuickBtn');
     if(expQuickBtn) expQuickBtn.addEventListener('click', function(){ expOpenQuick(); });
     var expSoonBtn = document.getElementById('impExpSoonBtn');
@@ -6688,6 +6725,239 @@ if ("serviceWorker" in navigator) {
       if(e.target && e.target !== document && e.target.nodeType === 1 && pop.contains(e.target)) return;
       if(Math.abs((window.pageYOffset || 0) - (state.expPop.sy || 0)) > 24) expClosePop();
     }, true);
+  }
+
+  // ================= Pasar la importación al inventario =================
+  // Suma lo que llegó de una importación a tu inventario general y a la bodega de Supermaxi, con un
+  // reabastecimiento por producto. Se guarda en la importación qué se sumó (imp.ingreso) para no
+  // duplicarlo y para poder deshacerlo completo.
+  function importFindProductIn(list, linea, sabor, presentacion){
+    var norm = function(s){ return (s||'').toString().trim().toLowerCase(); };
+    var candidates = [norm(sabor)];
+    var alias = IMPORT_PHOTO_ALIASES[norm(sabor)];
+    if(alias) candidates.push(alias);
+    var presCandidates = [norm(presentacion)];
+    var presAlias = IMPORT_PRESENTATION_ALIASES[norm(presentacion)];
+    if(presAlias) presCandidates.push(presAlias);
+    return (list || []).find(function(p){
+      return norm(p.category) === norm(linea) && candidates.indexOf(norm(p.flavor)) !== -1 && presCandidates.indexOf(norm(p.presentation)) !== -1;
+    }) || null;
+  }
+  function ingRowsFor(imp){
+    var rows = [];
+    (imp.products || []).forEach(function(line, idx){
+      var cajas = parseFloat(line.cajas) || 0; if(!(cajas > 0)) return;
+      var upc = parseFloat(line.unidadesPorCaja) || 0;
+      var smxLine = (parseFloat(line.precioVenta) || 0) > 0;
+      var b = smxLine ? bodCajasOf(imp, line) : {n: cajas, prov: false};
+      var mine = Math.min(b.n, cajas), smx = smxLine ? cajas - mine : 0;
+      var gp = mine > 0 ? importFindProductIn(state.products, line.linea, line.sabor, line.presentacion) : null;
+      var sp = smx > 0 ? importFindProductIn(state.supermaxiProducts, line.linea, line.sabor, line.presentacion) : null;
+      rows.push({idx: idx, linea: line.linea, sabor: line.sabor, pres: line.presentacion, cajas: cajas, upc: upc,
+        mine: mine, smx: smx, mineU: Math.round(mine * upc), smxU: Math.round(smx * upc),
+        gid: gp ? gp.id : '', sid: sp ? sp.id : '', prov: !!(smxLine && b.prov)});
+    });
+    return rows;
+  }
+  function ingClose(){
+    var el = document.getElementById('ingWrap'); if(el) el.remove();
+    state.ing = null;
+  }
+  function ingOpen(){
+    var imp = currentImport(); if(!imp) return;
+    var wrap = document.getElementById('ingWrap');
+    if(!wrap){ wrap = document.createElement('div'); wrap.className = 'exp-backdrop'; wrap.id = 'ingWrap'; document.body.appendChild(wrap); }
+    if(imp.ingreso){ state.ing = {impId: imp.id, mode: 'done'}; }
+    else {
+      var rows = ingRowsFor(imp);
+      if(!rows.length){ wrap.remove(); showStatus('Esta importación no tiene productos con cajas.', true); return; }
+      var vals = rows.map(function(r){ return {g: r.mineU, s: r.smxU, gid: r.gid, sid: r.sid}; });
+      state.ing = {impId: imp.id, mode: 'new', rows: rows, vals: vals, busy: false};
+    }
+    ingRender();
+  }
+  function ingProdOptions(list, selectedId){
+    var sorted = (list || []).slice().sort(function(a,b){
+      var ca = CATEGORY_LABEL[a.category] || a.category, cb = CATEGORY_LABEL[b.category] || b.category;
+      if(ca !== cb) return ca < cb ? -1 : 1;
+      return (a.flavor||'').localeCompare(b.flavor||'');
+    });
+    return '<option value="">Elegir producto (si no, se omite)</option>' + sorted.map(function(p){
+      return '<option value="' + esc(p.id) + '"' + (p.id === selectedId ? ' selected' : '') + '>' + esc((CATEGORY_LABEL[p.category]||p.category) + ' · ' + p.flavor + ' · ' + p.presentation) + '</option>';
+    }).join('');
+  }
+  function ingTotals(){
+    var st = state.ing, g = 0, s = 0;
+    st.rows.forEach(function(r, i){
+      var v = st.vals[i];
+      if(r.mine > 0 && v.gid) g += Math.max(0, v.g || 0);
+      if(r.smx > 0 && v.sid) s += Math.max(0, v.s || 0);
+    });
+    return {g: g, s: s};
+  }
+  function ingTotalHtml(){
+    var t = ingTotals();
+    return '<span>A tu inventario: <b>' + fmtInt(t.g) + ' u</b></span><span>A Supermaxi: <b>' + fmtInt(t.s) + ' u</b></span>';
+  }
+  function ingRender(){
+    var st = state.ing, wrap = document.getElementById('ingWrap'); if(!st || !wrap) return;
+    var imp = state.imports.filter(function(i){ return i.id === st.impId; })[0]; if(!imp){ ingClose(); return; }
+    var html = '<div class="ing-card">';
+    if(st.mode === 'new'){
+      html += '<h3>📦 Pasar ' + esc(imp.name || 'la importación') + ' al inventario</h3>'
+        + '<p class="ing-sub">Se suma como reabastecimiento a tu inventario general y a Supermaxi, según lo que marcaste en cada línea. Puedes corregir cualquier cantidad antes de confirmar.</p>'
+        + '<div class="ing-scroll"><table class="ing-table"><thead><tr><th>Producto</th><th class="n">Tu inventario (u)</th><th class="n">Supermaxi (u)</th></tr></thead><tbody>';
+      st.rows.forEach(function(r, i){
+        var v = st.vals[i];
+        var warn = (r.mine > 0 && !v.gid) || (r.smx > 0 && !v.sid);
+        html += '<tr class="' + (warn ? 'ing-warn' : '') + '"><td><b>' + esc(r.sabor) + '</b><small>' + esc(CATEGORY_LABEL[r.linea] || CATEGORY_LABEL[String(r.linea||'').toUpperCase()] || r.linea) + ' · ' + esc(r.pres) + '</small>';
+        if(r.mine > 0 && !r.gid) html += '<select data-ingsel="g" data-i="' + i + '">' + ingProdOptions(state.products, v.gid) + '</select>';
+        html += '</td>';
+        if(r.mine > 0){
+          html += '<td class="n"><input type="number" min="0" step="1" inputmode="numeric" data-ing="g" data-i="' + i + '" value="' + (v.g || 0) + '">'
+            + '<small>' + fmtInt(r.mine) + ' ' + (r.mine === 1 ? 'caja' : 'cajas') + (r.prov ? ' <span class="ing-prov" title="Valor provisional de cajas a tu bodega">(provisional)</span>' : '') + '</small></td>';
+        } else html += '<td class="n"><span class="ing-dash">—</span></td>';
+        if(r.smx > 0){
+          html += '<td class="n"><input type="number" min="0" step="1" inputmode="numeric" data-ing="s" data-i="' + i + '" value="' + (v.s || 0) + '">'
+            + '<small>' + fmtInt(r.smx) + ' ' + (r.smx === 1 ? 'caja' : 'cajas') + '</small>'
+            + (!r.sid ? '<select data-ingsel="s" data-i="' + i + '">' + ingProdOptions(state.supermaxiProducts, v.sid) + '</select>' : '') + '</td>';
+        } else html += '<td class="n"><span class="ing-dash">—</span></td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table></div><div class="ing-total" id="ingTotal">' + ingTotalHtml() + '</div>'
+        + '<div class="ing-acts"><button type="button" data-ingact="close">Cancelar</button><button type="button" class="ok" id="ingConfirmBtn" data-ingact="confirm"' + (st.busy ? ' disabled' : '') + '>' + (st.busy ? 'Ingresando…' : 'Confirmar ingreso') + '</button></div>';
+    } else {
+      var ing = imp.ingreso || {items: []};
+      var when = ing.at ? new Date(ing.at) : null;
+      html += '<h3>✔ ' + esc(imp.name || 'Importación') + ' ya está en el inventario</h3>'
+        + '<p class="ing-sub">' + (when && !isNaN(when) ? 'Ingresada el ' + when.getDate() + ' ' + MESES_ES[when.getMonth()] + ' ' + when.getFullYear() : 'Ingresada') + (ing.by ? ' por ' + esc(ing.by) : '') + '. Esto es lo que se sumó:</p>'
+        + '<div class="ing-scroll"><table class="ing-table"><thead><tr><th>Producto</th><th class="n">Dónde</th><th class="n">Unidades</th></tr></thead><tbody>'
+        + (ing.items || []).map(function(it){
+            return '<tr><td><b>' + esc(it.label || '') + '</b></td><td class="n">' + (it.col === 's' ? 'Supermaxi' : 'Tu inventario') + '</td><td class="n">+' + fmtInt(it.qty) + '</td></tr>';
+          }).join('')
+        + '</tbody></table></div>';
+      if(st.confirmUndo){
+        html += '<div class="ing-note">¿Seguro? Se resta de ambos inventarios todo lo que se sumó. Si ya vendiste parte de eso, el stock quedará en 0 como mínimo.</div>'
+          + '<div class="ing-acts"><button type="button" data-ingact="close">No, dejarlo</button><button type="button" class="bad" id="ingUndoBtn" data-ingact="undo"' + (st.busy ? ' disabled' : '') + '>' + (st.busy ? 'Deshaciendo…' : 'Sí, deshacer ingreso') + '</button></div>';
+      } else {
+        html += '<div class="ing-acts"><button type="button" class="bad" data-ingact="askundo">Deshacer ingreso</button><button type="button" class="ok" data-ingact="close">Cerrar</button></div>';
+      }
+    }
+    html += '</div>';
+    wrap.innerHTML = html;
+  }
+  function ingWrite(item, product, qty, note, imp){
+    var prodCol = item.col === 's' ? 'supermaxiProducts' : 'products', movCol = item.col === 's' ? 'supermaxiMovements' : 'movements';
+    var nowIso = new Date().toISOString(), ref = state.db.doc(prodCol + '/' + product.id);
+    return state.db.runTransaction(function(tx){
+      return tx.get(ref).then(function(doc){
+        var cur = (doc.exists && doc.data().stock) || 0;
+        tx.update(ref, {stock: cur + qty, lastMovementAt: nowIso, lastMovementBy: state.userName});
+      });
+    }).then(function(){
+      return state.db.collection(movCol).add({
+        productId: product.id, productLabel: product.presentation + ' · ' + product.flavor, type: 'reabastecer',
+        qty: qty, deltaStock: qty, at: nowIso, user: state.userName, client: '', note: note, importId: imp.id
+      });
+    }).then(function(ref2){
+      item.productId = product.id; item.label = product.presentation + ' · ' + product.flavor; item.qty = qty; item.movId = (ref2 && ref2.id) || '';
+      return item;
+    });
+  }
+  function ingRevertItem(it){
+    var prodCol = it.col === 's' ? 'supermaxiProducts' : 'products', movCol = it.col === 's' ? 'supermaxiMovements' : 'movements';
+    var nowIso = new Date().toISOString(), ref = state.db.doc(prodCol + '/' + it.productId);
+    return state.db.runTransaction(function(tx){
+      return tx.get(ref).then(function(doc){
+        if(!doc.exists) return;
+        var cur = doc.data().stock || 0;
+        tx.update(ref, {stock: Math.max(0, cur - it.qty), lastMovementAt: nowIso, lastMovementBy: state.userName});
+      });
+    }).then(function(){
+      return it.movId ? state.db.doc(movCol + '/' + it.movId).update({reversed: true}) : null;
+    }).then(function(){
+      return state.db.collection(movCol).add({
+        productId: it.productId, productLabel: it.label, type: 'correccion', qty: it.qty, deltaStock: -it.qty,
+        at: nowIso, user: state.userName, note: 'Se deshizo el ingreso de una importación', reversalOf: it.movId || ''
+      });
+    });
+  }
+  function ingConfirm(){
+    var st = state.ing; if(!st || st.mode !== 'new' || st.busy) return;
+    var imp = state.imports.filter(function(i){ return i.id === st.impId; })[0]; if(!imp){ ingClose(); return; }
+    if(imp.ingreso){ showStatus('Esta importación ya se pasó al inventario.', true); ingClose(); render(); return; }
+    var jobs = [];
+    st.rows.forEach(function(r, i){
+      var v = st.vals[i];
+      if(r.mine > 0 && v.g > 0 && v.gid){ var p = findProduct(v.gid); if(p) jobs.push({col: 'g', p: p, qty: v.g}); }
+      if(r.smx > 0 && v.s > 0 && v.sid){ var q = findSupermaxiProduct(v.sid); if(q) jobs.push({col: 's', p: q, qty: v.s}); }
+    });
+    if(!jobs.length){ showStatus('No hay cantidades para ingresar.', true); return; }
+    ensureUser(function(){
+      st.busy = true; ingRender();
+      var done = [], note = 'Importación ' + (imp.name || '');
+      jobs.reduce(function(chain, j){
+        return chain.then(function(){ return ingWrite({col: j.col}, j.p, j.qty, note, imp).then(function(it){ done.push(it); }); });
+      }, Promise.resolve()).then(function(){
+        return state.db.collection('imports').doc(imp.id).update({ingreso: {at: new Date().toISOString(), by: state.userName || '', items: done}});
+      }).then(function(){
+        var g = 0, s = 0; done.forEach(function(it){ if(it.col === 's') s += it.qty; else g += it.qty; });
+        ingClose();
+        showStatus('Listo: ' + fmtInt(g) + ' u. a tu inventario y ' + fmtInt(s) + ' u. a Supermaxi.');
+        render();
+      }).catch(function(){
+        // Si algo falló a la mitad, se revierte lo que ya se había sumado para no dejar números a medias.
+        done.reduce(function(chain, it){ return chain.then(function(){ return ingRevertItem(it); }); }, Promise.resolve()).catch(function(){}).then(function(){
+          if(state.ing) { state.ing.busy = false; ingRender(); }
+          showStatus('No se pudo completar el ingreso. Lo que alcanzó a sumarse se revirtió; intenta de nuevo.', true);
+        });
+      });
+    });
+  }
+  function ingUndo(){
+    var st = state.ing; if(!st || st.mode !== 'done' || st.busy) return;
+    var imp = state.imports.filter(function(i){ return i.id === st.impId; })[0]; if(!imp || !imp.ingreso){ ingClose(); return; }
+    var items = (imp.ingreso.items || []).slice();
+    ensureUser(function(){
+      st.busy = true; ingRender();
+      items.reduce(function(chain, it){ return chain.then(function(){ return ingRevertItem(it); }); }, Promise.resolve()).then(function(){
+        return state.db.collection('imports').doc(imp.id).update({ingreso: firebase.firestore.FieldValue.delete()});
+      }).then(function(){
+        ingClose(); showStatus('Ingreso deshecho: se restó de ambos inventarios.'); render();
+      }).catch(function(){
+        if(state.ing){ state.ing.busy = false; ingRender(); }
+        showStatus('No se pudo deshacer completo. Revisa el historial de movimientos.', true);
+      });
+    });
+  }
+  if(!window.__ingBound){
+    window.__ingBound = true;
+    document.addEventListener('click', function(e){
+      var wrap = document.getElementById('ingWrap'); if(!wrap || !state.ing) return;
+      var t = e.target;
+      if(t === wrap){ if(!state.ing.busy) ingClose(); return; }
+      var b = t.closest && t.closest('[data-ingact]'); if(!b) return;
+      var a = b.getAttribute('data-ingact');
+      if(a === 'close'){ if(!state.ing.busy) ingClose(); }
+      else if(a === 'confirm') ingConfirm();
+      else if(a === 'askundo'){ state.ing.confirmUndo = true; ingRender(); }
+      else if(a === 'undo') ingUndo();
+    });
+    document.addEventListener('input', function(e){
+      var t = e.target, st = state.ing; if(!st || st.mode !== 'new' || !t || !t.getAttribute) return;
+      var k = t.getAttribute('data-ing'); if(!k) return;
+      var i = parseInt(t.getAttribute('data-i'), 10); if(isNaN(i) || !st.vals[i]) return;
+      var n = Math.round(parseFloat(t.value)); st.vals[i][k] = isNaN(n) || n < 0 ? 0 : n;
+      var tot = document.getElementById('ingTotal'); if(tot) tot.innerHTML = ingTotalHtml();
+    });
+    document.addEventListener('change', function(e){
+      var t = e.target, st = state.ing; if(!st || st.mode !== 'new' || !t || !t.getAttribute) return;
+      var k = t.getAttribute('data-ingsel'); if(!k) return;
+      var i = parseInt(t.getAttribute('data-i'), 10); if(isNaN(i) || !st.vals[i]) return;
+      st.vals[i][k === 'g' ? 'gid' : 'sid'] = t.value;
+      var tot = document.getElementById('ingTotal'); if(tot) tot.innerHTML = ingTotalHtml();
+    });
+    document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && state.ing && !state.ing.busy) ingClose(); });
   }
 
   function attachImportEvents(imp){
