@@ -1464,9 +1464,9 @@ if ("serviceWorker" in navigator) {
   .imp-empty{padding:60px 20px; text-align:center; color:var(--text-muted);}
   .imp-kpis{grid-template-columns:repeat(auto-fit, minmax(150px,1fr));}
   .imp-layout{display:flex; gap:16px; align-items:flex-start;}
-  .imp-main{background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); flex:1 1 0; min-width:0;}
+  .imp-main{background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); flex:1 1 0; min-width:0; overflow-x:auto; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain;}
   .imp-side{flex:0 0 400px; display:flex; flex-direction:column; gap:10px; min-width:0;}
-  @media (max-width:1100px){ .imp-layout{flex-direction:column;} .imp-side{flex:1 1 auto; width:100%;} }
+  @media (max-width:1100px){ .imp-layout{flex-direction:column; align-items:stretch;} .imp-main{flex:0 0 auto; width:100%; max-width:100%;} .imp-side{flex:1 1 auto; width:100%;} }
   .imp-card{background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); padding:10px 14px;}
   .imp-card h4{margin:0 0 7px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); font-weight:700;}
   .imp-card-head{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:7px; flex-wrap:wrap;}
@@ -1597,6 +1597,10 @@ if ("serviceWorker" in navigator) {
   .imp-sabor-cell .nm{min-width:0; white-space:nowrap;}
   .imp-exp{flex:0 0 auto; border:1px solid transparent; background:transparent; color:var(--text-muted); font-size:10.5px; line-height:14px; padding:0 6px; border-radius:999px; cursor:pointer; font-family:inherit; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap;}
   .imp-exp.empty{opacity:.5; padding:0 3px;}
+  @media (pointer:coarse){
+    .imp-exp, .imp-bod{position:relative;}
+    .imp-exp::after, .imp-bod::after{content:''; position:absolute; top:-9px; bottom:-9px; left:-3px; right:-3px;}
+  }
   .imp-exp:hover{border-color:var(--imports-color); color:var(--imports-color); opacity:1;}
   .imp-exp.set{border-color:var(--border); background:var(--surface);}
   .imp-exp.soon{border-color:var(--warning); background:var(--warning-tint); color:var(--warning);}
@@ -5534,12 +5538,22 @@ if ("serviceWorker" in navigator) {
       + '<div class="sum" id="bodSum">' + bodSummaryHtml(line, cur) + '</div>'
       + '<div class="act"><button type="button" class="ok" data-bodok="1">Guardar</button><button type="button" class="clr" data-bodclr="1">Quitar</button></div>';
     document.body.appendChild(pop);
+    state.bodPop.w = window.innerWidth;
+    bodPlacePop();
+    var inp = document.getElementById('bodInput'); if(inp){ inp.focus(); inp.select(); }
+  }
+  // Coloca el cuadrito junto a su botón, dentro de la parte visible de la pantalla (en el móvil, con el
+  // teclado abierto la parte visible es más baja). Se vuelve a llamar si la pantalla cambia de alto.
+  function bodPlacePop(){
+    var pop = document.getElementById('bodPop'); if(!pop || !state.bodPop) return;
+    var btn = document.querySelector('.imp-bod[data-idx="' + state.bodPop.idx + '"]'); if(!btn) return;
+    var vv = window.visualViewport, vh = vv ? vv.height : window.innerHeight, vt = vv ? vv.offsetTop : 0;
     var r = btn.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
     var left = Math.max(8, Math.min(r.left - 6, window.innerWidth - w - 8));
     var top = r.bottom + 6;
-    if(top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+    if(top + h > vt + vh - 8) top = r.top - h - 6;
+    top = Math.max(vt + 8, Math.min(top, vt + vh - h - 8));
     pop.style.left = left + 'px'; pop.style.top = top + 'px';
-    var inp = document.getElementById('bodInput'); if(inp){ inp.focus(); inp.select(); }
   }
   document.addEventListener('click', function(e){
     var pop = document.getElementById('bodPop'); if(!pop || !state.bodPop) return;
@@ -5562,7 +5576,13 @@ if ("serviceWorker" in navigator) {
     var line = imp && (imp.products || [])[state.bodPop.idx], sum = document.getElementById('bodSum');
     if(line && sum) sum.innerHTML = bodSummaryHtml(line, Math.round(parseFloat(e.target.value)));
   });
-  window.addEventListener('resize', bodClosePop);
+  // Al abrir el teclado del móvil la pantalla cambia de alto: eso NO debe cerrar el cuadrito.
+  // Solo se cierra si cambió el ancho (girar el teléfono); si no, se vuelve a acomodar.
+  window.addEventListener('resize', function(){
+    if(!state.bodPop) return;
+    if(state.bodPop.w !== window.innerWidth) bodClosePop(); else bodPlacePop();
+  });
+  if(window.visualViewport) window.visualViewport.addEventListener('resize', function(){ if(state.bodPop) bodPlacePop(); });
 
   // ================= Análisis: Rentabilidad y Comparador de importaciones =================
   // Solo lee (state.products, state.imports). No escribe nada.
@@ -6520,7 +6540,7 @@ if ("serviceWorker" in navigator) {
     expClosePop();
     var line = (imp.products||[])[idx]; if(!line) return;
     var d = expParse(line.venc);
-    state.expPop = {impId: imp.id, idx: idx, year: d ? d.y : expLastYear()};
+    state.expPop = {impId: imp.id, idx: idx, year: d ? d.y : expLastYear(), w: window.innerWidth, sy: window.pageYOffset || 0};
     var pop = document.createElement('div');
     pop.className = 'exp-pop'; pop.id = 'expPop';
     document.body.appendChild(pop);
@@ -6657,8 +6677,17 @@ if ("serviceWorker" in navigator) {
       else if(document.getElementById('expQuickWrap')) expCloseQuick();
       else { var lw = document.getElementById('expListWrap'); if(lw) lw.remove(); }
     });
-    window.addEventListener('resize', expClosePop);
-    window.addEventListener('scroll', expClosePop, true);
+    // En el móvil la barra del navegador y el teclado cambian el alto de la pantalla (y a veces disparan un
+    // scroll mínimo) al tocar: eso no debe cerrar el calendario. Solo se cierra si gira la pantalla (cambia el
+    // ancho) o si de verdad se desplaza la página más de unos pocos píxeles.
+    window.addEventListener('resize', function(){
+      if(state.expPop && state.expPop.w !== window.innerWidth) expClosePop();
+    });
+    window.addEventListener('scroll', function(e){
+      var pop = document.getElementById('expPop'); if(!pop || !state.expPop) return;
+      if(e.target && e.target !== document && e.target.nodeType === 1 && pop.contains(e.target)) return;
+      if(Math.abs((window.pageYOffset || 0) - (state.expPop.sy || 0)) > 24) expClosePop();
+    }, true);
   }
 
   function attachImportEvents(imp){
