@@ -328,9 +328,9 @@ if ("serviceWorker" in navigator) {
   @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .b2b-link{background:var(--surface); border-color:var(--border); color:var(--text); font-weight:600;} :root:not([data-theme="light"]) .b2b-link:hover{background:var(--surface-2);} }
   :root[data-theme="dark"] .b2b-link{background:var(--surface); border-color:var(--border); color:var(--text); font-weight:600;}
   :root[data-theme="dark"] .b2b-link:hover{background:var(--surface-2);}
-  .b2b-link .b2b-short{display:none;}
-  @media (max-width:400px){ .brand-line .eyebrow{padding-right:46px;} }
-  @media (max-width:520px){ .b2b-link{top:2px; padding:6px 9px; font-size:11px;} .b2b-link .b2b-txt, .b2b-link .b2b-ico{display:none;} .b2b-link .b2b-short{display:inline;} }
+  .user-row{display:flex; align-items:center; gap:10px;}
+  .b2b-link.b2b-mob{display:none; position:static; top:auto; right:auto; margin-left:auto;}
+  @media (max-width:520px){ .b2b-link.b2b-top{display:none;} .user-chip-wrap{flex:1 1 100%;} .user-row{width:100%;} .b2b-link.b2b-mob{display:inline-flex; padding:9px 18px; font-size:13px;} }
 
   /* ---------- KPI strip ---------- */
   .kpis{
@@ -1956,7 +1956,7 @@ if ("serviceWorker" in navigator) {
 
 <div class="wrap" id="appWrap">
   <div class="topbar">
-    <a class="b2b-link" id="b2bLink" href="https://pedidos.tailwindnutrition.ec/central/" target="_blank" rel="noopener" title="Central de pedidos B2B" aria-label="Central de pedidos B2B"><svg class="b2b-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="20" r="1.6"/><circle cx="18" cy="20" r="1.6"/><path d="M2 3h3l2.6 12.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L21 8H6"/></svg><span class="b2b-txt">Pedidos B2B</span><span class="b2b-short">B2B</span></a>
+    <a class="b2b-link b2b-top" id="b2bLink" href="https://pedidos.tailwindnutrition.ec/central/" target="_blank" rel="noopener" title="Central de pedidos B2B" aria-label="Central de pedidos B2B"><svg class="b2b-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="20" r="1.6"/><circle cx="18" cy="20" r="1.6"/><path d="M2 3h3l2.6 12.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L21 8H6"/></svg><span class="b2b-txt">Pedidos B2B</span></a>
     <div class="brand-row">
       <div class="brand">
         <div class="brand-line">
@@ -1968,10 +1968,13 @@ if ("serviceWorker" in navigator) {
       </div>
       <div class="user-chip-wrap">
         <span class="chip-label">Usuario</span>
+        <div class="user-row">
         <div class="user-chip">
           <span class="dot"></span>
           <span id="userLabel">Sin identificar</span>
           <button id="changeUserBtn" type="button">Cambiar</button>
+        </div>
+        <a class="b2b-link b2b-mob" id="b2bLinkMob" href="https://pedidos.tailwindnutrition.ec/central/" target="_blank" rel="noopener" title="Central de pedidos B2B" aria-label="Central de pedidos B2B">B2B</a>
         </div>
       </div>
       <div class="user-chip client-chip" id="clientChip" style="display:none;">
