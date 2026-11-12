@@ -319,11 +319,15 @@ if ("serviceWorker" in navigator) {
   .b2b-link{
     position:absolute; top:6px; right:0; z-index:2;
     display:inline-flex; align-items:center; gap:6px;
-    background:var(--surface); border:1px solid var(--border); border-radius:999px;
-    box-shadow:var(--shadow); color:var(--text); text-decoration:none;
-    font-size:12px; font-weight:600; line-height:1; padding:7px 12px; white-space:nowrap;
+    background:#c9a0d6; border:1px solid #b88bc8; border-radius:999px;
+    box-shadow:var(--shadow); color:#1a1220; text-decoration:none;
+    font-size:12px; font-weight:700; line-height:1; padding:7px 12px; white-space:nowrap;
   }
-  .b2b-link:hover{background:var(--surface-2);}
+  .b2b-link:hover{background:#bf92cd;}
+  .b2b-link .b2b-ico{flex:none;}
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .b2b-link{background:var(--surface); border-color:var(--border); color:var(--text); font-weight:600;} :root:not([data-theme="light"]) .b2b-link:hover{background:var(--surface-2);} }
+  :root[data-theme="dark"] .b2b-link{background:var(--surface); border-color:var(--border); color:var(--text); font-weight:600;}
+  :root[data-theme="dark"] .b2b-link:hover{background:var(--surface-2);}
   @media (max-width:520px){ .b2b-link{padding:7px 10px;} .b2b-link .b2b-txt{display:none;} }
 
   /* ---------- KPI strip ---------- */
@@ -1950,7 +1954,7 @@ if ("serviceWorker" in navigator) {
 
 <div class="wrap" id="appWrap">
   <div class="topbar">
-    <a class="b2b-link" id="b2bLink" href="https://pedidos.tailwindnutrition.ec/central/" target="_blank" rel="noopener" title="Central de pedidos B2B" aria-label="Central de pedidos B2B">🛒 <span class="b2b-txt">Pedidos B2B</span></a>
+    <a class="b2b-link" id="b2bLink" href="https://pedidos.tailwindnutrition.ec/central/" target="_blank" rel="noopener" title="Central de pedidos B2B" aria-label="Central de pedidos B2B"><svg class="b2b-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="20" r="1.6"/><circle cx="18" cy="20" r="1.6"/><path d="M2 3h3l2.6 12.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L21 8H6"/></svg><span class="b2b-txt">Pedidos B2B</span></a>
     <div class="brand-row">
       <div class="brand">
         <div class="brand-line">
