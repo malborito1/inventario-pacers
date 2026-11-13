@@ -8283,10 +8283,44 @@ if ("serviceWorker" in navigator) {
       createdBy: state.userName
     }, fields);
     state.db.doc('products/' + id).set(doc).then(function(){
-      showStatus('Producto agregado al catálogo.');
+      return ensureGraceItem(id, doc).then(function(res){
+        showStatus(res === 'created' ? 'Producto agregado al catálogo y a Grace (0 unidades).' : 'Producto agregado al catálogo.');
+      }, function(err){
+        console.error('ensureGraceItem error:', err);
+        showStatus('Producto agregado al catálogo, pero NO se pudo crear su ítem en Grace. Avísame para agregarlo.', true);
+      });
     }).catch(function(){
       showStatus('No se pudo agregar el producto.', true);
     });
+  }
+
+  // Cada producto nuevo del inventario general tambien nace en Grace, con 0 unidades,
+  // hasta que se reabastezca ese ítem. Solo Endurance/HCF/Recovery en grande, sachets o flask.
+  function graceGroupFor(fields){
+    var pres = (fields.presentation || '').toLowerCase();
+    if(/sachet/.test(pres)) return 'SACHETS';
+    if(/flask/.test(pres)) return 'FLASKS';
+    if(fields.category !== 'SWAG' && /serv/.test(pres)) return 'GRANDE';
+    return null;
+  }
+  function graceLabelFor(fields){
+    var f = (fields.flavor || '').trim();
+    if(fields.category === 'HCF') return 'HCF ' + f;
+    if(fields.category === 'RECOVERY') return 'Recovery ' + f;
+    return f || (fields.presentation || '');
+  }
+  function ensureGraceItem(productId, fields){
+    var group = graceGroupFor(fields);
+    if(!group) return Promise.resolve('skipped');
+    if(state.graceItems.some(function(g){ return g.linkedProductId === productId; })) return Promise.resolve('exists');
+    var label = graceLabelFor(fields);
+    var slug = label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'') || 'item';
+    var gid = 'grace-' + group.toLowerCase() + '-' + slug;
+    if(state.graceItems.some(function(g){ return g.id === gid; })) gid += '-' + Date.now().toString(36);
+    var maxOrder = state.graceItems.reduce(function(m,g){ return Math.max(m, g.order||0); }, 0);
+    return state.db.doc('graceStock/' + gid).set({
+      label: label, group: group, qty: 0, order: maxOrder + 1, linkedProductId: productId
+    }).then(function(){ return 'created'; });
   }
 
   // ---------------- Reportes y exportación ----------------
