@@ -325,9 +325,6 @@ if ("serviceWorker" in navigator) {
   }
   .b2b-link:hover{background:#bf92cd;}
   .b2b-link .b2b-ico{flex:none;}
-  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .b2b-link{background:var(--surface); border-color:var(--border); color:var(--text); font-weight:600;} :root:not([data-theme="light"]) .b2b-link:hover{background:var(--surface-2);} }
-  :root[data-theme="dark"] .b2b-link{background:var(--surface); border-color:var(--border); color:var(--text); font-weight:600;}
-  :root[data-theme="dark"] .b2b-link:hover{background:var(--surface-2);}
   .user-row{display:flex; align-items:center; gap:10px;}
   .b2b-link.b2b-mob{display:none; position:static; top:auto; right:auto; margin-left:auto;}
   @media (max-width:520px){ .b2b-link.b2b-top{display:none;} .user-chip-wrap{flex:1 1 100%;} .user-row{width:100%;} .b2b-link.b2b-mob{display:inline-flex; padding:9px 18px; font-size:13px;} }
