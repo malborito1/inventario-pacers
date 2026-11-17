@@ -3478,6 +3478,53 @@ if ("serviceWorker" in navigator) {
   }
 
   // ---------------- Pagos pendientes ----------------
+  // Historial: un renglon por cuenta cobrada (mismo cliente, vencimiento y momento de cobro),
+  // en vez de un renglon por producto. Los abonos/retenciones previos se resumen en una linea.
+  function historyGroups(paid){
+    var groups = [], idx = {};
+    paid.forEach(function(pg){
+      var k = (pg.name||'') + '|' + (pg.dueDate||'') + '|' + (pg.paidAt||'').slice(0,16);
+      if(!idx.hasOwnProperty(k)){ idx[k] = groups.length; groups.push({rows: [], paidAt: pg.paidAt}); }
+      groups[idx[k]].rows.push(pg);
+    });
+    return groups;
+  }
+  function historyHtml(paid){
+    var groups = historyGroups(paid);
+    var out = '';
+    groups.forEach(function(g){
+      var rows = g.rows, pg = rows[0];
+      var credit = 0, abonos = [], ret = 0, ship = 0, labels = [];
+      rows.forEach(function(r){
+        var amt = r.amount||0;
+        if(r.origin === 'abono'){ abonos.push({amount: -amt, date: r.abonoDate || (r.createdAt||'').slice(0,10)}); }
+        else if(r.origin === 'retencion'){ ret += -amt; }
+        else { credit += amt; if(r.origin === 'envio'){ ship += amt; } else if(r.productLabel && labels.indexOf(r.productLabel) === -1){ labels.push(r.productLabel); } }
+      });
+      var ids = rows.map(function(r){ return r.id; }).join(',');
+      // Un solo registro (pago suelto, abono huerfano): se muestra como antes.
+      if(rows.length === 1){
+        out += '<div class="pago-item pago-item-paid"><span class="pago-name">' + esc(pg.name) + (pg.origin === 'abono' ? ' <span class="pago-abono-tag">abono parcial</span>' : (pg.origin === 'retencion' ? ' <span class="pago-abono-tag">retención</span>' : '')) + '</span><span class="pago-amt num">' + fmtMoney((pg.origin === 'abono' || pg.origin === 'retencion') ? -(pg.amount||0) : pg.amount) + '</span><span class="pago-paid-date">Cobrado ' + fmtDateDMY(pg.paidAt) + '</span><button class="pago-reopen" data-pid="' + ids + '" title="Volver a pendiente">↺</button></div>';
+        return;
+      }
+      var abTotal = 0; abonos.forEach(function(x){ abTotal += x.amount; });
+      var finalPay = credit - abTotal - ret;
+      var detail = '';
+      if(abonos.length || ret > 0){
+        detail = '<div class="pago-distrib-products">Total ' + fmtMoney(credit)
+          + (abonos.length ? (' · Abonos ' + fmtMoney(abTotal)) : '')
+          + (ret > 0 ? (' · Retención ' + fmtMoney(ret)) : '')
+          + ' · Pago final ' + fmtMoney(finalPay) + '</div>';
+      } else if(ship > 0){
+        detail = '<div class="pago-distrib-products">Productos: ' + fmtMoney(credit - ship) + ' + Envío: ' + fmtMoney(ship) + '</div>';
+      }
+      out += '<div class="pago-item pago-item-paid"><span class="pago-name">' + esc(pg.name)
+        + (labels.length ? ('<div class="pago-distrib-products">' + esc(labels.join(' · ')) + '</div>') : '') + detail
+        + '</span><span class="pago-amt num">' + fmtMoney(credit) + '</span><span class="pago-paid-date">Cobrado ' + fmtDateDMY(g.paidAt) + '</span><button class="pago-reopen" data-pid="' + ids + '" title="Volver a pendiente (toda la cuenta)">↺</button></div>';
+    });
+    return out;
+  }
+
   function renderPagos(){
     var root = document.getElementById('categoriesRoot');
     var allPending = state.payments.filter(function(pg){ return pg.status !== 'paid'; });
@@ -3643,15 +3690,13 @@ if ("serviceWorker" in navigator) {
       });
       html += '</div>';
     }
-    html += '<div class="pagos-history-toggle" id="pagosHistoryToggle">Historial de pagos (' + paid.length + ') <span class="chev">' + (state.pagosHistoryOpen?'▲':'▼') + '</span></div>';
+    html += '<div class="pagos-history-toggle" id="pagosHistoryToggle">Historial de pagos (' + historyGroups(paid).length + ') <span class="chev">' + (state.pagosHistoryOpen?'▲':'▼') + '</span></div>';
     if(state.pagosHistoryOpen){
       if(paid.length === 0){
         html += '<p class="empty-hint">Todavía no hay pagos marcados como cobrados.</p>';
       } else {
         html += '<div class="pagos-list pagos-list-history">';
-        paid.forEach(function(pg){
-          html += '<div class="pago-item pago-item-paid"><span class="pago-name">' + esc(pg.name) + (pg.origin === 'abono' ? ' <span class="pago-abono-tag">abono parcial</span>' : (pg.origin === 'retencion' ? ' <span class="pago-abono-tag">retención</span>' : '')) + '</span><span class="pago-amt num">' + fmtMoney((pg.origin === 'abono' || pg.origin === 'retencion') ? -(pg.amount||0) : pg.amount) + '</span><span class="pago-paid-date">Cobrado ' + fmtDateDMY(pg.paidAt) + '</span><button class="pago-reopen" data-pid="' + pg.id + '" title="Volver a pendiente">↺</button></div>';
-        });
+        html += historyHtml(paid);
         html += '</div>';
       }
     }
@@ -3826,11 +3871,15 @@ if ("serviceWorker" in navigator) {
     }).catch(function(){ showStatus('No se pudo actualizar.', true); });
   }
 
-  function reopenPago(id){
+  function reopenPago(idOrIds){
     if(!state.db) return;
-    state.db.doc('pendingPayments/' + id).update({
-      status: 'pending', paidAt: null
-    }).then(function(){
+    var ids = String(idOrIds).split(',').filter(Boolean);
+    if(!ids.length) return;
+    Promise.all(ids.map(function(id){
+      return state.db.doc('pendingPayments/' + id).update({
+        status: 'pending', paidAt: null
+      });
+    })).then(function(){
       showStatus('Pago devuelto a pendientes.');
     }).catch(function(){ showStatus('No se pudo actualizar.', true); });
   }
