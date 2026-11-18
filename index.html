@@ -1687,6 +1687,51 @@ if ("serviceWorker" in navigator) {
   .exp-list .r:last-child{border-bottom:none;}
   .exp-list .r span:last-child{white-space:nowrap; font-weight:700;}
   .exp-list .r span.crit{color:var(--critical);} .exp-list .r span.soon{color:var(--warning);}
+
+  /* ---- Vencimientos del stock (ventana) ---- */
+  .exs{width:860px; max-width:100%; max-height:90vh; overflow:auto; background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:0 12px 36px rgba(0,0,0,.32); padding:20px 22px; color:var(--text);}
+  .exs h3{margin:0 0 3px; font-size:19px;}
+  .exs .hint{margin:0 0 14px; font-size:12.5px; color:var(--text-muted);}
+  .exs-cards{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-bottom:12px;}
+  .exs-card{border:1px solid var(--border); border-radius:12px; padding:9px 12px; background:var(--surface-2); min-width:0;}
+  .exs-card small{display:block; color:var(--text-muted); font-size:11.5px;} .exs-card b{display:block; font-size:16px; font-variant-numeric:tabular-nums;} .exs-card span{display:block; color:var(--text-muted); font-size:11.5px; margin-top:1px;}
+  .exs-card.warn{background:var(--warning-tint); border-color:var(--warning);}
+  .exs-card.crit{background:var(--critical-tint); border-color:var(--critical);}
+  .exs-bar{display:flex; height:9px; border-radius:99px; overflow:hidden; background:var(--surface-2); margin:2px 0 6px;}
+  .exs-bar i{display:block; height:100%;} .exs-bar .d{background:var(--success);} .exs-bar .n{background:var(--border);}
+  .exs-leg{font-size:11.5px; color:var(--text-muted); display:flex; gap:6px 14px; flex-wrap:wrap; margin-bottom:10px;}
+  .exs-leg u{text-decoration:none; display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px;}
+  .exs-tabs{display:flex; gap:6px; margin:6px 0 4px;}
+  .exs-tabs button{border:1px solid var(--border); background:var(--surface-2); color:var(--text); border-radius:99px; padding:5px 13px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit;}
+  .exs-tabs button.on{background:var(--imports-color); color:var(--on-solid); border-color:var(--imports-color);}
+  .exs-cat{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--imports-color); font-weight:800; margin:14px 0 2px; padding-bottom:3px; border-bottom:2px solid var(--border);}
+  .exs-row{display:grid; grid-template-columns:210px 58px minmax(0,1fr); gap:10px; align-items:center; padding:6px 0; border-bottom:1px solid var(--border);}
+  .exs-row .nm{display:flex; align-items:center; gap:9px; min-width:0;}
+  .exs-row .nm b{display:block; font-size:13px;} .exs-row .nm small{display:block; color:var(--text-muted); font-size:11.5px;}
+  .exs-ph{width:38px; height:38px; border-radius:8px; object-fit:cover; border:1px solid var(--border); background:var(--surface-2); flex:0 0 auto; display:block;}
+  .exs-row .tt{text-align:right; font-weight:800; font-variant-numeric:tabular-nums; font-size:13px;}
+  .exs-chips{display:flex; flex-wrap:wrap; gap:6px;}
+  .exs-chip{font-family:inherit; font-size:12px; padding:3px 9px; border-radius:99px; border:1px solid; white-space:nowrap; cursor:pointer; background:var(--surface); color:var(--text);}
+  .exs-chip i{font-style:normal; opacity:.75;}
+  .exs-chip.ok{background:var(--success-tint); border-color:var(--success); color:var(--success);}
+  .exs-chip.soon{background:var(--warning-tint); border-color:var(--warning); color:var(--warning);}
+  .exs-chip.crit{background:var(--critical-tint); border-color:var(--critical); color:var(--critical);}
+  .exs-chip.nodate{border:1px dashed var(--text-muted); color:var(--text-muted);}
+  .exs-chip.static{cursor:default; border:1px dashed var(--border); color:var(--text-muted);}
+  .exs-chip:hover:not(.static){box-shadow:0 0 0 2px var(--imports-color);}
+  .exs-flat .exs-row{grid-template-columns:minmax(0,1fr) auto 110px;}
+  .exs-flat .exs-row .tt{text-align:right; font-weight:600; color:var(--text-muted); font-size:12px;}
+  .exs-flat .exs-chip{white-space:nowrap;}
+  .exs-acts{display:flex; gap:8px; margin-top:14px; justify-content:flex-end;}
+  .exs-acts button{border:1px solid var(--border); background:var(--surface-2); color:var(--text); border-radius:99px; padding:7px 16px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;}
+  .exs-split{display:flex; gap:6px; align-items:center;} .exs-split input{width:90px; padding:6px 8px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:14px; font-family:inherit;}
+  .exs-split button{border:1px solid var(--imports-color); background:var(--imports-color); color:var(--on-solid); border-radius:8px; padding:6px 12px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit;}
+  #expSPop .clr{margin-right:12px;}
+  @media (max-width:640px){
+    .exs{padding:16px 14px;} .exs-cards{grid-template-columns:1fr;}
+    .exs-row{grid-template-columns:minmax(0,1fr) auto;} .exs-row .chips-col, .exs-row .exs-chips{grid-column:1/-1;}
+    .exs-flat .exs-row{grid-template-columns:minmax(0,1fr) auto;}
+  }
   /* ===== Pronóstico de pedidos ===== */
   .fc-wrap{--fc-sug:#0b8a8f; --fc-sug-tint:#e1f3f3;}
   @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .fc-wrap{--fc-sug:#4fd1d6; --fc-sug-tint:#12302f;} }
@@ -2242,6 +2287,7 @@ if ("serviceWorker" in navigator) {
       <button class="btn-history" id="copyInventoryCsvBtn" type="button">📋 Inventario (CSV)</button>
       <button class="btn-history" id="copyMovementsCsvBtn" type="button">📋 Movimientos del periodo (CSV)</button>
       <button class="btn-history" id="copyGraceSummaryBtn" type="button">📋 Inventario de Grace (WhatsApp)</button>
+      <button class="btn-history" id="openExpStockBtn" type="button">📅 Vencimientos del stock</button>
     </div>
     <div class="modal-actions">
       <button class="cancel-btn" id="reportCloseBtn" type="button">Cerrar</button>
@@ -3478,53 +3524,6 @@ if ("serviceWorker" in navigator) {
   }
 
   // ---------------- Pagos pendientes ----------------
-  // Historial: un renglon por cuenta cobrada (mismo cliente, vencimiento y momento de cobro),
-  // en vez de un renglon por producto. Los abonos/retenciones previos se resumen en una linea.
-  function historyGroups(paid){
-    var groups = [], idx = {};
-    paid.forEach(function(pg){
-      var k = (pg.name||'') + '|' + (pg.dueDate||'') + '|' + (pg.paidAt||'').slice(0,16);
-      if(!idx.hasOwnProperty(k)){ idx[k] = groups.length; groups.push({rows: [], paidAt: pg.paidAt}); }
-      groups[idx[k]].rows.push(pg);
-    });
-    return groups;
-  }
-  function historyHtml(paid){
-    var groups = historyGroups(paid);
-    var out = '';
-    groups.forEach(function(g){
-      var rows = g.rows, pg = rows[0];
-      var credit = 0, abonos = [], ret = 0, ship = 0, labels = [];
-      rows.forEach(function(r){
-        var amt = r.amount||0;
-        if(r.origin === 'abono'){ abonos.push({amount: -amt, date: r.abonoDate || (r.createdAt||'').slice(0,10)}); }
-        else if(r.origin === 'retencion'){ ret += -amt; }
-        else { credit += amt; if(r.origin === 'envio'){ ship += amt; } else if(r.productLabel && labels.indexOf(r.productLabel) === -1){ labels.push(r.productLabel); } }
-      });
-      var ids = rows.map(function(r){ return r.id; }).join(',');
-      // Un solo registro (pago suelto, abono huerfano): se muestra como antes.
-      if(rows.length === 1){
-        out += '<div class="pago-item pago-item-paid"><span class="pago-name">' + esc(pg.name) + (pg.origin === 'abono' ? ' <span class="pago-abono-tag">abono parcial</span>' : (pg.origin === 'retencion' ? ' <span class="pago-abono-tag">retención</span>' : '')) + '</span><span class="pago-amt num">' + fmtMoney((pg.origin === 'abono' || pg.origin === 'retencion') ? -(pg.amount||0) : pg.amount) + '</span><span class="pago-paid-date">Cobrado ' + fmtDateDMY(pg.paidAt) + '</span><button class="pago-reopen" data-pid="' + ids + '" title="Volver a pendiente">↺</button></div>';
-        return;
-      }
-      var abTotal = 0; abonos.forEach(function(x){ abTotal += x.amount; });
-      var finalPay = credit - abTotal - ret;
-      var detail = '';
-      if(abonos.length || ret > 0){
-        detail = '<div class="pago-distrib-products">Total ' + fmtMoney(credit)
-          + (abonos.length ? (' · Abonos ' + fmtMoney(abTotal)) : '')
-          + (ret > 0 ? (' · Retención ' + fmtMoney(ret)) : '')
-          + ' · Pago final ' + fmtMoney(finalPay) + '</div>';
-      } else if(ship > 0){
-        detail = '<div class="pago-distrib-products">Productos: ' + fmtMoney(credit - ship) + ' + Envío: ' + fmtMoney(ship) + '</div>';
-      }
-      out += '<div class="pago-item pago-item-paid"><span class="pago-name">' + esc(pg.name)
-        + (labels.length ? ('<div class="pago-distrib-products">' + esc(labels.join(' · ')) + '</div>') : '') + detail
-        + '</span><span class="pago-amt num">' + fmtMoney(credit) + '</span><span class="pago-paid-date">Cobrado ' + fmtDateDMY(g.paidAt) + '</span><button class="pago-reopen" data-pid="' + ids + '" title="Volver a pendiente (toda la cuenta)">↺</button></div>';
-    });
-    return out;
-  }
-
   function renderPagos(){
     var root = document.getElementById('categoriesRoot');
     var allPending = state.payments.filter(function(pg){ return pg.status !== 'paid'; });
@@ -3690,13 +3689,15 @@ if ("serviceWorker" in navigator) {
       });
       html += '</div>';
     }
-    html += '<div class="pagos-history-toggle" id="pagosHistoryToggle">Historial de pagos (' + historyGroups(paid).length + ') <span class="chev">' + (state.pagosHistoryOpen?'▲':'▼') + '</span></div>';
+    html += '<div class="pagos-history-toggle" id="pagosHistoryToggle">Historial de pagos (' + paid.length + ') <span class="chev">' + (state.pagosHistoryOpen?'▲':'▼') + '</span></div>';
     if(state.pagosHistoryOpen){
       if(paid.length === 0){
         html += '<p class="empty-hint">Todavía no hay pagos marcados como cobrados.</p>';
       } else {
         html += '<div class="pagos-list pagos-list-history">';
-        html += historyHtml(paid);
+        paid.forEach(function(pg){
+          html += '<div class="pago-item pago-item-paid"><span class="pago-name">' + esc(pg.name) + (pg.origin === 'abono' ? ' <span class="pago-abono-tag">abono parcial</span>' : (pg.origin === 'retencion' ? ' <span class="pago-abono-tag">retención</span>' : '')) + '</span><span class="pago-amt num">' + fmtMoney((pg.origin === 'abono' || pg.origin === 'retencion') ? -(pg.amount||0) : pg.amount) + '</span><span class="pago-paid-date">Cobrado ' + fmtDateDMY(pg.paidAt) + '</span><button class="pago-reopen" data-pid="' + pg.id + '" title="Volver a pendiente">↺</button></div>';
+        });
         html += '</div>';
       }
     }
@@ -3871,15 +3872,11 @@ if ("serviceWorker" in navigator) {
     }).catch(function(){ showStatus('No se pudo actualizar.', true); });
   }
 
-  function reopenPago(idOrIds){
+  function reopenPago(id){
     if(!state.db) return;
-    var ids = String(idOrIds).split(',').filter(Boolean);
-    if(!ids.length) return;
-    Promise.all(ids.map(function(id){
-      return state.db.doc('pendingPayments/' + id).update({
-        status: 'pending', paidAt: null
-      });
-    })).then(function(){
+    state.db.doc('pendingPayments/' + id).update({
+      status: 'pending', paidAt: null
+    }).then(function(){
       showStatus('Pago devuelto a pendientes.');
     }).catch(function(){ showStatus('No se pudo actualizar.', true); });
   }
@@ -6607,50 +6604,116 @@ if ("serviceWorker" in navigator) {
     return 'set';
   }
   function expChipHtml(line, idx){
-    var st = expStatus(line.venc);
+    var subs = (Array.isArray(line.lotes) ? line.lotes : []).filter(function(s){ return s && s.venc; });
+    var vs = [line.venc].concat(subs.map(function(s){ return s.venc; })).filter(Boolean).sort();
+    var v = vs[0] || '';
+    var st = expStatus(v);
     if(st === 'empty') return '<button type="button" class="imp-exp empty" data-idx="'+idx+'" title="Poner vencimiento">📅</button>';
-    var txt = expLabel(line.venc);
-    return '<button type="button" class="imp-exp '+st+'" data-idx="'+idx+'" title="Vence '+EXP_MONTHS_CAP[expParse(line.venc).m-1]+' '+expParse(line.venc).y+'">'+(st==='soon'||st==='crit' ? '⏳ ' : '')+txt+'</button>';
+    var txt = expLabel(v) + (subs.length ? ' +' + subs.length : '');
+    var ttl = 'Vence ' + EXP_MONTHS_CAP[expParse(v).m-1] + ' ' + expParse(v).y + (subs.length ? '. Esta línea tiene lotes con otras fechas: se editan en Reportes > Vencimientos del stock' : '');
+    return '<button type="button" class="imp-exp '+st+'" data-idx="'+idx+'" title="'+esc(ttl)+'">'+(st==='soon'||st==='crit' ? '⏳ ' : '')+txt+'</button>';
   }
   function expImportOrderKey(imp){
     var ms = imp.milestones || [];
     for(var i = ms.length-1; i >= 0; i--){ if(ms[i] && ms[i].date) return String(ms[i].date); }
     return String(imp.createdAt || '');
   }
-  // Productos del inventario general cuyo lote (el que aún tiene unidades, vendiendo primero lo más viejo)
-  // vence en menos de 6 meses.
-  function expiryAlerts(){
+  // Lotes de una linea de importacion, en el orden en que se venden (sin fecha primero, luego la fecha mas cercana).
+  // Una linea tiene una fecha (line.venc) y, si hace falta, lotes aparte (line.lotes = [{u, venc}]) con otra fecha:
+  // las unidades de esos lotes salen de la linea y el resto conserva line.venc.
+  function expLineLots(l, units){
+    var out = [], used = 0;
+    (Array.isArray(l.lotes) ? l.lotes : []).forEach(function(s, i){
+      var u = parseFloat(s && s.u) || 0;
+      if(!(u > 0) || !(s && s.venc)) return;
+      out.push({u: u, venc: s.venc, sub: i}); used += u;
+    });
+    if(units - used > 0) out.push({u: units - used, venc: l.venc || '', sub: -1});
+    out.sort(function(a, b){ return a.venc < b.venc ? -1 : (a.venc > b.venc ? 1 : 0); });
+    return out;
+  }
+  // Lotes que quedan en el inventario general, por producto: el stock actual se asigna a los lotes
+  // mas nuevos (se vende primero lo mas viejo) y, dentro de una linea, se sale primero lo que vence antes.
+  function expStockLots(){
     var imps = (state.imports || []).slice().sort(function(a,b){ var ka = expImportOrderKey(a), kb = expImportOrderKey(b); return ka<kb ? -1 : (ka>kb ? 1 : 0); });
-    var norm = function(x){ return (x||'').toString().trim().toLowerCase(); };
     var groups = {}, order = [];
     imps.forEach(function(imp){
-      (imp.products || []).forEach(function(l){
+      (imp.products || []).forEach(function(l, li){
         var c = importLineCalc(l);
         if(!(c.unidades > 0)) return;
         if((parseFloat(l.precioVenta)||0) > 0) return;   // las líneas con precio son de Supermaxi (otro inventario)
-        var key = norm(l.linea)+'|'+norm(l.presentacion)+'|'+norm(l.sabor);
-        if(!groups[key]){ groups[key] = {linea:l.linea, presentacion:l.presentacion, sabor:l.sabor, lots:[]}; order.push(key); }
-        groups[key].lots.push({units:c.unidades, venc:l.venc||'', imp:imp.name});
+        var gp = importFindGeneralProduct(l.linea, l.sabor, l.presentacion); if(!gp) return;
+        var g = groups[gp.id]; if(!g){ g = groups[gp.id] = {gp: gp, lots: []}; order.push(gp.id); }
+        expLineLots(l, c.unidades).forEach(function(lt){ lt.imp = imp.name; lt.impId = imp.id; lt.li = li; g.lots.push(lt); });
       });
     });
     var out = [];
-    order.forEach(function(key){
-      var g = groups[key];
-      var gp = importFindGeneralProduct(g.linea, g.sabor, g.presentacion);
-      if(!gp) return;
-      var remaining = parseFloat(gp.stock)||0;
+    order.forEach(function(id){
+      var g = groups[id], remaining = parseFloat(g.gp.stock) || 0, picked = [];
       for(var i = g.lots.length-1; i >= 0 && remaining > 0; i--){
-        var take = Math.min(remaining, g.lots[i].units);
+        var lt = g.lots[i], take = Math.min(remaining, lt.u);
         remaining -= take;
-        var ml = expMonthsLeft(g.lots[i].venc);
-        if(ml !== null && ml < 6){
-          out.push({linea:g.linea, presentacion:g.presentacion, sabor:g.sabor, units:take, venc:g.lots[i].venc, monthsLeft:ml, imp:g.lots[i].imp});
-        }
+        picked.push({units: take, full: lt.u, venc: lt.venc, imp: lt.imp, impId: lt.impId, li: lt.li, sub: lt.sub, monthsLeft: expMonthsLeft(lt.venc)});
       }
+      picked.reverse();
+      out.push({gp: g.gp, stock: parseFloat(g.gp.stock) || 0, lots: picked, rest: remaining});
+    });
+    // productos con stock que no salen de ninguna importación registrada
+    (state.products || []).forEach(function(p){
+      if(groups[p.id] || !(parseFloat(p.stock) > 0)) return;
+      if(['ENDURANCE','HCF','RECOVERY'].indexOf(p.category) === -1) return;
+      out.push({gp: p, stock: parseFloat(p.stock) || 0, lots: [], rest: parseFloat(p.stock) || 0});
+    });
+    return out;
+  }
+  // Productos del inventario general cuyo lote (el que aún tiene unidades, vendiendo primero lo más viejo)
+  // vence en menos de 6 meses.
+  function expiryAlerts(){
+    var out = [];
+    expStockLots().forEach(function(g){
+      g.lots.forEach(function(lt){
+        if(lt.monthsLeft !== null && lt.monthsLeft < 6){
+          out.push({linea: g.gp.category, presentacion: g.gp.presentation, sabor: g.gp.flavor, units: lt.units, venc: lt.venc, monthsLeft: lt.monthsLeft, imp: lt.imp});
+        }
+      });
     });
     out.sort(function(a,b){ return a.monthsLeft - b.monthsLeft; });
     return out;
   }
+
+  // Cambia una linea de una importacion y la guarda (incluso si la importacion esta cerrada: es un dato de control).
+  function expPatchLine(impId, li, fn){
+    var imp = (state.imports || []).filter(function(i){ return i.id === impId; })[0];
+    if(!imp || !state.db || !(imp.products || [])[li]) return false;
+    var products = (imp.products || []).slice();
+    var line = Object.assign({}, products[li]);
+    fn(line);
+    products[li] = line;
+    imp.products = products;
+    state.db.collection('imports').doc(impId).update({products: products}).catch(function(){
+      showStatus('No se pudo guardar el vencimiento. Intenta de nuevo.', true);
+    });
+    return true;
+  }
+  function expCopyLotes(line){ return (Array.isArray(line.lotes) ? line.lotes : []).map(function(x){ return Object.assign({}, x); }); }
+  function expSetLotDate(lt, venc){
+    expPatchLine(lt.impId, lt.li, function(line){
+      if(lt.sub === -1){ if(venc) line.venc = venc; else delete line.venc; return; }
+      var ls = expCopyLotes(line);
+      if(!ls[lt.sub]) return;
+      if(venc) ls[lt.sub].venc = venc; else ls.splice(lt.sub, 1);   // sin fecha = se une al lote principal
+      if(ls.length) line.lotes = ls; else delete line.lotes;
+    });
+  }
+  function expSplitLot(lt, n, venc){
+    expPatchLine(lt.impId, lt.li, function(line){
+      var ls = expCopyLotes(line);
+      if(lt.sub !== -1){ if(!ls[lt.sub]) return; ls[lt.sub].u = (parseFloat(ls[lt.sub].u) || 0) - n; }
+      ls.push({u: n, venc: venc});
+      line.lotes = ls;
+    });
+  }
+  function expSplitMax(lt){ return lt.units >= lt.full ? lt.full - 1 : lt.units; }
 
   function expSaveLine(impId, idx, venc){
     var imp = state.imports.filter(function(i){ return i.id === impId; })[0];
@@ -6843,6 +6906,195 @@ if ("serviceWorker" in navigator) {
       if(e.target && e.target !== document && e.target.nodeType === 1 && pop.contains(e.target)) return;
       if(Math.abs((window.pageYOffset || 0) - (state.expPop.sy || 0)) > 24) expClosePop();
     }, true);
+  }
+
+  // ================= Ventana: vencimientos del stock =================
+  state.expS = {view: 'prod', pop: null};
+  function expFindLot(p){
+    var res = null;
+    expStockLots().forEach(function(g){
+      g.lots.forEach(function(lt){ if(!res && lt.impId === p.impId && lt.li === p.li && lt.sub === p.sub) res = {g: g, lt: lt}; });
+    });
+    return res;
+  }
+  function expPh(gp){
+    return (gp && gp.photoUrl) ? '<img class="exs-ph" src="' + esc(gp.photoUrl) + '" alt="" loading="lazy">' : '<span class="exs-ph exs-ph0"></span>';
+  }
+  function expLotChip(lt, withImp){
+    var key = lt.impId + '|' + lt.li + '|' + lt.sub;
+    var cls, txt = '<b>' + fmtInt(lt.units) + ' u</b> · ';
+    if(!lt.venc){ cls = 'nodate'; txt += 'sin fecha'; }
+    else {
+      var ml = lt.monthsLeft;
+      cls = ml < 6 ? 'crit' : (ml < 12 ? 'soon' : 'ok');
+      txt += 'vence ' + expLabel(lt.venc) + ' <i>(' + (ml < 0 ? 'vencido' : ml + (ml === 1 ? ' mes' : ' meses')) + ')</i>';
+    }
+    if(withImp) txt += ' <i>· ' + esc(lt.imp || '') + '</i>';
+    return '<button type="button" class="exs-chip ' + cls + '" data-exlot="' + esc(key) + '" title="' + esc(lt.imp || '') + ' · toca para poner o cambiar la fecha">' + txt + '</button>';
+  }
+  function expStockHtml(){
+    var groups = expStockLots();
+    var tot = 0, withD = 0, soon = 0, best = null, S = state.expS;
+    groups.forEach(function(g){
+      tot += g.stock;
+      g.lots.forEach(function(lt){
+        if(!lt.venc) return;
+        withD += lt.units;
+        if(lt.monthsLeft !== null && lt.monthsLeft < 6) soon += lt.units;
+        if(!best || lt.venc < best.lt.venc) best = {g: g, lt: lt};
+      });
+    });
+    var noD = Math.max(0, tot - withD), pctNo = tot > 0 ? Math.round(noD / tot * 100) : 0;
+    var h = '<h3>📅 Vencimientos del stock</h3><p class="hint">Lotes de tu inventario general. Toca un lote para poner o cambiar su fecha. Se descuenta primero lo más viejo.</p>';
+    h += '<div class="exs-cards">'
+      + '<div class="exs-card' + (soon > 0 ? ' crit' : '') + '"><small>Por vencer en menos de 6 meses</small><b>' + fmtInt(soon) + ' u</b><span>' + (soon > 0 ? 'Revisa los lotes en rojo' : 'Nada urgente por ahora') + '</span></div>'
+      + '<div class="exs-card"><small>Próximo vencimiento</small><b>' + (best ? esc(expLabel(best.lt.venc)) + ' · ' + fmtInt(best.lt.units) + ' u' : 'sin datos') + '</b><span>' + (best ? esc(best.g.gp.flavor + ' · ' + best.g.gp.presentation) + ' (' + (best.lt.monthsLeft < 0 ? 'vencido' : best.lt.monthsLeft + ' meses') + ')' : 'Carga fechas para verlo') + '</span></div>'
+      + '<div class="exs-card' + (noD > 0 ? ' warn' : '') + '"><small>Sin fecha cargada</small><b>' + fmtInt(noD) + ' de ' + fmtInt(tot) + ' u</b><span>' + pctNo + ' % del stock no tiene vencimiento</span></div></div>';
+    h += '<div class="exs-bar"><i class="d" style="width:' + (tot > 0 ? (withD / tot * 100).toFixed(1) : 0) + '%"></i><i class="n" style="width:' + (tot > 0 ? (noD / tot * 100).toFixed(1) : 0) + '%"></i></div>';
+    h += '<div class="exs-leg"><span><u style="background:var(--success)"></u>Con fecha ' + fmtInt(withD) + ' u</span><span><u style="background:var(--border)"></u>Sin fecha ' + fmtInt(noD) + ' u</span><span><u style="background:var(--success-tint);border:1px solid var(--success)"></u>12 meses o más</span><span><u style="background:var(--warning-tint);border:1px solid var(--warning)"></u>6 a 11 meses</span><span><u style="background:var(--critical-tint);border:1px solid var(--critical)"></u>menos de 6 meses</span></div>';
+    h += '<div class="exs-tabs"><button type="button" data-exs-view="prod" class="' + (S.view === 'prod' ? 'on' : '') + '">Por producto</button><button type="button" data-exs-view="fecha" class="' + (S.view === 'fecha' ? 'on' : '') + '">Por fecha</button></div>';
+    var rank = {ENDURANCE: 0, HCF: 1, RECOVERY: 2};
+    groups.sort(function(a, b){
+      var ra = rank[a.gp.category] != null ? rank[a.gp.category] : 9, rb = rank[b.gp.category] != null ? rank[b.gp.category] : 9;
+      if(ra !== rb) return ra - rb;
+      if(fcNorm(a.gp.presentation) !== fcNorm(b.gp.presentation)) return fcNorm(a.gp.presentation) === '30 servings' ? -1 : (fcNorm(b.gp.presentation) === '30 servings' ? 1 : String(a.gp.presentation).localeCompare(String(b.gp.presentation)));
+      return String(a.gp.flavor).localeCompare(String(b.gp.flavor));
+    });
+    if(S.view === 'fecha'){
+      var flat = [], undated = 0, undatedLots = 0;
+      groups.forEach(function(g){ g.lots.forEach(function(lt){ if(lt.venc) flat.push({g: g, lt: lt}); else { undated += lt.units; undatedLots++; } }); undated += g.rest; if(g.rest > 0) undatedLots++; });
+      flat.sort(function(a, b){ return a.lt.venc < b.lt.venc ? -1 : (a.lt.venc > b.lt.venc ? 1 : 0); });
+      h += '<div class="exs-flat">';
+      flat.forEach(function(x){ h += '<div class="exs-row"><div class="nm">' + expPh(x.g.gp) + '<span><b>' + esc(x.g.gp.flavor) + '</b><small>' + esc((CATEGORY_LABEL[x.g.gp.category] || x.g.gp.category) + ' · ' + x.g.gp.presentation) + '</small></span></div><div class="exs-chips">' + expLotChip(x.lt, false) + '</div><div class="tt" style="text-align:right;">' + esc(x.lt.imp || '') + '</div></div>'; });
+      if(!flat.length) h += '<div class="exs-row"><div class="nm"><small>Todavía no hay lotes con fecha.</small></div></div>';
+      if(undatedLots) h += '<div class="exs-row"><div class="nm"><small>' + undatedLots + (undatedLots === 1 ? ' lote' : ' lotes') + ' sin fecha (' + fmtInt(undated) + ' u). Cámbialos en la vista Por producto.</small></div></div>';
+      h += '</div>';
+    } else {
+      var cat = null;
+      groups.forEach(function(g){
+        if(g.gp.category !== cat){ cat = g.gp.category; h += '<div class="exs-cat">' + esc(CATEGORY_LABEL[cat] || cat) + '</div>'; }
+        var chips = g.lots.map(function(lt){ return expLotChip(lt, true); }).join('');
+        if(g.rest > 0) chips += '<span class="exs-chip static" title="El stock es mayor que lo registrado en las importaciones"><b>' + fmtInt(g.rest) + ' u</b> · sin lote registrado</span>';
+        h += '<div class="exs-row"><div class="nm">' + expPh(g.gp) + '<span><b>' + esc(g.gp.flavor) + '</b><small>' + esc(g.gp.presentation) + '</small></span></div><div class="tt">' + fmtInt(g.stock) + ' u</div><div class="exs-chips">' + chips + '</div></div>';
+      });
+    }
+    h += '<div class="exs-acts"><button type="button" data-exs-close="1">Cerrar</button></div>';
+    return h;
+  }
+  function expSRender(){
+    var wrap = document.getElementById('expStockWrap'); if(!wrap) return;
+    var box = wrap.querySelector('.exs'); var top = box ? box.scrollTop : 0;
+    if(!box){ box = document.createElement('div'); box.className = 'exs'; wrap.appendChild(box); }
+    box.innerHTML = expStockHtml();
+    box.scrollTop = top;
+    if(state.expS.pop) expSRenderPop();
+  }
+  function expOpenStock(){
+    expSClosePop();
+    var wrap = document.getElementById('expStockWrap');
+    if(!wrap){ wrap = document.createElement('div'); wrap.className = 'exp-backdrop'; wrap.id = 'expStockWrap'; wrap.style.zIndex = '998'; document.body.appendChild(wrap); }
+    state.expS.view = 'prod'; state.expS.pop = null;
+    expSRender();
+  }
+  function expSClose(){
+    expSClosePop();
+    var wrap = document.getElementById('expStockWrap'); if(wrap) wrap.remove();
+  }
+  function expSClosePop(){
+    var el = document.getElementById('expSPop'); if(el) el.remove();
+    state.expS.pop = null;
+  }
+  function expSRenderPop(){
+    var p = state.expS.pop, pop = document.getElementById('expSPop');
+    if(!p){ if(pop) pop.remove(); return; }
+    var f = expFindLot(p);
+    if(!f){ expSClosePop(); return; }
+    var lt = f.lt, g = f.g, max = expSplitMax(lt);
+    var cap = esc(g.gp.flavor) + ' · ' + esc(g.gp.presentation) + ' · ' + fmtInt(lt.units) + ' u (' + esc(lt.imp || '') + ')';
+    var h;
+    if(p.mode === 'splitN'){
+      h = '<p class="cap">' + cap + '</p><p class="cap">¿Cuántas unidades tienen otra fecha?</p><div class="exs-split"><input type="number" id="expSN" min="1" max="' + max + '" step="1" value="' + (p.n || Math.max(1, Math.min(max, Math.ceil(max / 2)))) + '"><button type="button" data-exs="splitgo">Siguiente</button></div><button type="button" class="clr" data-exs="back" style="margin-top:8px;">Volver</button>';
+    } else {
+      h = '<p class="cap">' + (p.mode === 'splitDate' ? 'Fecha del nuevo lote de ' + fmtInt(p.n) + ' u' : cap) + '</p>'
+        + expPickerHtml(p.year, p.mode === 'splitDate' ? '' : lt.venc);
+      if(p.mode === 'date'){
+        var acts = '';
+        if(lt.sub >= 0) acts += '<button type="button" class="clr" data-exs="merge">Unir al lote principal</button>';
+        else if(lt.venc) acts += '<button type="button" class="clr" data-exs="clear">Quitar fecha</button>';
+        if(max >= 1 && lt.full > 1) acts += '<button type="button" class="clr" data-exs="split">Dividir en otro lote…</button>';
+        h += acts;
+      } else {
+        h += '<button type="button" class="clr" data-exs="back">Volver</button>';
+      }
+    }
+    var fresh = !pop;
+    if(!pop){ pop = document.createElement('div'); pop.className = 'exp-pop'; pop.id = 'expSPop'; pop.style.zIndex = '1001'; pop.style.width = '260px'; document.body.appendChild(pop); }
+    pop.innerHTML = h;
+    if(fresh && p.anchor){
+      var w = pop.offsetWidth, hh = pop.offsetHeight, r = p.anchor;
+      var left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+      var topPx = r.bottom + 6;
+      if(topPx + hh > window.innerHeight - 8) topPx = Math.max(8, r.top - hh - 6);
+      pop.style.left = left + 'px'; pop.style.top = topPx + 'px';
+    }
+  }
+  if(!window.__expSBound){
+    window.__expSBound = true;
+    document.addEventListener('click', function(e){
+      var t = e.target; if(!t || !t.closest) return;
+      var wrap = document.getElementById('expStockWrap'); if(!wrap) return;
+      var S = state.expS, pop = document.getElementById('expSPop');
+      if(pop && pop.contains(t)){
+        var p = S.pop; if(!p) return;
+        var f = expFindLot(p); if(!f){ expSClosePop(); return; }
+        var lt = f.lt;
+        var yb = t.closest('[data-expy]');
+        if(yb){ p.year = parseInt(yb.getAttribute('data-expy'), 10); expRememberYear(p.year); expSRenderPop(); return; }
+        var mb = t.closest('[data-expm]');
+        if(mb){
+          var m = parseInt(mb.getAttribute('data-expm'), 10), v = p.year + '-' + (m < 10 ? '0' : '') + m;
+          expRememberYear(p.year);
+          if(p.mode === 'splitDate') expSplitLot(lt, p.n, v); else expSetLotDate(lt, v);
+          expSClosePop(); expSRender(); return;
+        }
+        var ab = t.closest('[data-exs]');
+        if(ab){
+          var a = ab.getAttribute('data-exs');
+          if(a === 'merge' || a === 'clear'){ expSetLotDate(lt, ''); expSClosePop(); expSRender(); }
+          else if(a === 'split'){ p.mode = 'splitN'; expSRenderPop(); }
+          else if(a === 'back'){ p.mode = 'date'; expSRenderPop(); }
+          else if(a === 'splitgo'){
+            var inp = document.getElementById('expSN'), n = Math.floor(parseFloat(inp && inp.value));
+            var max = expSplitMax(lt);
+            if(!(n >= 1) || n > max){ showStatus('Pon un número entre 1 y ' + fmtInt(max) + '.', true); return; }
+            p.n = n; p.mode = 'splitDate'; expSRenderPop();
+          }
+        }
+        return;
+      }
+      var chip = t.closest('[data-exlot]');
+      if(chip){
+        var parts = chip.getAttribute('data-exlot').split('|');
+        var np = {impId: parts[0], li: parseInt(parts[1], 10), sub: parseInt(parts[2], 10)};
+        if(S.pop && S.pop.impId === np.impId && S.pop.li === np.li && S.pop.sub === np.sub){ expSClosePop(); return; }
+        var f2 = expFindLot(np); if(!f2) return;
+        var d = expParse(f2.lt.venc);
+        np.mode = 'date'; np.year = d ? d.y : expLastYear(); np.anchor = chip.getBoundingClientRect().toJSON ? chip.getBoundingClientRect().toJSON() : chip.getBoundingClientRect();
+        expSClosePop(); S.pop = np; expSRenderPop(); return;
+      }
+      var vb = t.closest('[data-exs-view]');
+      if(vb){ S.view = vb.getAttribute('data-exs-view'); expSClosePop(); expSRender(); return; }
+      if(t.closest('[data-exs-close]')){ expSClose(); return; }
+      if(t === wrap){ if(S.pop) expSClosePop(); else expSClose(); return; }
+      if(S.pop) expSClosePop();
+    });
+    document.addEventListener('keydown', function(e){
+      if(e.key !== 'Escape') return;
+      if(!document.getElementById('expStockWrap')) return;
+      if(state.expS.pop) expSClosePop(); else expSClose();
+    });
+    var openBtn = document.getElementById('openExpStockBtn');
+    if(openBtn) openBtn.addEventListener('click', expOpenStock);
   }
 
   // ================= Pasar la importación al inventario =================
@@ -12645,6 +12897,7 @@ if ("serviceWorker" in navigator) {
         state.imports = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         if(!state.currentImportId && state.imports.length){ state.currentImportId = state.imports[0].id; }
         if(state.activeTab === 'IMPORTACIONES') render();
+        if(document.getElementById('expStockWrap')) expSRender();
       }, function(err){ notifyLiveDataError('importaciones', err); });
   }
 
