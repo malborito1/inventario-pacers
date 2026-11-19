@@ -1718,7 +1718,26 @@ if ("serviceWorker" in navigator) {
   .exs-chip.crit{background:var(--critical-tint); border-color:var(--critical); color:var(--critical);}
   .exs-chip.nodate{border:1px dashed var(--text-muted); color:var(--text-muted);}
   .exs-chip.static{cursor:default; border:1px dashed var(--border); color:var(--text-muted);}
-  .exs-chip:hover:not(.static){box-shadow:0 0 0 2px var(--imports-color);}
+  .exs-chip{cursor:inherit;}
+  .exs-row.go{cursor:pointer;} .exs-row.go:hover{background:var(--surface-2);}
+  .exs-ed{width:460px; max-width:100%; max-height:92vh; overflow:auto; background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:0 12px 36px rgba(0,0,0,.4); padding:16px 18px; color:var(--text);}
+  .exs-ed .top{display:flex; align-items:center; gap:10px; margin-bottom:6px;}
+  .exs-ed .top span{flex:1; min-width:0;} .exs-ed .top b{display:block; font-size:16px;} .exs-ed .top small{display:block; color:var(--text-muted); font-size:12px;}
+  .exs-ed .cl{border:0; background:transparent; color:var(--text-muted); font-size:18px; cursor:pointer; padding:4px 8px; border-radius:8px;}
+  .exs-ed .hint{margin:4px 0 10px; font-size:12.5px; color:var(--text-muted);}
+  .exs-sum{font-size:13px; font-weight:700; margin:2px 0 10px; font-variant-numeric:tabular-nums;} .exs-sum.ok{color:var(--success);} .exs-sum.over{color:var(--critical);}
+  .exs-lr{display:flex; align-items:center; gap:6px; padding:5px 0; border-radius:8px;}
+  .exs-lr.err{background:var(--critical-tint); box-shadow:0 0 0 2px var(--critical);}
+  .exs-lr .n{width:46px; font-size:12px; font-weight:700; color:var(--text-muted); flex:0 0 auto;}
+  .exs-lr .u{font-size:12px; color:var(--text-muted); margin-right:4px;}
+  .exs-lr input, .exs-lr select{padding:7px 8px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:14px; font-family:inherit; min-width:0;}
+  .exs-lr input{width:72px; font-variant-numeric:tabular-nums; font-weight:700; text-align:right;}
+  .exs-lr select{flex:1 1 0;}
+  .exs-lr .x{border:0; background:transparent; color:var(--text-muted); font-size:15px; cursor:pointer; padding:6px 8px; border-radius:8px;}
+  .exs-lr .x:hover{background:var(--surface-2); color:var(--critical);}
+  .exs-add{margin-top:6px; width:100%; border:1px dashed var(--imports-color); background:transparent; color:var(--imports-color); border-radius:10px; padding:9px 12px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;}
+  .exs-add:hover{background:var(--surface-2);}
+  .exs-acts .pri{background:var(--imports-color); border-color:var(--imports-color); color:var(--on-solid);}
   .exs-flat .exs-row{grid-template-columns:minmax(0,1fr) auto 110px;}
   .exs-flat .exs-row .tt{text-align:right; font-weight:600; color:var(--text-muted); font-size:12px;}
   .exs-flat .exs-chip{white-space:nowrap;}
@@ -1729,6 +1748,7 @@ if ("serviceWorker" in navigator) {
   #expSPop .clr{margin-right:12px;}
   @media (max-width:640px){
     .exs{padding:16px 14px;} .exs-cards{grid-template-columns:1fr;}
+    .exs-ed{padding:14px 12px;} .exs-lr{gap:4px;} .exs-lr .n{width:38px; font-size:11px;} .exs-lr input{width:60px; padding:7px 5px;} .exs-lr select{padding:7px 2px; font-size:13px;} .exs-lr .x{padding:6px 4px;}
     .exs-row{grid-template-columns:minmax(0,1fr) auto;} .exs-row .chips-col, .exs-row .exs-chips{grid-column:1/-1;}
     .exs-flat .exs-row{grid-template-columns:minmax(0,1fr) auto;}
   }
@@ -6696,24 +6716,56 @@ if ("serviceWorker" in navigator) {
     return true;
   }
   function expCopyLotes(line){ return (Array.isArray(line.lotes) ? line.lotes : []).map(function(x){ return Object.assign({}, x); }); }
-  function expSetLotDate(lt, venc){
-    expPatchLine(lt.impId, lt.li, function(line){
-      if(lt.sub === -1){ if(venc) line.venc = venc; else delete line.venc; return; }
-      var ls = expCopyLotes(line);
-      if(!ls[lt.sub]) return;
-      if(venc) ls[lt.sub].venc = venc; else ls.splice(lt.sub, 1);   // sin fecha = se une al lote principal
-      if(ls.length) line.lotes = ls; else delete line.lotes;
+  // Aplica a las lineas de importacion una lista de lotes de un producto: lots = [{u, venc}] (con fecha).
+  // Lo que no se asigna queda sin fecha. Las fechas mas cercanas van a las lineas mas viejas (se venden primero).
+  function expApplyLots(g, lots){
+    var cap = 0, slots = [], idx = {};
+    g.lots.forEach(function(lt){
+      cap += lt.units;
+      var k = lt.impId + '|' + lt.li;
+      if(!(k in idx)){ idx[k] = slots.length; slots.push({impId: lt.impId, li: lt.li, take: 0}); }
+      slots[idx[k]].take += lt.units;
+    });
+    var ds = {};
+    lots.forEach(function(x){ if(x.venc && x.u > 0) ds[x.venc] = (ds[x.venc] || 0) + x.u; });
+    var keys = Object.keys(ds).sort(), dated = 0, items = [];
+    keys.forEach(function(k){ dated += ds[k]; });
+    if(cap - dated > 0) items.push({venc: '', u: cap - dated});
+    keys.forEach(function(k){ items.push({venc: k, u: ds[k]}); });
+    var p = 0, used = 0, patches = [];
+    slots.forEach(function(s){
+      var imp = (state.imports || []).filter(function(i){ return i.id === s.impId; })[0];
+      var line = imp && (imp.products || [])[s.li]; if(!line) return;
+      var full = importLineCalc(line).unidades, need = s.take, groups = [];
+      while(need > 0 && p < items.length){
+        var avail = items[p].u - used, t = Math.min(avail, need);
+        if(t > 0) groups.push({venc: items[p].venc, u: t});
+        need -= t; used += t;
+        if(used >= items[p].u){ p++; used = 0; }
+      }
+      if(!groups.length) return;
+      groups[0].u += Math.max(0, full - s.take);   // lo ya vendido de esta linea va en su fecha mas cercana
+      patches.push({impId: s.impId, li: s.li, venc: groups[0].venc, lotes: groups.slice(1).filter(function(x){ return x.venc; }).map(function(x){ return {u: x.u, venc: x.venc}; })});
+    });
+    var byImp = {};
+    patches.forEach(function(pt){ (byImp[pt.impId] = byImp[pt.impId] || []).push(pt); });
+    Object.keys(byImp).forEach(function(id){
+      var imp = state.imports.filter(function(i){ return i.id === id; })[0];
+      if(!imp || !state.db) return;
+      var products = (imp.products || []).slice(), changed = false;
+      byImp[id].forEach(function(pt){
+        var old = products[pt.li], line = Object.assign({}, old);
+        if(pt.venc) line.venc = pt.venc; else delete line.venc;
+        if(pt.lotes.length) line.lotes = pt.lotes; else delete line.lotes;
+        if(JSON.stringify([old.venc || '', old.lotes || []]) !== JSON.stringify([line.venc || '', line.lotes || []])){ products[pt.li] = line; changed = true; }
+      });
+      if(!changed) return;
+      imp.products = products;
+      state.db.collection('imports').doc(id).update({products: products}).catch(function(){
+        showStatus('No se pudo guardar el vencimiento. Intenta de nuevo.', true);
+      });
     });
   }
-  function expSplitLot(lt, n, venc){
-    expPatchLine(lt.impId, lt.li, function(line){
-      var ls = expCopyLotes(line);
-      if(lt.sub !== -1){ if(!ls[lt.sub]) return; ls[lt.sub].u = (parseFloat(ls[lt.sub].u) || 0) - n; }
-      ls.push({u: n, venc: venc});
-      line.lotes = ls;
-    });
-  }
-  function expSplitMax(lt){ return lt.units >= lt.full ? lt.full - 1 : lt.units; }
 
   function expSaveLine(impId, idx, venc){
     var imp = state.imports.filter(function(i){ return i.id === impId; })[0];
@@ -6909,19 +6961,11 @@ if ("serviceWorker" in navigator) {
   }
 
   // ================= Ventana: vencimientos del stock =================
-  state.expS = {view: 'prod', pop: null};
-  function expFindLot(p){
-    var res = null;
-    expStockLots().forEach(function(g){
-      g.lots.forEach(function(lt){ if(!res && lt.impId === p.impId && lt.li === p.li && lt.sub === p.sub) res = {g: g, lt: lt}; });
-    });
-    return res;
-  }
+  state.expS = {view: 'prod', ed: null};
   function expPh(gp){
     return (gp && gp.photoUrl) ? '<img class="exs-ph" src="' + esc(gp.photoUrl) + '" alt="" loading="lazy">' : '<span class="exs-ph exs-ph0"></span>';
   }
-  function expLotChip(lt, withImp){
-    var key = lt.impId + '|' + lt.li + '|' + lt.sub;
+  function expLotChip(lt, withImp, gid){
     var cls, txt = '<b>' + fmtInt(lt.units) + ' u</b> · ';
     if(!lt.venc){ cls = 'nodate'; txt += 'sin fecha'; }
     else {
@@ -6930,7 +6974,7 @@ if ("serviceWorker" in navigator) {
       txt += 'vence ' + expLabel(lt.venc) + ' <i>(' + (ml < 0 ? 'vencido' : ml + (ml === 1 ? ' mes' : ' meses')) + ')</i>';
     }
     if(withImp) txt += ' <i>· ' + esc(lt.imp || '') + '</i>';
-    return '<button type="button" class="exs-chip ' + cls + '" data-exlot="' + esc(key) + '" title="' + esc(lt.imp || '') + ' · toca para poner o cambiar la fecha">' + txt + '</button>';
+    return '<span class="exs-chip ' + cls + '" title="' + esc(lt.imp || '') + '">' + txt + '</span>';
   }
   function expStockHtml(){
     var groups = expStockLots();
@@ -6945,7 +6989,7 @@ if ("serviceWorker" in navigator) {
       });
     });
     var noD = Math.max(0, tot - withD), pctNo = tot > 0 ? Math.round(noD / tot * 100) : 0;
-    var h = '<h3>📅 Vencimientos del stock</h3><p class="hint">Lotes de tu inventario general. Toca un lote para poner o cambiar su fecha. Se descuenta primero lo más viejo.</p>';
+    var h = '<h3>📅 Vencimientos del stock</h3><p class="hint">Lotes de tu inventario general. Toca un producto para cargar sus lotes: cantidad y fecha de cada uno. Se descuenta primero lo más viejo.</p>';
     h += '<div class="exs-cards">'
       + '<div class="exs-card' + (soon > 0 ? ' crit' : '') + '"><small>Por vencer en menos de 6 meses</small><b>' + fmtInt(soon) + ' u</b><span>' + (soon > 0 ? 'Revisa los lotes en rojo' : 'Nada urgente por ahora') + '</span></div>'
       + '<div class="exs-card"><small>Próximo vencimiento</small><b>' + (best ? esc(expLabel(best.lt.venc)) + ' · ' + fmtInt(best.lt.units) + ' u' : 'sin datos') + '</b><span>' + (best ? esc(best.g.gp.flavor + ' · ' + best.g.gp.presentation) + ' (' + (best.lt.monthsLeft < 0 ? 'vencido' : best.lt.monthsLeft + ' meses') + ')' : 'Carga fechas para verlo') + '</span></div>'
@@ -6965,7 +7009,7 @@ if ("serviceWorker" in navigator) {
       groups.forEach(function(g){ g.lots.forEach(function(lt){ if(lt.venc) flat.push({g: g, lt: lt}); else { undated += lt.units; undatedLots++; } }); undated += g.rest; if(g.rest > 0) undatedLots++; });
       flat.sort(function(a, b){ return a.lt.venc < b.lt.venc ? -1 : (a.lt.venc > b.lt.venc ? 1 : 0); });
       h += '<div class="exs-flat">';
-      flat.forEach(function(x){ h += '<div class="exs-row"><div class="nm">' + expPh(x.g.gp) + '<span><b>' + esc(x.g.gp.flavor) + '</b><small>' + esc((CATEGORY_LABEL[x.g.gp.category] || x.g.gp.category) + ' · ' + x.g.gp.presentation) + '</small></span></div><div class="exs-chips">' + expLotChip(x.lt, false) + '</div><div class="tt" style="text-align:right;">' + esc(x.lt.imp || '') + '</div></div>'; });
+      flat.forEach(function(x){ h += '<div class="exs-row go" data-exg="' + esc(x.g.gp.id) + '"><div class="nm">' + expPh(x.g.gp) + '<span><b>' + esc(x.g.gp.flavor) + '</b><small>' + esc((CATEGORY_LABEL[x.g.gp.category] || x.g.gp.category) + ' · ' + x.g.gp.presentation) + '</small></span></div><div class="exs-chips">' + expLotChip(x.lt, false, x.g.gp.id) + '</div><div class="tt" style="text-align:right;">' + esc(x.lt.imp || '') + '</div></div>'; });
       if(!flat.length) h += '<div class="exs-row"><div class="nm"><small>Todavía no hay lotes con fecha.</small></div></div>';
       if(undatedLots) h += '<div class="exs-row"><div class="nm"><small>' + undatedLots + (undatedLots === 1 ? ' lote' : ' lotes') + ' sin fecha (' + fmtInt(undated) + ' u). Cámbialos en la vista Por producto.</small></div></div>';
       h += '</div>';
@@ -6973,9 +7017,9 @@ if ("serviceWorker" in navigator) {
       var cat = null;
       groups.forEach(function(g){
         if(g.gp.category !== cat){ cat = g.gp.category; h += '<div class="exs-cat">' + esc(CATEGORY_LABEL[cat] || cat) + '</div>'; }
-        var chips = g.lots.map(function(lt){ return expLotChip(lt, true); }).join('');
+        var chips = g.lots.map(function(lt){ return expLotChip(lt, true, g.gp.id); }).join('');
         if(g.rest > 0) chips += '<span class="exs-chip static" title="El stock es mayor que lo registrado en las importaciones"><b>' + fmtInt(g.rest) + ' u</b> · sin lote registrado</span>';
-        h += '<div class="exs-row"><div class="nm">' + expPh(g.gp) + '<span><b>' + esc(g.gp.flavor) + '</b><small>' + esc(g.gp.presentation) + '</small></span></div><div class="tt">' + fmtInt(g.stock) + ' u</div><div class="exs-chips">' + chips + '</div></div>';
+        h += '<div class="exs-row go" data-exg="' + esc(g.gp.id) + '"><div class="nm">' + expPh(g.gp) + '<span><b>' + esc(g.gp.flavor) + '</b><small>' + esc(g.gp.presentation) + '</small></span></div><div class="tt">' + fmtInt(g.stock) + ' u</div><div class="exs-chips">' + chips + '</div></div>';
       });
     }
     h += '<div class="exs-acts"><button type="button" data-exs-close="1">Cerrar</button></div>';
@@ -6987,111 +7031,169 @@ if ("serviceWorker" in navigator) {
     if(!box){ box = document.createElement('div'); box.className = 'exs'; wrap.appendChild(box); }
     box.innerHTML = expStockHtml();
     box.scrollTop = top;
-    if(state.expS.pop) expSRenderPop();
   }
   function expOpenStock(){
-    expSClosePop();
+    expEdClose();
     var wrap = document.getElementById('expStockWrap');
     if(!wrap){ wrap = document.createElement('div'); wrap.className = 'exp-backdrop'; wrap.id = 'expStockWrap'; wrap.style.zIndex = '998'; document.body.appendChild(wrap); }
-    state.expS.view = 'prod'; state.expS.pop = null;
+    state.expS.view = 'prod';
     expSRender();
   }
   function expSClose(){
-    expSClosePop();
+    expEdClose();
     var wrap = document.getElementById('expStockWrap'); if(wrap) wrap.remove();
   }
-  function expSClosePop(){
-    var el = document.getElementById('expSPop'); if(el) el.remove();
-    state.expS.pop = null;
+
+  // ----- Editor de lotes de un producto -----
+  function expFindGroup(id){
+    var r = null;
+    expStockLots().forEach(function(g){ if(g.gp.id === id) r = g; });
+    return r;
   }
-  function expSRenderPop(){
-    var p = state.expS.pop, pop = document.getElementById('expSPop');
-    if(!p){ if(pop) pop.remove(); return; }
-    var f = expFindLot(p);
-    if(!f){ expSClosePop(); return; }
-    var lt = f.lt, g = f.g, max = expSplitMax(lt);
-    var cap = esc(g.gp.flavor) + ' · ' + esc(g.gp.presentation) + ' · ' + fmtInt(lt.units) + ' u (' + esc(lt.imp || '') + ')';
-    var h;
-    if(p.mode === 'splitN'){
-      h = '<p class="cap">' + cap + '</p><p class="cap">¿Cuántas unidades tienen otra fecha?</p><div class="exs-split"><input type="number" id="expSN" min="1" max="' + max + '" step="1" value="' + (p.n || Math.max(1, Math.min(max, Math.ceil(max / 2)))) + '"><button type="button" data-exs="splitgo">Siguiente</button></div><button type="button" class="clr" data-exs="back" style="margin-top:8px;">Volver</button>';
-    } else {
-      h = '<p class="cap">' + (p.mode === 'splitDate' ? 'Fecha del nuevo lote de ' + fmtInt(p.n) + ' u' : cap) + '</p>'
-        + expPickerHtml(p.year, p.mode === 'splitDate' ? '' : lt.venc);
-      if(p.mode === 'date'){
-        var acts = '';
-        if(lt.sub >= 0) acts += '<button type="button" class="clr" data-exs="merge">Unir al lote principal</button>';
-        else if(lt.venc) acts += '<button type="button" class="clr" data-exs="clear">Quitar fecha</button>';
-        if(max >= 1 && lt.full > 1) acts += '<button type="button" class="clr" data-exs="split">Dividir en otro lote…</button>';
-        h += acts;
-      } else {
-        h += '<button type="button" class="clr" data-exs="back">Volver</button>';
+  function expEdCap(g){ var c = 0; g.lots.forEach(function(lt){ c += lt.units; }); return c; }
+  function expEdClose(){
+    var el = document.getElementById('expEd'); if(el) el.remove();
+    state.expS.ed = null;
+  }
+  function expEdOpen(gid){
+    var g = expFindGroup(gid); if(!g) return;
+    var by = {}, order = [];
+    g.lots.forEach(function(lt){ if(!lt.venc) return; if(!(lt.venc in by)){ by[lt.venc] = 0; order.push(lt.venc); } by[lt.venc] += lt.units; });
+    order.sort();
+    var rows = order.map(function(v){ var d = expParse(v); return {u: String(by[v]), m: d.m, y: d.y}; });
+    var cap = expEdCap(g);
+    if(!rows.length && cap > 0) rows.push({u: String(cap), m: '', y: expLastYear()});
+    state.expS.ed = {gid: gid, rows: rows};
+    expEdRender(true);
+  }
+  function expEdOpts(i, r){
+    var cur = new Date().getFullYear(), years = [], y;
+    for(y = cur - 1; y <= cur + 7; y++) years.push(y);
+    if(r.y && years.indexOf(r.y) < 0){ years.push(r.y); years.sort(); }
+    var sm = '<select data-edm="' + i + '" aria-label="Mes"><option value="">Mes</option>';
+    for(var m = 1; m <= 12; m++) sm += '<option value="' + m + '"' + (r.m === m ? ' selected' : '') + '>' + EXP_MONTHS_CAP[m-1] + '</option>';
+    sm += '</select>';
+    var sy = '<select data-edy="' + i + '" aria-label="Año"><option value="">Año</option>';
+    years.forEach(function(v){ sy += '<option value="' + v + '"' + (r.y === v ? ' selected' : '') + '>' + v + '</option>'; });
+    return sm + sy + '</select>';
+  }
+  function expEdRowsHtml(){
+    var ed = state.expS.ed, h = '';
+    ed.rows.forEach(function(r, i){
+      h += '<div class="exs-lr" data-edrow="' + i + '"><span class="n">Lote ' + (i + 1) + '</span>'
+        + '<input type="number" inputmode="numeric" min="1" step="1" data-edq="' + i + '" value="' + esc(r.u) + '" aria-label="Unidades del lote ' + (i + 1) + '"><span class="u">u</span>'
+        + expEdOpts(i, r)
+        + '<button type="button" class="x" data-edx="' + i + '" title="Quitar este lote" aria-label="Quitar lote ' + (i + 1) + '">✕</button></div>';
+    });
+    return h;
+  }
+  function expEdRender(fresh){
+    var ed = state.expS.ed; if(!ed) return;
+    var g = expFindGroup(ed.gid); if(!g){ expEdClose(); return; }
+    var cap = expEdCap(g);
+    var el = document.getElementById('expEd');
+    if(!el){ el = document.createElement('div'); el.className = 'exp-backdrop'; el.id = 'expEd'; el.style.zIndex = '1002'; document.body.appendChild(el); }
+    var h = '<div class="exs-ed"><div class="top">' + expPh(g.gp) + '<span><b>' + esc(g.gp.flavor) + '</b><small>' + esc((CATEGORY_LABEL[g.gp.category] || g.gp.category) + ' · ' + g.gp.presentation) + '</small></span>'
+      + '<button type="button" class="cl" data-edcancel="1" aria-label="Cerrar">✕</button></div>'
+      + '<p class="hint">Tienes <b>' + fmtInt(cap) + ' u</b> en bodega' + (g.rest > 0 ? ' (más ' + fmtInt(g.rest) + ' u sin lote registrado)' : '') + '. Pon cuántas son de cada lote y su vencimiento.</p>'
+      + '<div class="exs-bar"><i class="d" id="expEdBarD"></i><i class="n" id="expEdBarN"></i></div>'
+      + '<div class="exs-sum" id="expEdSum"></div>'
+      + '<div id="expEdRows">' + expEdRowsHtml() + '</div>'
+      + '<button type="button" class="exs-add" id="expEdAdd" data-edadd="1"></button>'
+      + '<div class="exs-acts"><button type="button" data-edcancel="1">Cancelar</button><button type="button" class="pri" data-edsave="1">Guardar</button></div></div>';
+    el.innerHTML = h;
+    expEdRefresh();
+  }
+  function expEdAssigned(){
+    var tot = 0;
+    state.expS.ed.rows.forEach(function(r){ var u = Math.floor(parseFloat(r.u)); if(u > 0) tot += u; });
+    return tot;
+  }
+  function expEdRefresh(){
+    var ed = state.expS.ed; if(!ed) return;
+    var g = expFindGroup(ed.gid); if(!g) return;
+    var cap = expEdCap(g), as = expEdAssigned(), left = cap - as;
+    var d = document.getElementById('expEdBarD'), n = document.getElementById('expEdBarN'), sum = document.getElementById('expEdSum'), add = document.getElementById('expEdAdd');
+    if(d) d.style.width = (cap > 0 ? Math.min(100, as / cap * 100) : 0).toFixed(1) + '%';
+    if(n) n.style.width = (cap > 0 ? Math.max(0, Math.min(100, left / cap * 100)) : 0).toFixed(1) + '%';
+    if(sum){
+      if(left < 0){ sum.className = 'exs-sum over'; sum.textContent = 'Asignadas ' + fmtInt(as) + ' de ' + fmtInt(cap) + ' u · te pasas por ' + fmtInt(-left) + ' u'; }
+      else if(left === 0){
+        var nodate = state.expS.ed.rows.some(function(r){ return Math.floor(parseFloat(r.u)) > 0 && !(r.m && r.y); });
+        sum.className = nodate ? 'exs-sum' : 'exs-sum ok';
+        sum.textContent = 'Asignadas ' + fmtInt(as) + ' de ' + fmtInt(cap) + ' u · ' + (nodate ? 'falta elegir la fecha' : 'todo con fecha');
       }
+      else { sum.className = 'exs-sum'; sum.textContent = 'Asignadas ' + fmtInt(as) + ' de ' + fmtInt(cap) + ' u · faltan ' + fmtInt(left) + ' u'; }
     }
-    var fresh = !pop;
-    if(!pop){ pop = document.createElement('div'); pop.className = 'exp-pop'; pop.id = 'expSPop'; pop.style.zIndex = '1001'; pop.style.width = '260px'; document.body.appendChild(pop); }
-    pop.innerHTML = h;
-    if(fresh && p.anchor){
-      var w = pop.offsetWidth, hh = pop.offsetHeight, r = p.anchor;
-      var left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
-      var topPx = r.bottom + 6;
-      if(topPx + hh > window.innerHeight - 8) topPx = Math.max(8, r.top - hh - 6);
-      pop.style.left = left + 'px'; pop.style.top = topPx + 'px';
+    if(add){
+      if(left > 0){ add.hidden = false; add.textContent = '+ Agregar otro lote (faltan ' + fmtInt(left) + ' u)'; }
+      else add.hidden = true;
     }
+  }
+  function expEdSave(){
+    var ed = state.expS.ed; if(!ed) return;
+    var g = expFindGroup(ed.gid); if(!g){ expEdClose(); return; }
+    var cap = expEdCap(g), lots = [], bad = -1, total = 0;
+    ed.rows.forEach(function(r, i){
+      var u = Math.floor(parseFloat(r.u));
+      if(!(u > 0)) return;
+      if(!(r.m && r.y)){ if(bad < 0) bad = i; return; }
+      total += u;
+      lots.push({u: u, venc: r.y + '-' + (r.m < 10 ? '0' : '') + r.m});
+    });
+    if(bad >= 0){
+      var rowEl = document.querySelector('#expEd [data-edrow="' + bad + '"]');
+      if(rowEl){ rowEl.classList.add('err'); var sel = rowEl.querySelector('select'); if(sel) sel.focus(); }
+      showStatus('Falta el mes y el año del lote ' + (bad + 1) + '.', true); return;
+    }
+    if(total > cap){ showStatus('Pusiste ' + fmtInt(total - cap) + ' u más de las que tienes en bodega.', true); return; }
+    expApplyLots(g, lots);
+    expEdClose(); expSRender();
   }
   if(!window.__expSBound){
     window.__expSBound = true;
     document.addEventListener('click', function(e){
       var t = e.target; if(!t || !t.closest) return;
-      var wrap = document.getElementById('expStockWrap'); if(!wrap) return;
-      var S = state.expS, pop = document.getElementById('expSPop');
-      if(pop && pop.contains(t)){
-        var p = S.pop; if(!p) return;
-        var f = expFindLot(p); if(!f){ expSClosePop(); return; }
-        var lt = f.lt;
-        var yb = t.closest('[data-expy]');
-        if(yb){ p.year = parseInt(yb.getAttribute('data-expy'), 10); expRememberYear(p.year); expSRenderPop(); return; }
-        var mb = t.closest('[data-expm]');
-        if(mb){
-          var m = parseInt(mb.getAttribute('data-expm'), 10), v = p.year + '-' + (m < 10 ? '0' : '') + m;
-          expRememberYear(p.year);
-          if(p.mode === 'splitDate') expSplitLot(lt, p.n, v); else expSetLotDate(lt, v);
-          expSClosePop(); expSRender(); return;
-        }
-        var ab = t.closest('[data-exs]');
-        if(ab){
-          var a = ab.getAttribute('data-exs');
-          if(a === 'merge' || a === 'clear'){ expSetLotDate(lt, ''); expSClosePop(); expSRender(); }
-          else if(a === 'split'){ p.mode = 'splitN'; expSRenderPop(); }
-          else if(a === 'back'){ p.mode = 'date'; expSRenderPop(); }
-          else if(a === 'splitgo'){
-            var inp = document.getElementById('expSN'), n = Math.floor(parseFloat(inp && inp.value));
-            var max = expSplitMax(lt);
-            if(!(n >= 1) || n > max){ showStatus('Pon un número entre 1 y ' + fmtInt(max) + '.', true); return; }
-            p.n = n; p.mode = 'splitDate'; expSRenderPop();
-          }
+      var ed = document.getElementById('expEd');
+      if(ed){
+        var S0 = state.expS;
+        if(t === ed){ expEdClose(); return; }
+        if(!ed.contains(t)) return;
+        if(t.closest('[data-edcancel]')){ expEdClose(); return; }
+        if(t.closest('[data-edsave]')){ expEdSave(); return; }
+        var xb = t.closest('[data-edx]');
+        if(xb){ S0.ed.rows.splice(parseInt(xb.getAttribute('data-edx'), 10), 1); expEdRender(); return; }
+        if(t.closest('[data-edadd]')){
+          var g0 = expFindGroup(S0.ed.gid); if(!g0) return;
+          var left = expEdCap(g0) - expEdAssigned();
+          if(left > 0){ S0.ed.rows.push({u: String(left), m: '', y: expLastYear()}); expEdRender(); var qs = document.querySelectorAll('#expEd [data-edm]'); if(qs.length) qs[qs.length - 1].focus(); }
         }
         return;
       }
-      var chip = t.closest('[data-exlot]');
-      if(chip){
-        var parts = chip.getAttribute('data-exlot').split('|');
-        var np = {impId: parts[0], li: parseInt(parts[1], 10), sub: parseInt(parts[2], 10)};
-        if(S.pop && S.pop.impId === np.impId && S.pop.li === np.li && S.pop.sub === np.sub){ expSClosePop(); return; }
-        var f2 = expFindLot(np); if(!f2) return;
-        var d = expParse(f2.lt.venc);
-        np.mode = 'date'; np.year = d ? d.y : expLastYear(); np.anchor = chip.getBoundingClientRect().toJSON ? chip.getBoundingClientRect().toJSON() : chip.getBoundingClientRect();
-        expSClosePop(); S.pop = np; expSRenderPop(); return;
-      }
+      var wrap = document.getElementById('expStockWrap'); if(!wrap) return;
+      var S = state.expS;
       var vb = t.closest('[data-exs-view]');
-      if(vb){ S.view = vb.getAttribute('data-exs-view'); expSClosePop(); expSRender(); return; }
+      if(vb){ S.view = vb.getAttribute('data-exs-view'); expSRender(); return; }
       if(t.closest('[data-exs-close]')){ expSClose(); return; }
-      if(t === wrap){ if(S.pop) expSClosePop(); else expSClose(); return; }
-      if(S.pop) expSClosePop();
+      var row = t.closest('[data-exg]');
+      if(row && wrap.contains(row)){ expEdOpen(row.getAttribute('data-exg')); return; }
+      if(t === wrap){ expSClose(); return; }
+    });
+    document.addEventListener('input', function(e){
+      var t = e.target, ed = state.expS && state.expS.ed; if(!ed || !t || !t.getAttribute) return;
+      var q = t.getAttribute('data-edq');
+      if(q !== null){ ed.rows[parseInt(q, 10)].u = t.value; expEdRefresh(); }
+    });
+    document.addEventListener('change', function(e){
+      var t = e.target, ed = state.expS && state.expS.ed; if(!ed || !t || !t.getAttribute) return;
+      var m = t.getAttribute('data-edm'), y = t.getAttribute('data-edy');
+      if(m !== null){ ed.rows[parseInt(m, 10)].m = t.value ? parseInt(t.value, 10) : ''; var r1 = t.closest('.exs-lr'); if(r1) r1.classList.remove('err'); expEdRefresh(); }
+      if(y !== null){ var yy = t.value ? parseInt(t.value, 10) : ''; ed.rows[parseInt(y, 10)].y = yy; if(yy) expRememberYear(yy); var r2 = t.closest('.exs-lr'); if(r2) r2.classList.remove('err'); expEdRefresh(); }
     });
     document.addEventListener('keydown', function(e){
       if(e.key !== 'Escape') return;
-      if(!document.getElementById('expStockWrap')) return;
-      if(state.expS.pop) expSClosePop(); else expSClose();
+      if(document.getElementById('expEd')){ expEdClose(); return; }
+      if(document.getElementById('expStockWrap')) expSClose();
     });
     var openBtn = document.getElementById('openExpStockBtn');
     if(openBtn) openBtn.addEventListener('click', expOpenStock);
