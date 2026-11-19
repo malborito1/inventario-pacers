@@ -6636,7 +6636,10 @@ if ("serviceWorker" in navigator) {
   function expImportOrderKey(imp){
     var ms = imp.milestones || [];
     for(var i = ms.length-1; i >= 0; i--){ if(ms[i] && ms[i].date) return String(ms[i].date); }
-    return String(imp.createdAt || '');
+    // Sin ninguna fecha cargada: si ya se pasó al inventario vale la fecha en que se pasó; si no, es una importación
+    // antigua (la fecha de creación es cuando se registró en el sistema, no cuando llegó) y va primero.
+    if(imp.ingreso && imp.ingreso.at) return String(imp.ingreso.at);
+    return '0000-sin-fecha ' + String(imp.createdAt || '');
   }
   // Lotes de una linea de importacion, en el orden en que se venden (sin fecha primero, luego la fecha mas cercana).
   // Una linea tiene una fecha (line.venc) y, si hace falta, lotes aparte (line.lotes = [{u, venc}]) con otra fecha:
