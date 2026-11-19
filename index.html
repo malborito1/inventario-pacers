@@ -6658,13 +6658,28 @@ if ("serviceWorker" in navigator) {
     var imps = (state.imports || []).slice().sort(function(a,b){ var ka = expImportOrderKey(a), kb = expImportOrderKey(b); return ka<kb ? -1 : (ka>kb ? 1 : 0); });
     var groups = {}, order = [];
     imps.forEach(function(imp){
+      // Solo cuenta lo que realmente está en tu inventario general:
+      // - importación ya pasada al inventario: lo que se sumó a tu inventario (imp.ingreso, columna g), no toda la línea
+      //   (las líneas con precio de venta van sobre todo a Supermaxi y solo una parte llega a tu inventario);
+      // - importación antigua sin ese registro: solo si ya está recibida o cerrada, y sin las líneas de Supermaxi;
+      // - importación que aún no llega (planeada o en camino): no cuenta.
+      var ing = null;
+      if(imp.ingreso && Array.isArray(imp.ingreso.items)){
+        ing = {};
+        imp.ingreso.items.forEach(function(it){ if(it && it.col !== 's' && it.productId){ ing[it.productId] = (ing[it.productId] || 0) + (parseFloat(it.qty) || 0); } });
+      } else if(imp.status !== 'cerrada' && imp.status !== 'recibida') return;
       (imp.products || []).forEach(function(l, li){
         var c = importLineCalc(l);
         if(!(c.unidades > 0)) return;
-        if((parseFloat(l.precioVenta)||0) > 0) return;   // las líneas con precio son de Supermaxi (otro inventario)
         var gp = importFindGeneralProduct(l.linea, l.sabor, l.presentacion); if(!gp) return;
+        var units = c.unidades;
+        if(ing){
+          var avail = ing[gp.id] || 0;
+          if(!(avail > 0)) return;
+          units = Math.min(units, avail); ing[gp.id] = avail - units;
+        } else if((parseFloat(l.precioVenta)||0) > 0) return;   // sin registro de ingreso no se sabe cuánto llegó de las líneas de Supermaxi
         var g = groups[gp.id]; if(!g){ g = groups[gp.id] = {gp: gp, lots: []}; order.push(gp.id); }
-        expLineLots(l, c.unidades).forEach(function(lt){ lt.imp = imp.name; lt.impId = imp.id; lt.li = li; g.lots.push(lt); });
+        expLineLots(l, units).forEach(function(lt){ lt.imp = imp.name; lt.impId = imp.id; lt.li = li; lt.lu = units; g.lots.push(lt); });
       });
     });
     var out = [];
@@ -6673,7 +6688,7 @@ if ("serviceWorker" in navigator) {
       for(var i = g.lots.length-1; i >= 0 && remaining > 0; i--){
         var lt = g.lots[i], take = Math.min(remaining, lt.u);
         remaining -= take;
-        picked.push({units: take, full: lt.u, venc: lt.venc, imp: lt.imp, impId: lt.impId, li: lt.li, sub: lt.sub, monthsLeft: expMonthsLeft(lt.venc)});
+        picked.push({units: take, full: lt.u, lu: lt.lu, venc: lt.venc, imp: lt.imp, impId: lt.impId, li: lt.li, sub: lt.sub, monthsLeft: expMonthsLeft(lt.venc)});
       }
       picked.reverse();
       out.push({gp: g.gp, stock: parseFloat(g.gp.stock) || 0, lots: picked, rest: remaining});
@@ -6723,7 +6738,7 @@ if ("serviceWorker" in navigator) {
     g.lots.forEach(function(lt){
       cap += lt.units;
       var k = lt.impId + '|' + lt.li;
-      if(!(k in idx)){ idx[k] = slots.length; slots.push({impId: lt.impId, li: lt.li, take: 0}); }
+      if(!(k in idx)){ idx[k] = slots.length; slots.push({impId: lt.impId, li: lt.li, take: 0, full: lt.lu}); }
       slots[idx[k]].take += lt.units;
     });
     var ds = {};
@@ -6736,7 +6751,7 @@ if ("serviceWorker" in navigator) {
     slots.forEach(function(s){
       var imp = (state.imports || []).filter(function(i){ return i.id === s.impId; })[0];
       var line = imp && (imp.products || [])[s.li]; if(!line) return;
-      var full = importLineCalc(line).unidades, need = s.take, groups = [];
+      var full = s.full, need = s.take, groups = [];
       while(need > 0 && p < items.length){
         var avail = items[p].u - used, t = Math.min(avail, need);
         if(t > 0) groups.push({venc: items[p].venc, u: t});
