@@ -368,6 +368,13 @@ if ("serviceWorker" in navigator) {
     overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; max-width:100%; flex:1 1 auto; min-width:0;
   }
   .tabs::-webkit-scrollbar{display:none;}
+  /* Con mouse (ventana angosta o pestaña dividida) las pestañas que no caben se desplazan con una barra visible. */
+  @media (hover:hover) and (pointer:fine){
+    .tabs{scrollbar-width:thin; scrollbar-color:var(--text-muted) transparent;}
+    .tabs::-webkit-scrollbar{display:block; height:7px;}
+    .tabs::-webkit-scrollbar-thumb{background:var(--text-muted); border-radius:99px;}
+    .tabs::-webkit-scrollbar-track{background:transparent;}
+  }
   .tab{
     border:none; background:transparent; color:var(--text-muted); font-weight:600; font-size:13px;
     padding:7px 14px; border-radius:8px; cursor:pointer; flex:0 0 auto; white-space:nowrap;
@@ -8066,6 +8073,17 @@ if ("serviceWorker" in navigator) {
         ['noteInput-' + ocId, 'dueDateInput-' + ocId, 'discountInput-' + ocId]);
     }
   }
+
+  // La rueda del mouse sobre las pestañas las desplaza de lado cuando no caben (ventana angosta o pestaña dividida).
+  (function(){
+    var tr = document.getElementById('tabRow'); if(!tr || tr.__wheelBound) return; tr.__wheelBound = true;
+    tr.addEventListener('wheel', function(e){
+      if(tr.scrollWidth <= tr.clientWidth + 1 || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      var atStart = tr.scrollLeft <= 0, atEnd = tr.scrollLeft + tr.clientWidth >= tr.scrollWidth - 1;
+      if((e.deltaY < 0 && atStart) || (e.deltaY > 0 && atEnd)) return;
+      tr.scrollLeft += e.deltaY; e.preventDefault();
+    }, {passive: false});
+  })();
 
   function handleRowAction(action, id, el){
     var p = findProduct(id);
