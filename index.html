@@ -2795,6 +2795,15 @@ if ("serviceWorker" in navigator) {
     }
     return '';
   }
+  // Cortesía recordada: si el último registro fue una cortesía para un cliente, el siguiente producto del mismo
+  // cliente (dentro de los 20 min) ya trae marcada la casilla Cortesía, igual que el nombre y la nota.
+  function activeCortesia(){
+    return !!(state.lastCortesia && state.lastCortesiaAt && (Date.now() - state.lastCortesiaAt) < LAST_CLIENT_TTL_MS && activeClientValue());
+  }
+  function noteCortesiaUsed(on){
+    state.lastCortesia = !!on;
+    state.lastCortesiaAt = Date.now();
+  }
   function noteNoteUsed(note){
     var v = (note||'').trim();
     if(!v) return;
@@ -2823,6 +2832,10 @@ if ("serviceWorker" in navigator) {
       state.lastDueDate = null; state.lastDueDateAt = null;
       state.lastDiscountPct = null; state.lastDiscountPctAt = null;
       state.lastDiscountMode = ''; state.lastPayPend = null; state.lastPayPendAt = null;
+      state.lastCortesia = null; state.lastCortesiaAt = null;
+      document.querySelectorAll('[id^=cortesiaInput-],[id^=gcortesiaInput-]').forEach(function(c){
+        if(c.checked){ c.checked = false; c.dispatchEvent(new Event('change', {bubbles: true})); }
+      });
       document.querySelectorAll('[id^=discPvp-],[id^=payPend-]').forEach(function(c){ c.checked = false; });
       document.querySelectorAll('[id^=discHint-]').forEach(function(h){ h.textContent = ''; });
     });
@@ -2842,6 +2855,7 @@ if ("serviceWorker" in navigator) {
     if(due) parts.push('vence ' + fmtDateOnly(due));
     if(disc) parts.push(disc + '% desc.' + (state.lastDiscountMode === 'pvp' ? ' PVP' : ''));
     if(activePayPend()) parts.push('a Pagos');
+    if(activeCortesia()) parts.push('cortesía');
     document.getElementById('clientLabel').textContent = parts.join(' · ') + ' (' + agoText + ')';
   }
   // allMovements(): usa state.extMovements (historial COMPLETO, sin el límite de
@@ -3256,11 +3270,11 @@ if ("serviceWorker" in navigator) {
       }
       if(isVenta){
         html += '<div class="mini-field-row">'
-          + '<div class="mini-field"><label>Cliente (opcional)</label><input type="text" id="clientInput-' + p.id + '" list="clientNamesList" value="' + esc(activeClientValue()) + '" placeholder="Nombre del comprador" maxlength="60"></div>'
+          + '<div class="mini-field"><label>Cliente (opcional)</label><input type="text" id="clientInput-' + p.id + '" list="clientNamesList" value="' + esc(activeClientValue()) + '" placeholder="' + (activeCortesia() ? 'Quién recibe la cortesía' : 'Nombre del comprador') + '" maxlength="60"></div>'
           + '<div class="mini-field"><label>Notas (opcional)</label><input type="text" id="noteInput-' + p.id + '" value="' + esc(activeNoteValue()) + '" placeholder="Ej. evento, pedido especial…" maxlength="120"></div>'
           + '</div>';
-        html += '<label class="grace-cortesia main-cortesia"><input type="checkbox" id="cortesiaInput-' + p.id + '"><span><b>Cortesía</b> (regalo): descuenta stock pero no suma venta</span></label>';
-        html += '<div class="sale-opts" id="saleOpts-' + p.id + '">';
+        html += '<label class="grace-cortesia main-cortesia"><input type="checkbox" id="cortesiaInput-' + p.id + '"' + (activeCortesia() ? ' checked' : '') + '><span><b>Cortesía</b> (regalo): descuenta stock pero no suma venta</span></label>';
+        html += '<div class="sale-opts" id="saleOpts-' + p.id + '"' + (activeCortesia() ? ' hidden' : '') + '>';
         html += '<div class="mini-field-row">'
           + '<div class="mini-field"><label>Vencimiento de factura (opcional)</label><input type="date" id="dueDateInput-' + p.id + '" value="' + esc(activeDueDateValue()) + '">'
           + '<label class="disc-pvp pay-pend" title="La venta queda en Pagos, en Total pendiente, hasta que la marques como cobrada"><input type="checkbox" id="payPend-' + p.id + '"' + (activePayPend() ? ' checked' : '') + '> A Pagos pendientes</label></div>'
@@ -3270,7 +3284,7 @@ if ("serviceWorker" in navigator) {
         html += '<p class="hint" style="margin:-6px 0 0;">Pon una fecha solo si esta venta es a un distribuidor a crédito: aparecerá en Pagos como cuenta por cobrar y se marcará "VENCIDO" cuando llegue esa fecha. Con "Sobre PVP" el % se resta del PVP con IVA (cliente); sin marcar es margen de distribuidor.</p>';
         html += '</div>';
       }
-      html += '<button class="confirm-btn" data-action="confirm-move" data-id="' + p.id + '" data-mode="' + openMode + '">' + (isVenta?'Registrar venta':'Registrar ingreso') + '</button>';
+      html += '<button class="confirm-btn" data-action="confirm-move" data-id="' + p.id + '" data-mode="' + openMode + '">' + (isVenta?(activeCortesia() ? 'Registrar cortesía' : 'Registrar venta'):'Registrar ingreso') + '</button>';
       html += '<button class="cancel-btn" data-action="cancel-move" data-id="' + p.id + '">Cancelar</button>';
       html += '</div>';
     }
@@ -3406,7 +3420,7 @@ if ("serviceWorker" in navigator) {
           + '<div class="mini-field"><label>Cliente (opcional)</label><input type="text" id="gclientInput-' + g.id + '" list="clientNamesList" value="' + esc(activeClientValue()) + '" placeholder="Nombre del comprador" maxlength="60"></div>'
           + '<div class="mini-field"><label>Notas (opcional)</label><input type="text" id="gnoteInput-' + g.id + '" value="' + esc(activeNoteValue()) + '" placeholder="Ej. evento, pedido especial…" maxlength="120"></div>'
           + '</div>';
-        html += '<label class="grace-cortesia"><input type="checkbox" id="gcortesiaInput-' + g.id + '"><span><b>Cortesía</b> (regalo): descuenta stock pero no suma venta</span></label>';
+        html += '<label class="grace-cortesia"><input type="checkbox" id="gcortesiaInput-' + g.id + '"' + (activeCortesia() ? ' checked' : '') + '><span><b>Cortesía</b> (regalo): descuenta stock pero no suma venta</span></label>';
       }
       html += '<button class="confirm-btn" data-gaction="confirm-move" data-gid="' + g.id + '" data-mode="' + openMode + '">' + (isVenta?'Registrar venta':'Registrar ingreso a Grace') + '</button>';
       html += '<button class="cancel-btn" data-gaction="cancel-move" data-gid="' + g.id + '">Cancelar</button>';
@@ -3535,7 +3549,8 @@ if ("serviceWorker" in navigator) {
       ensureUser(function(){
         applyGraceMovement(g, mode, qty, client, note, cortesia);
         if(mode === 'venta' && client) noteClientUsed(client);
-        if(mode === 'venta' && note && !cortesia) noteNoteUsed(note);
+        if(mode === 'venta' && note) noteNoteUsed(note);
+        if(mode === 'venta') noteCortesiaUsed(cortesia);
         state.openGraceRow = null;
         render();
       });
@@ -8099,7 +8114,9 @@ if ("serviceWorker" in navigator) {
           applyMovement(p, 'salida', qty, client, note, {reason: 'cortesia'}, true).then(function(moved){
             showStatus('Cortesía registrada: ' + fmtInt(moved) + ' u. de ' + p.flavor + (client ? ' para ' + client : '') + '.');
           }).catch(function(){ showStatus('No se pudo registrar la cortesía. Intenta de nuevo.', true); });
-          if(client) noteClientUsed(client);   // el cliente se queda para el siguiente producto, igual que en una venta
+          if(client) noteClientUsed(client);   // el cliente, la nota y la casilla Cortesía se quedan para el siguiente producto
+          if(note) noteNoteUsed(note);
+          noteCortesiaUsed(true);
           state.openRow = null;
           render();
         });
@@ -8177,6 +8194,7 @@ if ("serviceWorker" in navigator) {
           } else if(mode === 'venta'){ notePayPendUsed(false); }
           if(mode === 'venta' && client) noteClientUsed(client);
           if(mode === 'venta' && note) noteNoteUsed(note);
+          if(mode === 'venta') noteCortesiaUsed(false);
           state.openRow = null;
           render();
         });
