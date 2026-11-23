@@ -3534,7 +3534,7 @@ if ("serviceWorker" in navigator) {
       var cortesia = !!(mode === 'venta' && cortesiaInput && cortesiaInput.checked);
       ensureUser(function(){
         applyGraceMovement(g, mode, qty, client, note, cortesia);
-        if(mode === 'venta' && client && !cortesia) noteClientUsed(client);
+        if(mode === 'venta' && client) noteClientUsed(client);
         if(mode === 'venta' && note && !cortesia) noteNoteUsed(note);
         state.openGraceRow = null;
         render();
@@ -8099,6 +8099,7 @@ if ("serviceWorker" in navigator) {
           applyMovement(p, 'salida', qty, client, note, {reason: 'cortesia'}, true).then(function(moved){
             showStatus('Cortesía registrada: ' + fmtInt(moved) + ' u. de ' + p.flavor + (client ? ' para ' + client : '') + '.');
           }).catch(function(){ showStatus('No se pudo registrar la cortesía. Intenta de nuevo.', true); });
+          if(client) noteClientUsed(client);   // el cliente se queda para el siguiente producto, igual que en una venta
           state.openRow = null;
           render();
         });
