@@ -4183,13 +4183,9 @@ if ("serviceWorker" in navigator) {
         html += '<div class="cliente-item"><div class="cliente-item-head"><span class="cliente-name">' + esc(g.client) + ' <span class="cliente-count">(solo cortesía)</span></span><span class="cliente-detail">' + dateHtml + '</span></div>' + clienteGiftsHtml(g.gifts) + '</div>';
         return;
       }
-      if(g.items.length === 1 && !g.gifts.length){
-        var m = g.items[0];
-        html += '<div class="cliente-item"><div class="cliente-item-head"><span class="cliente-name">' + esc(g.client) + noteHtml + '</span><span class="cliente-detail">' + esc(m.productLabel||'') + ' · ' + fmtInt(m.qty) + ' u' + clienteTotalHtml(g.items) + ' · ' + dateHtml + '</span></div></div>';
-      } else {
-        var totalQty = g.items.reduce(function(s,m2){ return s + (m2.qty||0); }, 0);
-        html += '<div class="cliente-item"><div class="cliente-item-head"><span class="cliente-name">' + esc(g.client) + noteHtml + ' <span class="cliente-count">(' + g.items.length + ' productos · ' + fmtInt(totalQty) + ' u' + giftTag + ')</span>' + clienteTotalHtml(g.items) + '</span><span class="cliente-detail">' + dateHtml + '</span></div>' + clienteGroupsHtml(g.items, g.gifts) + '</div>';
-      }
+      var totalQty = g.items.reduce(function(s,m2){ return s + (m2.qty||0); }, 0);
+      var cntTxt = g.items.length + (g.items.length === 1 ? ' producto' : ' productos');
+      html += '<div class="cliente-item"><div class="cliente-item-head"><span class="cliente-name">' + esc(g.client) + noteHtml + ' <span class="cliente-count">(' + cntTxt + ' · ' + fmtInt(totalQty) + ' u' + giftTag + ')</span>' + clienteTotalHtml(g.items) + '</span><span class="cliente-detail">' + dateHtml + '</span></div>' + clienteGroupsHtml(g.items, g.gifts) + '</div>';
     });
     html += '</div></div>';
     finish(html);
