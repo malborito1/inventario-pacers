@@ -4552,7 +4552,7 @@ if ("serviceWorker" in navigator) {
         lastMovementAt: nowIso,
         lastMovementBy: state.userName
       }).then(function(){
-        return state.db.doc('movements/' + m.id).update({ reversed: true });
+        return state.db.doc('movements/' + m.id).update({ reversed: true }).then(function(r){ extCacheClear(); return r; });
       }).then(function(){
         return state.db.collection('movements').add({
           productId: p.id,
@@ -4668,7 +4668,7 @@ if ("serviceWorker" in navigator) {
         });
       }
       chain.then(function(){
-        return state.db.doc('movements/' + m.id).update({ reversed: true });
+        return state.db.doc('movements/' + m.id).update({ reversed: true }).then(function(r){ extCacheClear(); return r; });
       }).then(function(){
         return state.db.collection('movements').add({
           productId: m.productId || null,
@@ -7514,7 +7514,7 @@ if ("serviceWorker" in navigator) {
         tx.update(ref, {stock: Math.max(0, cur - it.qty), lastMovementAt: nowIso, lastMovementBy: state.userName});
       });
     }).then(function(){
-      return it.movId ? state.db.doc(movCol + '/' + it.movId).update({reversed: true}) : null;
+      return it.movId ? state.db.doc(movCol + '/' + it.movId).update({reversed: true}).then(function(r){ extCacheClear(); return r; }) : null;
     }).then(function(){
       return state.db.collection(movCol).add({
         productId: it.productId, productLabel: it.label, type: 'correccion', qty: it.qty, deltaStock: -it.qty,
@@ -8143,6 +8143,7 @@ if ("serviceWorker" in navigator) {
         });
       });
       chain.then(function(){
+        extCacheClear();
         var meta = { at: new Date().toISOString(), by: state.userName, count: docs.length };
         return state.db.doc('meta/historicalImport' + batchId).set(meta).then(function(){ return meta; });
       }).then(function(meta){
@@ -9091,16 +9092,64 @@ if ("serviceWorker" in navigator) {
     var w = state.extWaiters; state.extWaiters = [];
     w.forEach(function(cb){ try{ cb(); }catch(e){ console.error(e); } });
   }
+  // Cache local (IndexedDB) del historial completo, para no releer miles de movimientos en cada apertura
+  // (gastaba la cuota diaria de lecturas de Firebase). Al abrir: se lee el cache y solo se piden a Firebase
+  // los movimientos desde el mas reciente guardado. Una vez al dia (o tras deshacer una venta, borrar una
+  // feria o importar historicos) se hace la lectura completa para corregir cualquier cambio en movimientos viejos.
+  var EXT_CACHE_KEY = 'ext_movements_v1', EXT_CACHE_MAX_AGE_MS = 24*60*60*1000;
+  function extIdb(fn){
+    return new Promise(function(resolve){
+      try{
+        var rq = indexedDB.open('pacers_cache', 1);
+        rq.onupgradeneeded = function(){ try{ rq.result.createObjectStore('kv'); }catch(e){} };
+        rq.onerror = function(){ resolve(null); };
+        rq.onblocked = function(){ resolve(null); };
+        rq.onsuccess = function(){ try{ fn(rq.result, resolve); }catch(e){ resolve(null); } };
+      }catch(e){ resolve(null); }
+    });
+  }
+  function extCacheGet(){ return extIdb(function(db, res){ var r = db.transaction('kv').objectStore('kv').get(EXT_CACHE_KEY); r.onsuccess = function(){ res(r.result || null); }; r.onerror = function(){ res(null); }; }); }
+  function extCacheClear(){ return extIdb(function(db, res){ var t = db.transaction('kv', 'readwrite'); t.objectStore('kv').delete(EXT_CACHE_KEY); t.oncomplete = function(){ res(true); }; t.onerror = function(){ res(null); }; }); }
+  function extCacheable(docs){
+    // Solo se guarda si todos los movimientos son datos simples (fecha 'at' en texto, sin Timestamps de Firebase).
+    for(var i = 0; i < docs.length; i++){
+      var m = docs[i];
+      if(typeof m.at !== 'string') return false;
+      for(var k in m){ var v = m[k]; if(v && typeof v === 'object' && !Array.isArray(v) && (typeof v.toDate === 'function' || typeof v.seconds === 'number')) return false; }
+    }
+    return true;
+  }
+  function extCacheSet(docs, fullAt){
+    if(!docs || !docs.length || !extCacheable(docs)) return extCacheClear();
+    return extIdb(function(db, res){ var t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put({docs: docs, fullAt: fullAt, savedAt: Date.now()}, EXT_CACHE_KEY); t.oncomplete = function(){ res(true); }; t.onerror = function(){ res(null); }; });
+  }
   function loadExtMovements(attempt){
     state.extMovementsLoading = true;
     state.extMovementsFailed = false;
     // Sin limit(): antes se cortaba en las 1000 más recientes, lo cual
     // excluía silenciosamente movimientos historicos antiguos (p.ej. enero-
     // febrero 2025) de Ranking/Reportes una vez que la coleccion supero los
-    // 1000 documentos. Se trae la coleccion completa para que los calculos
+    // 1000 documentos. Se trae la coleccion completa (o cache + lo nuevo) para que los calculos
     // de Ranking/Reportes sean siempre exactos.
-    state.db.collection('movements').orderBy('at','desc').get().then(function(snap){
-      state.extMovements = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+    function fullRead(){
+      return state.db.collection('movements').orderBy('at','desc').get().then(function(snap){
+        return {docs: snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); }), fullAt: Date.now()};
+      });
+    }
+    extCacheGet().then(function(c){
+      var newest = '';
+      var usable = c && c.docs && c.docs.length && c.fullAt && (Date.now() - c.fullAt) < EXT_CACHE_MAX_AGE_MS && c.fullAt <= Date.now() + 60000;
+      if(usable){ c.docs.forEach(function(m){ if(typeof m.at === 'string' && m.at > newest) newest = m.at; }); }
+      if(!usable || !newest) return fullRead();
+      return state.db.collection('movements').where('at', '>=', newest).orderBy('at','desc').get().then(function(snap){
+        var by = {};
+        c.docs.forEach(function(m){ by[m.id] = m; });
+        snap.docs.forEach(function(d){ by[d.id] = Object.assign({id:d.id}, d.data()); });
+        return {docs: Object.keys(by).map(function(k){ return by[k]; }), fullAt: c.fullAt};
+      });
+    }).then(function(r){
+      state.extMovements = r.docs.slice().sort(function(a,b){ return (new Date(b.at).getTime() || 0) - (new Date(a.at).getTime() || 0); });
+      extCacheSet(state.extMovements, r.fullAt);
       state.extMovementsLoading = false;
       // Si mientras bajaba el historial entro una venta nueva, la ventana en vivo ya la tiene.
       syncExtMovements();
@@ -11733,7 +11782,7 @@ if ("serviceWorker" in navigator) {
       var deleteCustomWrites = customDocs.map(function(c){ return state.db.doc('fairCustomItems/' + c.id).delete(); });
       var deleteSaleWrites = saleDocs.map(function(s){ return state.db.doc('fairSales/' + s.id).delete(); });
       return Promise.all(restoreWrites.concat(deleteMoveWrites, deleteStockWrites, deleteCustomWrites, deleteSaleWrites))
-        .then(function(){ return { restoredUnits: Object.keys(restoreByProduct).reduce(function(a,k){ return a+restoreByProduct[k]; },0) }; });
+        .then(function(){ extCacheClear(); return { restoredUnits: Object.keys(restoreByProduct).reduce(function(a,k){ return a+restoreByProduct[k]; },0) }; });
     }).then(function(res){
       return state.db.doc('fairs/' + fairId).delete().then(function(){ return res; });
     }).then(function(res){
@@ -13222,7 +13271,7 @@ if ("serviceWorker" in navigator) {
   //     diferencia se corrige en el momento y se informa.
   // El resultado se ve siempre en el encabezado (verde = verificado, rojo = no confiar
   // en las cifras) y, si falla, en un aviso rojo visible en todas las pestañas.
-  var INTEGRITY_FULL_EVERY_MS = 3 * 60 * 60 * 1000;   // relectura completa del servidor mientras la pagina esta visible
+  var INTEGRITY_FULL_EVERY_MS = 12 * 60 * 60 * 1000;   // relectura completa del servidor mientras la pagina esta visible
   state.integrity = { status:'checking', rows:[], checkedAt:null, running:false, listenerErrors:{}, live:{}, serverAt:null, serverCount:null, lastDiff:null, lastError:'', lastAutoVerifyAt:0, startedAt: Date.now() };
   // Margen de arranque: durante los primeros segundos las colecciones en vivo todavia estan
   // llegando, asi que "incompleto" en ese lapso no es un problema real (no se alarma ni se relee).
@@ -13308,6 +13357,7 @@ if ("serviceWorker" in navigator) {
         state.extMovements.forEach(function(m){ if(!newIds[m.id]) diff++; });
       }
       state.extMovements = fresh; state.extMovementsFailed = false;
+      extCacheSet(fresh, Date.now());
       syncExtMovements();
       it.lastDiff = diff;
       noteExtLoaded(fresh.length);
@@ -13383,7 +13433,7 @@ if ("serviceWorker" in navigator) {
         var it = state.integrity;
         if(state.extMovements && (!it.serverAt || (Date.now() - it.serverAt.getTime()) > INTEGRITY_FULL_EVERY_MS)) verifyHistoryAgainstServer();
       });
-      // Revision local cada minuto (no lee nada de Firestore); relectura completa cada 3 h.
+      // Revision local cada minuto (no lee nada de Firestore); relectura completa cada 12 h.
       setInterval(function(){
         if(document.visibilityState !== 'visible') return;
         evaluateIntegrity();
