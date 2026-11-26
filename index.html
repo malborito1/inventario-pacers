@@ -3498,9 +3498,21 @@ if ("serviceWorker" in navigator) {
       var items = byGroup[grp];
       if(!items || !items.length) return;
       var presClass = grp === 'GRANDE' ? 'pres-30s' : (grp === 'SACHETS' ? 'pres-sachets' : 'pres-bulk');
+      // Cada botón de kit va en su propia familia dentro de los sachets de Grace: Endurance junto a la
+      // pastilla SACHETS (es la primera familia) y High Carb junto al encabezado HCF.
+      var pilledCats = {};
+      function gracePill(cat){
+        if(pilledCats[cat]) return '';
+        pilledCats[cat] = true;
+        var kk = cat === 'ENDURANCE' ? 'SACHETS_8' : (cat === 'HCF' ? 'HCF_6' : null);
+        if(!kk) return '';
+        var kd = INV_KITS[kk];
+        return '<button type="button" class="kit-pill" data-open-inv-kit="' + kd.key + '" data-ik-src="grace" title="Vender un ' + esc(kd.label) + ' de Grace">🎁 Kit $' + kd.price + '</button>';
+      }
       var gracePills = '';
       if(grp === 'SACHETS'){
-        ['SACHETS_8', 'HCF_6'].forEach(function(kk){ var kd = INV_KITS[kk]; gracePills += '<button type="button" class="kit-pill" data-open-inv-kit="' + kd.key + '" data-ik-src="grace" title="Vender un ' + esc(kd.label) + ' de Grace">🎁 ' + esc(kd.label) + ' $' + kd.price + '</button>'; });
+        var firstLinked = items[0] && items[0].linkedProductId ? findProduct(items[0].linkedProductId) : null;
+        gracePills = gracePill(firstLinked ? firstLinked.category : null);
       }
       html += '<div class="group-label ' + presClass + '"><span class="pres-chip">' + grp + '</span>' + gracePills + '</div><div class="row-list">';
       var prevCat = null;
@@ -3508,7 +3520,7 @@ if ("serviceWorker" in navigator) {
         var linked = g.linkedProductId ? findProduct(g.linkedProductId) : null;
         var cat = linked ? linked.category : null;
         if(cat && prevCat && cat !== prevCat){
-          html += '<div class="grace-family-break">' + esc(CATEGORY_LABEL[cat] || cat) + '</div>';
+          html += '<div class="grace-family-break">' + esc(CATEGORY_LABEL[cat] || cat) + (grp === 'SACHETS' ? gracePill(cat) : '') + '</div>';
         }
         if(cat) prevCat = cat;
         html += graceItemRowHtml(g);
