@@ -13275,11 +13275,12 @@ if ("serviceWorker" in navigator) {
     });
     var liveMov = it.live['movements'];
     var extOk = !!state.extMovements && extContainsLiveWindow();
-    var movText = state.extMovements ? (state.extMovements.length + ' registros' + (it.serverAt ? (' · servidor ' + integrityTimeText(it.serverAt)) : '')) : (state.extMovementsFailed ? 'no se pudo cargar' : 'cargando…');
-    rows.unshift({label:'Historial completo de movimientos', text: movText, ok: extOk});
+    var idle = !state.extMovements && !state.extMovementsFailed && !state.extMovementsLoading;
+    var movText = state.extMovements ? (state.extMovements.length + ' registros' + (it.serverAt ? (' · servidor ' + integrityTimeText(it.serverAt)) : '')) : (state.extMovementsFailed ? 'no se pudo cargar' : (idle ? 'se carga al abrir Reportes, Ranking o Clientes' : 'cargando…'));
+    rows.unshift({label:'Historial completo de movimientos', text: movText, ok: extOk || idle});
     it.rows = rows;
     it.checkedAt = new Date();
-    var loading = !state.extMovements && !state.extMovementsFailed;
+    var loading = !state.extMovements && !state.extMovementsFailed && !idle;
     var bad = rows.some(function(r){ return !r.ok; });
     var inGrace = (Date.now() - (it.startedAt||0)) < INTEGRITY_GRACE_MS;
     it.status = (loading || (bad && inGrace)) ? 'checking' : (bad ? 'bad' : 'ok');
@@ -13374,13 +13375,13 @@ if ("serviceWorker" in navigator) {
         if(chip.contains(e.target)) return;
         document.getElementById('dataDetail').classList.remove('open');
       });
-      window.addEventListener('online', function(){ evaluateIntegrity(); verifyHistoryAgainstServer(); });
+      window.addEventListener('online', function(){ evaluateIntegrity(); if(state.extMovements) verifyHistoryAgainstServer(); });
       window.addEventListener('offline', function(){ evaluateIntegrity(); });
       document.addEventListener('visibilitychange', function(){
         if(document.visibilityState !== 'visible') return;
         evaluateIntegrity();
         var it = state.integrity;
-        if(!it.serverAt || (Date.now() - it.serverAt.getTime()) > INTEGRITY_FULL_EVERY_MS) verifyHistoryAgainstServer();
+        if(state.extMovements && (!it.serverAt || (Date.now() - it.serverAt.getTime()) > INTEGRITY_FULL_EVERY_MS)) verifyHistoryAgainstServer();
       });
       // Revision local cada minuto (no lee nada de Firestore); relectura completa cada 3 h.
       setInterval(function(){
@@ -13412,7 +13413,16 @@ if ("serviceWorker" in navigator) {
       // que alguna vez se le vendió algo (incl. ventas históricas importadas) sin
       // tener que abrir primero Ranking/Reportes, que es lo único que antes
       // disparaba esta carga.
-      ensureExtendedMovements(renderClientDatalist);
+      // Ahora ya NO se descarga el historial completo al abrir (gastaba la cuota diaria de
+      // lecturas de Firebase en cada apertura). Se carga solo cuando hace falta: al abrir
+      // Reportes, Ranking, Clientes, al buscar en Historial, o al tocar un campo de Cliente.
+      renderClientDatalist();
+      document.addEventListener('focusin', function(e){
+        var t = e.target;
+        if(t && t.getAttribute && t.getAttribute('list') === 'clientNamesList' && !state.extMovements && !state.extMovementsFailed){
+          ensureExtendedMovements(renderClientDatalist);
+        }
+      });
       startIntegrityMonitor();
 
       db.collection('products').orderBy('order').onSnapshot(function(snap){
