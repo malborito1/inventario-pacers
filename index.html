@@ -11699,7 +11699,7 @@ if ("serviceWorker" in navigator) {
   function invKitCatCount(cat){ var n = 0; state.invKit.picks.forEach(function(pid){ var e = invKitEntry(pid); if(e && e.category === cat) n++; }); return n; }
   function openInvKit(kitKey, src){
     if(!INV_KITS[kitKey]) return;
-    state.invKit = {kitKey: kitKey, src: src === 'grace' ? 'grace' : 'main', picks: [], client: activeClientValue(), notes: '', err: '', submitting: false};
+    state.invKit = {kitKey: kitKey, src: src === 'grace' ? 'grace' : 'main', picks: [], client: activeClientValue(), notes: '', payPend: activePayPend(), err: '', submitting: false};
     document.getElementById('kitPopupScrim').classList.add('open');
     renderInvKit();
   }
@@ -11729,6 +11729,7 @@ if ("serviceWorker" in navigator) {
     html += '<div class="mini-field-row">'
       + '<div class="mini-field"><label>Cliente (opcional)</label><input type="text" id="ikClient" list="clientNamesList" value="' + esc(k.client || '') + '" maxlength="60"></div>'
       + '<div class="mini-field"><label>Notas (opcional)</label><input type="text" id="ikNote" value="' + esc(k.notes || '') + '" maxlength="120"></div></div>';
+    html += '<label class="disc-pvp pay-pend" style="margin-top:12px; font-size:13px; font-weight:600;" title="Los $' + kd.price + ' quedan en Pagos, en Total pendiente, hasta que los marques como cobrados"><input type="checkbox" id="ikPayPend"' + (k.payPend ? ' checked' : '') + '> A Pagos pendientes ($' + kd.price + ' al total pendiente)</label>';
     html += '<div class="kit-footer"><button class="kit-undo-btn" id="ikUndo" type="button"' + (total === 0 ? ' disabled' : '') + '>Deshacer último</button>'
       + '<div class="modal-actions" style="margin:0;"><button class="cancel-btn" id="ikCancel" type="button">Cancelar</button>'
       + '<button class="confirm-btn' + (total !== kd.max ? ' is-incomplete' : '') + '" id="ikConfirm" type="button">Confirmar venta ($' + kd.price.toFixed(2) + ')</button></div></div>';
@@ -11769,20 +11770,31 @@ if ("serviceWorker" in navigator) {
     });
     var ci = document.getElementById('ikClient'), ni = document.getElementById('ikNote');
     var client = ci ? ci.value.trim() : '', note = (ni ? ni.value.trim() : '') || kd.label;
+    var ppEl = document.getElementById('ikPayPend'), payPend = !!(ppEl && ppEl.checked);
+    if(payPend && !client){ showAttention('Falta el nombre del cliente', 'Para mandar el kit a Pagos pendientes escribe el nombre del cliente.', 'Escríbelo en "Cliente" y vuelve a confirmar.'); return; }
     var kitId = 'kit_' + Date.now().toString(36);
+    var payRef = payPend ? state.db.collection('pendingPayments').doc() : null;
     k.submitting = true;
     var btn = document.getElementById('ikConfirm'); if(btn) btn.disabled = true;
     ensureUser(function(){
       Promise.all(order.map(function(pid){
         var kx = {revenue: rev[pid], kit: kd.key, kitId: kitId};
+        if(payRef) kx.paymentId = payRef.id;
         return ent[pid].item ? applyGraceMovement(ent[pid].item, 'venta', by[pid], client, note, false, kx, true)
                              : applyMovement(ent[pid].product, 'venta', by[pid], client, note, kx, true);
       })).then(function(){
         if(client) noteClientUsed(client);
         noteCortesiaUsed(false);
-        showStatus('Kit vendido: ' + kd.label + ' (' + fmtMoney(kd.price) + ').');
+        notePayPendUsed(payPend);
         closeInvKit();
         render();
+        if(!payRef){ showStatus('Kit vendido: ' + kd.label + ' (' + fmtMoney(kd.price) + ').'); return; }
+        var dn = client + (note ? (' - ' + note) : '');
+        var firstE = ent[order[0]];
+        var pdoc = {name: dn, amount: kd.price, createdAt: new Date().toISOString(), addedBy: state.userName, origin: 'venta', kit: kd.key,
+          productId: firstE.item ? (firstE.item.linkedProductId || null) : firstE.id, productLabel: kd.label + (k.src === 'grace' ? ' (Grace)' : ''), qty: kd.max};
+        return payRef.set(pdoc).then(function(){ showStatus('Kit vendido y agregado a Pagos pendientes: ' + fmtMoney(kd.price) + ' de ' + dn + '.'); })
+          .catch(function(){ showStatus('El kit se registró, pero no se pudo agregar a Pagos pendientes. Agrégalo ahí manualmente.', true); });
       }).catch(function(){
         if(state.invKit){ state.invKit.submitting = false; }
         if(btn) btn.disabled = false;
@@ -11807,6 +11819,9 @@ if ("serviceWorker" in navigator) {
       var t = ev.target; if(!t || !state.invKit) return;
       if(t.id === 'ikClient') state.invKit.client = t.value;
       else if(t.id === 'ikNote') state.invKit.notes = t.value;
+    });
+    document.addEventListener('change', function(ev){
+      var t = ev.target; if(t && t.id === 'ikPayPend' && state.invKit) state.invKit.payPend = !!t.checked;
     });
     document.addEventListener('keydown', function(ev){ if(ev.key === 'Escape' && state.invKit) closeInvKit(); });
   }
