@@ -9937,6 +9937,8 @@ if ("serviceWorker" in navigator) {
   // Ranking de ferias: ventas, margen bruto y ganancia real de cada feria, de la mas rentable
   // a la menos rentable.
   function rankingFairsHtml(){
+    ensureFairData();
+    if(!state.fairDataReady) return '<h3 class="ranking-subhead">Ferias por ganancia real</h3><p class="empty-hint">Cargando datos de feria…</p>';
     var uioMap = importUnitCostMap();
     var list = (state.fairs || []).map(function(fr){
       var P = computeFairProfit(fr.id, uioMap);
@@ -10182,6 +10184,8 @@ if ("serviceWorker" in navigator) {
 
   function renderFerias(){
     var root = document.getElementById('categoriesRoot');
+    ensureFairData();
+    if(!state.fairDataReady){ root.innerHTML = fairLoadingHtml(); return; }
     if(state.newFairOpen){ root.innerHTML = newFairFormHtml(); attachNewFairEvents(); return; }
     if(state.fairView === 'detail' && state.currentFairId && findFair(state.currentFairId)){
       root.innerHTML = fairDetailHtml(state.currentFairId); attachFairDetailEvents(); return;
@@ -13281,12 +13285,12 @@ if ("serviceWorker" in navigator) {
     {col:'graceStock', label:'Grace'},
     {col:'pendingPayments', label:'Pagos'},
     {col:'fairs', label:'Ferias'},
-    {col:'fairStock', label:'Stock de feria'},
-    {col:'fairCustomItems', label:'Ítems propios de feria'},
-    {col:'fairCashOuts', label:'Salidas de caja'},
-    {col:'fairCosts', label:'Costos de feria'},
-    {col:'customItemDefaults', label:'Valores por defecto'},
-    {col:'fairSales', label:'Ventas de feria', limit:1000},
+    {col:'fairStock', label:'Stock de feria', lazy:true},
+    {col:'fairCustomItems', label:'Ítems propios de feria', lazy:true},
+    {col:'fairCashOuts', label:'Salidas de caja', lazy:true},
+    {col:'fairCosts', label:'Costos de feria', lazy:true},
+    {col:'customItemDefaults', label:'Valores por defecto', lazy:true},
+    {col:'fairSales', label:'Ventas de feria', limit:1000, lazy:true},
     {col:'supermaxiProducts', label:'Catálogo Supermaxi'},
     {col:'supermaxiMovements', label:'Ventas Supermaxi', limit:500},
     {col:'imports', label:'Importaciones'}
@@ -13318,6 +13322,7 @@ if ("serviceWorker" in navigator) {
     var rows = [];
     INTEGRITY_LIVE.forEach(function(c){
       var info = it.live[c.col];
+      if(c.lazy && !info){ rows.push({label:c.label, text:'se carga al abrir Ferias', ok:true}); return; }
       var capped = !!(c.limit && info && info.n >= c.limit);
       var ok = !!info && !info.cached && !capped;
       rows.push({label:c.label, text: info ? (info.n + (c.limit ? (' de máx ' + c.limit) : '') + (info.cached ? ' · solo caché' : '')) : 'sin datos', ok:ok});
@@ -13453,6 +13458,62 @@ if ("serviceWorker" in navigator) {
     showStatus('Se perdió la conexión en vivo con "' + label + '". Los datos que ves pueden estar desactualizados; recarga la página.', true);
   }
 
+  // ---- Datos de feria bajo demanda ----
+  var FAIR_LAZY_COLS = ['fairStock', 'fairCustomItems', 'fairCashOuts', 'fairCosts', 'customItemDefaults', 'fairSales'];
+  function fairLoaded(col){
+    state.fairLoadedCols = state.fairLoadedCols || {};
+    state.fairLoadedCols[col] = true;
+    state.fairDataReady = FAIR_LAZY_COLS.every(function(c){ return state.fairLoadedCols[c]; });
+  }
+  function ensureFairData(){
+    if(state.fairDataStarted || !state.db) return;
+    state.fairDataStarted = true;
+    var db = state.db;
+      db.collection('fairStock').onSnapshot(function(snap){
+          noteLive('fairStock', snap); fairLoaded('fairStock');
+          state.fairStock = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+          render();
+        }, function(err){ notifyLiveDataError('stock de feria', err); });
+
+      db.collection('fairCustomItems').onSnapshot(function(snap){
+          noteLive('fairCustomItems', snap); fairLoaded('fairCustomItems');
+          state.fairCustomItems = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+          render();
+        }, function(err){ notifyLiveDataError('ítems propios de feria', err); });
+
+      db.collection('fairCashOuts').onSnapshot(function(snap){
+          noteLive('fairCashOuts', snap); fairLoaded('fairCashOuts');
+          state.fairCashOuts = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+          render();
+        }, function(err){ notifyLiveDataError('salidas de caja de feria', err); });
+
+      db.collection('fairCosts').onSnapshot(function(snap){
+          noteLive('fairCosts', snap); fairLoaded('fairCosts');
+          state.fairCosts = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+          render();
+        }, function(err){ notifyLiveDataError('costos de feria', err); });
+
+      db.collection('customItemDefaults').onSnapshot(function(snap){
+          noteLive('customItemDefaults', snap); fairLoaded('customItemDefaults');
+          var map = {};
+          snap.docs.forEach(function(d){
+            var data = d.data();
+            map[d.id] = { name: data.name || '', photoUrl: data.photoUrl || '' };
+          });
+          state.customItemDefaults = map;
+          render();
+        }, function(err){ notifyLiveDataError('valores por defecto de ítems propios', err); });
+
+      db.collection('fairSales').orderBy('createdAt','desc').limit(1000).onSnapshot(function(snap){
+          noteLive('fairSales', snap); fairLoaded('fairSales');
+          state.fairSales = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+          render();
+        }, function(err){ notifyLiveDataError('ventas de feria', err); });
+  }
+  function fairLoadingHtml(){
+    return '<div class="category"><p class="empty-hint">Cargando datos de feria…</p></div>';
+  }
+
   function startListening(db){
       state.db = db;
       state.dbReady = true;
@@ -13512,46 +13573,8 @@ if ("serviceWorker" in navigator) {
         render();
       }, function(err){ notifyLiveDataError('ferias', err); });
 
-      db.collection('fairStock').onSnapshot(function(snap){
-        noteLive('fairStock', snap);
-        state.fairStock = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
-        render();
-      }, function(err){ notifyLiveDataError('stock de feria', err); });
-
-      db.collection('fairCustomItems').onSnapshot(function(snap){
-        noteLive('fairCustomItems', snap);
-        state.fairCustomItems = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
-        render();
-      }, function(err){ notifyLiveDataError('ítems propios de feria', err); });
-
-      db.collection('fairCashOuts').onSnapshot(function(snap){
-        noteLive('fairCashOuts', snap);
-        state.fairCashOuts = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
-        render();
-      }, function(err){ notifyLiveDataError('salidas de caja de feria', err); });
-
-      db.collection('fairCosts').onSnapshot(function(snap){
-        noteLive('fairCosts', snap);
-        state.fairCosts = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
-        render();
-      }, function(err){ notifyLiveDataError('costos de feria', err); });
-
-      db.collection('customItemDefaults').onSnapshot(function(snap){
-        noteLive('customItemDefaults', snap);
-        var map = {};
-        snap.docs.forEach(function(d){
-          var data = d.data();
-          map[d.id] = { name: data.name || '', photoUrl: data.photoUrl || '' };
-        });
-        state.customItemDefaults = map;
-        render();
-      }, function(err){ notifyLiveDataError('valores por defecto de ítems propios', err); });
-
-      db.collection('fairSales').orderBy('createdAt','desc').limit(1000).onSnapshot(function(snap){
-        noteLive('fairSales', snap);
-        state.fairSales = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
-        render();
-      }, function(err){ notifyLiveDataError('ventas de feria', err); });
+      // Stock, ítems, caja, costos y ventas de feria ya NO se descargan al abrir: se piden recién al entrar a
+      // Ferias o a Ranking > Ferias (ver ensureFairData). Ahorra miles de lecturas de Firebase por apertura.
 
       db.collection('supermaxiProducts').orderBy('order').onSnapshot(function(snap){
         noteLive('supermaxiProducts', snap);
