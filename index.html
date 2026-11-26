@@ -1000,6 +1000,20 @@ if ("serviceWorker" in navigator) {
   .photo-edit-row{display:flex; align-items:center; gap:12px;}
   .photo-edit-row .p-photo, .photo-edit-row .p-photo-placeholder{width:52px; height:52px;}
   .photo-edit-row input[type=file]{flex:1; font-size:12px; width:auto;}
+  /* Descargar un pedido B2B del inventario */
+  #orderImportBox{max-width:580px;}
+  .oi-sub{color:var(--text-muted);font-size:12.5px;margin:0 0 12px;}
+  .oi-warn{background:var(--warning-tint);color:#6d5200;border-radius:8px;padding:8px 10px;font-size:12.5px;margin:0 0 12px;}
+  .oi-warn label{display:flex;gap:6px;align-items:center;margin-top:6px;font-weight:600;cursor:pointer;}
+  .oi-tbl{width:100%;border-collapse:collapse;margin:6px 0 4px;font-size:12.5px;}
+  .oi-tbl th{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);text-align:right;padding:4px 6px;border-bottom:1px solid var(--border);}
+  .oi-tbl th:first-child,.oi-tbl td:first-child{text-align:left;}
+  .oi-tbl td{padding:5px 6px;border-bottom:1px solid var(--surface-2);text-align:right;}
+  .oi-st{display:inline-block;min-width:40px;text-align:center;padding:1px 7px;border-radius:99px;font-weight:600;font-size:11.5px;background:var(--accent-tint);color:var(--accent);}
+  .oi-st.bad{background:var(--critical-tint);color:var(--critical);}
+  .oi-tot{display:flex;justify-content:space-between;align-items:center;background:var(--surface-2);border-radius:10px;padding:10px 12px;margin:10px 0;font-weight:600;}
+  .oi-tot b{font-size:17px;}
+  .oi-err{color:var(--critical);font-size:12.5px;font-weight:600;margin:0 0 8px;}
   .modal-actions{display:flex; justify-content:flex-end; gap:8px; margin-top:16px;}
   .report-summary-box{
     background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
@@ -2182,6 +2196,10 @@ if ("serviceWorker" in navigator) {
       <button class="cancel-btn" id="noClientCancelBtn" type="button">Volver y poner cliente</button>
     </div>
   </div>
+</div>
+
+<div class="modal-scrim" id="orderImportScrim">
+  <div class="modal" id="orderImportBox"></div>
 </div>
 
 <div class="modal-scrim" id="editModalScrim">
@@ -8420,6 +8438,185 @@ if ("serviceWorker" in navigator) {
     });
   }
 
+
+  // ---------------- Descargar un pedido B2B (viene de pedidos.tailwindnutrition.ec) ----------------
+  // El botón "Descargar de inventario" de cada pedido abre este inventario con el pedido en el
+  // enlace (#pedido=...). Aquí se muestra una ventana para revisar cliente, nota, vencimiento y
+  // descuento, y al aceptar se registra una venta por cada producto con la misma lógica de siempre.
+  var OI_MAP = {
+    'ef30-mandarin':'end-30s-mandarin','ef30-berry':'end-30s-berry','ef30-lemon':'end-30s-lemon',
+    'ef30-dauwaltermelon':'end-30s-dauwaltermelon','ef30-uva':'end-30s-uva','ef30-naked':'end-30s-naked',
+    'ef30-tropical-caf':'end-30s-tropical','ef30-raspberry-caf':'end-30s-raspberry',
+    'efs-mandarin':'end-sachet-mandarin','efs-berry':'end-sachet-berry','efs-lemon':'end-sachet-lemon',
+    'efs-dauwaltermelon':'end-sachet-dauwaltermelon','efs-uva':'end-sachet-uva','efs-naked':'end-sachet-naked',
+    'efs-tropical-caf':'end-sachet-tropical','efs-raspberry-caf':'end-sachet-raspberry',
+    'efs-mango-limitado':'p_mubw0wgdkw2q',
+    'hcf-lemonade':'hcf-sachet-lemonade','hcf-ginger-lime':'hcf-sachet-gingerlime',
+    'rec-vanilla-20-servings':'rec-20s-vanilla','rec-vanilla-sachet':'rec-sachet-vanilla-new',
+    'rec-strawberry-sachet':'p_mtz37cpstv7z','rec-chocolate-sachet':'p_mtz34wqhxoau',
+    'flask-500':'p_mw18losftbch'
+  };
+  function oiParseHash(){
+    try{
+      var m = /[#&]pedido=([^&]+)/.exec(location.hash || '');
+      if(!m) return null;
+      var b = m[1].replace(/-/g,'+').replace(/_/g,'/');
+      while(b.length % 4) b += '=';
+      var o = JSON.parse(decodeURIComponent(escape(atob(b))));
+      if(!o || !Array.isArray(o.items) || !o.items.length) return null;
+      try{ history.replaceState(null, '', location.pathname + location.search); }catch(e){}
+      return o;
+    }catch(e){ return null; }
+  }
+  function oiAddDays(n){ var d = new Date(); d.setDate(d.getDate() + n); var z = function(x){ return (x<10?'0':'')+x; }; return d.getFullYear() + '-' + z(d.getMonth()+1) + '-' + z(d.getDate()); }
+  function oiLines(o, disc, pvpMode){
+    var sin = !!o.siniva, rows = [], sumBase = 0, ok = true;
+    (o.items || []).forEach(function(it){
+      var pid = OI_MAP[it.id], p = pid ? findProduct(pid) : null, q = parseInt(it.q, 10) || 0;
+      if(!p){ rows.push({it:it, q:q, p:null, bad:true}); ok = false; return; }
+      var unit = pvpMode ? pvpDiscUnit(p, disc) : distribLineTotals(p, 1, disc).unit;
+      var base = cents2(unit * q);
+      var bad = q > (p.stock || 0);
+      if(bad) ok = false;
+      sumBase += base;
+      rows.push({it:it, q:q, p:p, unit:unit, base:base, bad:bad, stock:p.stock || 0});
+    });
+    sumBase = cents2(sumBase);
+    var total = (sin || pvpMode) ? sumBase : cents2(sumBase + cents2(sumBase * IVA_RATE));
+    return {rows:rows, base:sumBase, total:total, ok:ok};
+  }
+  function oiRender(){
+    var o = state.orderImport; if(!o) return;
+    var box = document.getElementById('orderImportBox');
+    var disc = Math.min(100, Math.max(0, parseFloat(o.disc) || 0));
+    var L = oiLines(o, disc, !!o.pvp);
+    var h = '<h3>Descargar del inventario</h3>'
+      + '<p class="oi-sub">Pedido #' + esc(o.numero) + ' · ' + o.items.length + (o.items.length === 1 ? ' producto' : ' productos') + ' · se descuentan del inventario general</p>';
+    if(o.dup){
+      h += '<div class="oi-warn">⚠ Este pedido ya se descargó antes (' + esc(o.dup) + '). Si lo registras otra vez se descontará de nuevo.'
+        + '<label><input type="checkbox" id="oiDupOk"' + (o.dupOk ? ' checked' : '') + '> Descargar de nuevo igualmente</label></div>';
+    }
+    h += '<div class="mini-field-row">'
+      + '<div class="mini-field"><label>Cliente</label><input type="text" id="oiClient" list="clientNamesList" value="' + esc(o.client) + '"></div>'
+      + '<div class="mini-field"><label>Notas (opcional)</label><input type="text" id="oiNote" value="' + esc(o.note) + '" maxlength="120"></div>'
+      + '</div>'
+      + '<div class="mini-field-row">'
+      + '<div class="mini-field"><label>Vencimiento de factura (opcional)</label><input type="date" id="oiDue" value="' + esc(o.due) + '">'
+      + '<label class="disc-pvp pay-pend"><input type="checkbox" id="oiPend"' + (o.pend ? ' checked' : '') + '> A Pagos pendientes</label></div>'
+      + '<div class="mini-field"><label>Descuento % (opcional)</label><input type="number" id="oiDisc" min="0" max="100" step="1" value="' + esc(o.disc) + '">'
+      + '<label class="disc-pvp"><input type="checkbox" id="oiPvp"' + (o.pvp ? ' checked' : '') + '> Sobre PVP (cliente)</label></div>'
+      + '</div>';
+    h += '<table class="oi-tbl"><thead><tr><th>Producto</th><th>Cant.</th><th>Precio c/u</th><th>Stock</th><th>Subtotal</th></tr></thead><tbody>';
+    L.rows.forEach(function(r){
+      if(!r.p){ h += '<tr><td>' + esc(r.it.nombre) + '</td><td>' + r.q + '</td><td colspan="3"><span class="oi-st bad">no está en el inventario</span></td></tr>'; return; }
+      h += '<tr><td>' + esc(r.p.presentation + ' · ' + r.p.flavor) + '</td><td>' + r.q + '</td><td>' + fmtMoney(r.unit) + '</td><td><span class="oi-st' + (r.bad ? ' bad' : '') + '">' + fmtInt(r.stock) + '</span></td><td>' + fmtMoney(r.base) + '</td></tr>';
+    });
+    h += '</tbody></table>';
+    h += '<div class="oi-tot"><span>Total a registrar <span style="font-weight:400;color:var(--text-muted)">' + (o.siniva ? '(sin IVA: este cliente no paga IVA)' : (o.pvp ? '(precio con IVA)' : '(con IVA)')) + '</span></span><b>' + fmtMoney(L.total) + '</b></div>';
+    if(!L.ok) h += '<p class="oi-err">Hay productos sin stock suficiente o que no están en el inventario. Corrige el stock o registra ese pedido a mano.</p>';
+    if(o.err) h += '<p class="oi-err">' + esc(o.err) + '</p>';
+    h += '<p class="hint" style="margin:0 0 4px;">Se registra una venta por cada producto, igual que cuando las pones una por una. Con vencimiento, la venta queda en Pagos como cuenta por cobrar.</p>';
+    h += '<div class="modal-actions"><button class="cancel-btn" id="oiCancel" type="button">Cancelar</button><button class="confirm-btn" id="oiOk" type="button"' + ((L.ok && !o.busy && (!o.dup || o.dupOk)) ? '' : ' disabled') + '>' + (o.busy ? 'Registrando…' : 'Registrar venta') + '</button></div>';
+    box.innerHTML = h;
+    function sync(){
+      o.client = document.getElementById('oiClient').value;
+      o.note = document.getElementById('oiNote').value;
+      o.due = document.getElementById('oiDue').value;
+      o.pend = document.getElementById('oiPend').checked;
+      o.disc = document.getElementById('oiDisc').value;
+      o.pvp = document.getElementById('oiPvp').checked;
+      var d = document.getElementById('oiDupOk'); if(d) o.dupOk = d.checked;
+    }
+    ['oiClient','oiNote','oiDue','oiPend','oiDisc','oiPvp','oiDupOk'].forEach(function(id){
+      var el = document.getElementById(id); if(!el) return;
+      el.addEventListener('change', function(){ sync(); o.err = ''; if(id === 'oiDisc' || id === 'oiPvp' || id === 'oiDupOk' || id === 'oiDue' || id === 'oiPend') oiRender(); });
+    });
+    document.getElementById('oiDisc').addEventListener('input', function(){ sync(); oiRender(); var e = document.getElementById('oiDisc'); e.focus(); try{ e.setSelectionRange(e.value.length, e.value.length); }catch(x){} });
+    document.getElementById('oiCancel').addEventListener('click', oiClose);
+    document.getElementById('oiOk').addEventListener('click', function(){ sync(); oiConfirm(); });
+  }
+  function oiClose(){
+    state.orderImport = null;
+    document.getElementById('orderImportScrim').classList.remove('open');
+  }
+  function oiConfirm(){
+    var o = state.orderImport; if(!o || o.busy) return;
+    var client = (o.client || '').trim(), note = (o.note || '').trim(), due = o.due || '';
+    var disc = Math.min(100, Math.max(0, parseFloat(o.disc) || 0));
+    var pvpMode = !!o.pvp && disc > 0, pend = !!o.pend;
+    if(!client){ o.err = 'Escribe el nombre del cliente.'; oiRender(); return; }
+    if(pend && due){ o.err = 'Elige una sola: fecha de vencimiento (distribuidor a crédito) o "A Pagos pendientes" (cliente).'; oiRender(); return; }
+    if(pvpMode && due){ o.err = 'El descuento sobre PVP es para clientes. Para un distribuidor a crédito desmarca "Sobre PVP" y usa el margen.'; oiRender(); return; }
+    var L = oiLines(o, disc, pvpMode);
+    if(!L.ok){ oiRender(); return; }
+    o.busy = true; oiRender();
+    var sin = !!o.siniva, displayName = client + (note ? (' - ' + note) : '');
+    ensureUser(function(){
+      var chain = Promise.resolve(), done = 0;
+      L.rows.forEach(function(r){
+        chain = chain.then(function(){
+          var p = r.p, qty = r.q, extra = {orderRef: o.orderId, orderNum: o.numero};
+          if(pvpMode){
+            extra.revenue = cents2(r.unit * qty); extra.discountPct = disc; extra.discountBase = 'pvp'; extra.unitPrice = r.unit;
+          } else if(due || disc > 0){
+            var lt = distribLineTotals(p, qty, disc);
+            extra.revenue = sin ? lt.base : lt.total;
+            if(disc > 0) extra.discountPct = disc;
+          }
+          var payRef = null;
+          if((due || pend) && state.db){ payRef = state.db.collection('pendingPayments').doc(); extra.paymentId = payRef.id; }
+          return applyMovement(p, 'venta', qty, client, note, extra, true).then(function(moved){
+            done++;
+            if(due && payRef){
+              var lt2 = distribLineTotals(p, moved, disc);
+              if(sin){
+                return payRef.set({name: displayName, amount: lt2.base, unitSinIva: lt2.unit, baseSinIva: lt2.base, dueDate: due,
+                  createdAt: new Date().toISOString(), addedBy: state.userName, origin: 'venta', productId: p.id,
+                  productLabel: p.presentation + ' · ' + p.flavor, discountPct: disc || 0, sinIva: true, orderRef: o.orderId});
+              }
+              return registerDistributorInvoice(client, lt2, due, p, disc, note ? ('- ' + note) : '', payRef);
+            }
+            if(pend && payRef){
+              var amt = (extra.revenue != null) ? extra.revenue : cents2((parseFloat(p.pvpPerUnit) || 0) * qty);
+              var pdoc = {name: displayName, amount: amt, createdAt: new Date().toISOString(), addedBy: state.userName, origin: 'venta',
+                productId: p.id, productLabel: p.presentation + ' · ' + p.flavor, qty: qty, orderRef: o.orderId};
+              if(disc > 0) pdoc.discountPct = disc;
+              return payRef.set(pdoc);
+            }
+          });
+        });
+      });
+      chain.then(function(){
+        noteClientUsed(client); if(note) noteNoteUsed(note);
+        oiClose();
+        showStatus('Pedido #' + o.numero + ' descargado del inventario: ' + done + ' productos para ' + displayName + '.');
+        render();
+      }).catch(function(){
+        o.busy = false;
+        o.err = 'Se registraron ' + done + ' de ' + L.rows.length + ' productos y falló uno. Revisa el Historial antes de reintentar (no repitas los ya registrados).';
+        oiRender();
+      });
+    });
+  }
+  function maybeOpenOrderImport(){
+    if(state._oiTried) return;
+    state._oiTried = true;
+    var raw = oiParseHash(); if(!raw) return;
+    var o = {
+      orderId: String(raw.id || ''), numero: raw.numero, client: raw.cliente || '', siniva: !!raw.siniva,
+      note: '',
+      due: oiAddDays(30), disc: String(raw.margen != null ? raw.margen : ''), pvp: false, pend: false, items: raw.items, dup: '', dupOk: false
+    };
+    state.orderImport = o;
+    var show = function(){ document.getElementById('orderImportScrim').classList.add('open'); oiRender(); };
+    if(state.db && o.orderId){
+      state.db.collection('movements').where('orderRef', '==', o.orderId).limit(1).get().then(function(snap){
+        if(!snap.empty){ var at = snap.docs[0].data().at; o.dup = at ? new Date(at).toLocaleDateString('es-EC') : 'fecha desconocida'; }
+        show();
+      }).catch(show);
+    } else show();
+  }
+
   document.addEventListener('click', function(){
     if(state.openKebab){ state.openKebab = null; render(); }
     if(state.openGraceKebab){ state.openGraceKebab = null; render(); }
@@ -13220,6 +13417,7 @@ if ("serviceWorker" in navigator) {
         noteLive('products', snap);
         state.products = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         render();
+        maybeOpenOrderImport();
       }, function(err){
         notifyLiveDataError('catálogo de productos', err);
       });
