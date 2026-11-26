@@ -1206,6 +1206,10 @@ if ("serviceWorker" in navigator) {
     font-weight:700; border-radius:999px; min-width:20px; height:20px; display:flex; align-items:center;
     justify-content:center; padding:0 4px; box-shadow:var(--shadow);
   }
+  .kit-pill{margin-left:12px; padding:3px 11px; border-radius:999px; border:1px solid var(--fair-color); background:var(--fair-tint); color:var(--fair-color); font:inherit; font-size:11.5px; font-weight:700; cursor:pointer; vertical-align:middle;}
+  .kit-pill:hover{filter:brightness(.96);}
+  .ik-sub{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); margin:10px 0 2px; display:flex; gap:8px; align-items:baseline;}
+  .ik-sub span{font-weight:600; text-transform:none; letter-spacing:0;}
   .kit-footer{display:flex; justify-content:space-between; align-items:center; margin-top:10px; gap:10px; flex-wrap:wrap;}
   .kit-undo-btn{border:none; background:none; color:var(--text-muted); font-size:12.5px; cursor:pointer; text-decoration:underline;}
   .fair-report-kpis{display:grid; grid-template-columns:repeat(auto-fit, minmax(130px,1fr)); gap:10px; margin-bottom:18px;}
@@ -2644,6 +2648,8 @@ if ("serviceWorker" in navigator) {
     HCF_6: { key:'HCF_6', label:'Kit High Carb', max:6, price:30, cats:['HCF'] }
   };
 
+  var INV_KIT = {key:'SACHETS_8', label:'Kit Sachets', max:8, price:30, maxRecovery:1};
+
   var state = {
     products: [],
     movements: [],
@@ -3356,7 +3362,9 @@ if ("serviceWorker" in navigator) {
           + '<span class="chev">' + (collapsed ? '▸' : '▾') + '</span>'
           + '<span class="pres-chip">' + esc(pres) + '</span>'
           + '<span class="group-count">' + count + (collapsed ? ' · oculto, toca para mostrar' : '') + '</span>'
-          + '</button></div>';
+          + '</button>'
+          + ((cat === 'ENDURANCE' && presKey(pres) === 'sachets') ? '<button type="button" class="kit-pill" data-open-inv-kit="1" title="Vender un kit de 8 sachets">🎁 Kit $' + INV_KIT.price + '</button>' : '')
+          + '</div>';
         if(!collapsed){
           html += '<div class="row-list">';
           presMap[pres].forEach(function(p){ html += productRowHtml(p); });
@@ -11637,6 +11645,120 @@ if ("serviceWorker" in navigator) {
   function kitPickedQtyFor(stockId){
     if(!state.kitPopup) return 0;
     return state.kitPopup.picks.filter(function(p){ return p.stockId===stockId; }).length;
+  }
+
+  // ---------------- Kit de sachets desde el inventario general ----------------
+  // 8 sachets por $30: 8 Endurance, o 7 Endurance + 1 Recovery (máximo 1 Recovery).
+  // Descuenta del inventario general y guarda cada línea como venta normal; el monto de $30 se reparte
+  // entre las líneas según su precio de lista, para que Ranking, Reportes y Clientes sumen $30 exactos.
+  function invKitList(cat){
+    return state.products.filter(function(p){ return p.category === cat && presKey(p.presentation) === 'sachets' && (p.stock||0) > 0; })
+      .sort(function(a, b){ return (parseFloat(a.order)||9000) - (parseFloat(b.order)||9000); });
+  }
+  function invKitCount(pid){ var n = 0; state.invKit.picks.forEach(function(x){ if(x === pid) n++; }); return n; }
+  function invKitRecovery(){ var n = 0; state.invKit.picks.forEach(function(pid){ var p = findProduct(pid); if(p && p.category === 'RECOVERY') n++; }); return n; }
+  function openInvKit(){
+    state.invKit = {picks: [], client: activeClientValue(), notes: '', err: '', submitting: false};
+    document.getElementById('kitPopupScrim').classList.add('open');
+    renderInvKit();
+  }
+  function closeInvKit(){
+    state.invKit = null;
+    document.getElementById('kitPopupScrim').classList.remove('open');
+  }
+  function invKitTileHtml(p){
+    var picked = invKitCount(p.id), remaining = (p.stock||0) - picked, dis = remaining <= 0;
+    var photoHtml = p.photoUrl ? ('<img src="' + p.photoUrl + '" alt="' + esc(p.flavor) + '">') : '<div class="p-photo-placeholder"></div>';
+    return '<div class="kit-tile' + (dis ? ' disabled' : '') + '" data-ik-tile="' + esc(p.id) + '">' + photoHtml
+      + (picked > 0 ? ('<span class="kt-count">' + picked + '</span>') : '')
+      + '<div class="kt-flavor">' + esc(p.flavor) + '</div><div class="kt-remaining">quedan ' + fmtInt(Math.max(0, remaining)) + '</div></div>';
+  }
+  function renderInvKit(){
+    var k = state.invKit; if(!k) return;
+    var total = k.picks.length, rec = invKitRecovery(), end = total - rec;
+    var html = '<div class="kit-popup-head"><h3>' + INV_KIT.label + ' — $' + INV_KIT.price.toFixed(2) + '</h3><span class="kit-progress">' + total + '/' + INV_KIT.max + '</span></div>';
+    html += '<p class="hint">Toca cada sabor por cada unidad del kit: 8 Endurance, o 7 Endurance + 1 Recovery. Descuenta del inventario general.</p>';
+    if(k.err) html += '<div class="kit-err">' + esc(k.err) + '</div>';
+    html += '<div class="ik-sub">Endurance <span>' + end + ' elegidos</span></div><div class="kit-grid">' + invKitList('ENDURANCE').map(invKitTileHtml).join('') + '</div>';
+    var recList = invKitList('RECOVERY');
+    if(recList.length) html += '<div class="ik-sub">Recovery <span>' + rec + ' de ' + INV_KIT.maxRecovery + ' máximo</span></div><div class="kit-grid">' + recList.map(invKitTileHtml).join('') + '</div>';
+    html += '<div class="mini-field-row">'
+      + '<div class="mini-field"><label>Cliente (opcional)</label><input type="text" id="ikClient" list="clientNamesList" value="' + esc(k.client || '') + '" maxlength="60"></div>'
+      + '<div class="mini-field"><label>Notas (opcional)</label><input type="text" id="ikNote" value="' + esc(k.notes || '') + '" maxlength="120"></div></div>';
+    html += '<div class="kit-footer"><button class="kit-undo-btn" id="ikUndo" type="button"' + (total === 0 ? ' disabled' : '') + '>Deshacer último</button>'
+      + '<div class="modal-actions" style="margin:0;"><button class="cancel-btn" id="ikCancel" type="button">Cancelar</button>'
+      + '<button class="confirm-btn' + (total !== INV_KIT.max ? ' is-incomplete' : '') + '" id="ikConfirm" type="button">Confirmar venta ($' + INV_KIT.price.toFixed(2) + ')</button></div></div>';
+    document.getElementById('kitPopupBody').innerHTML = html;
+  }
+  function invKitAdd(pid){
+    var k = state.invKit; if(!k) return;
+    var p = findProduct(pid); if(!p) return;
+    if((p.stock||0) - invKitCount(pid) <= 0){ k.err = 'No queda más stock de "' + p.flavor + '".'; renderInvKit(); return; }
+    if(k.picks.length >= INV_KIT.max){ k.err = 'El kit ya tiene ' + INV_KIT.max + ' sachets. Usa "Deshacer último" si quieres cambiar uno.'; renderInvKit(); return; }
+    if(p.category === 'RECOVERY' && invKitRecovery() >= INV_KIT.maxRecovery){ k.err = 'El kit lleva máximo ' + INV_KIT.maxRecovery + ' Recovery.'; renderInvKit(); return; }
+    k.err = ''; k.picks.push(pid); renderInvKit();
+  }
+  function invKitConfirm(){
+    var k = state.invKit; if(!k || k.submitting) return;
+    var tot = k.picks.length;
+    if(tot !== INV_KIT.max){
+      showAttention('Falta completar el kit', 'Elegiste ' + tot + ' de ' + INV_KIT.max + ' sachets.', 'El kit lleva 8 sachets: 8 Endurance, o 7 Endurance + 1 Recovery. Toca los sabores que faltan y vuelve a confirmar.');
+      return;
+    }
+    if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
+    var by = {}, order = [];
+    k.picks.forEach(function(pid){ if(!(pid in by)){ by[pid] = 0; order.push(pid); } by[pid]++; });
+    for(var i = 0; i < order.length; i++){
+      var pc = findProduct(order[i]);
+      if(!pc || (pc.stock||0) < by[order[i]]){ showAttention('Sin stock suficiente', 'No alcanza el stock de ' + (pc ? pc.flavor : 'un sabor') + '.', 'Cambia ese sabor y vuelve a confirmar.'); return; }
+    }
+    var S = 0;
+    order.forEach(function(pid){ S += (parseFloat(findProduct(pid).pvpPerUnit) || 0) * by[pid]; });
+    var rev = {}, acc = 0;
+    order.forEach(function(pid, idx){
+      var share = S > 0 ? ((parseFloat(findProduct(pid).pvpPerUnit) || 0) * by[pid]) / S : by[pid] / tot;
+      rev[pid] = (idx === order.length - 1) ? cents2(INV_KIT.price - acc) : cents2(INV_KIT.price * share);
+      acc += rev[pid];
+    });
+    var ci = document.getElementById('ikClient'), ni = document.getElementById('ikNote');
+    var client = ci ? ci.value.trim() : '', note = (ni ? ni.value.trim() : '') || INV_KIT.label;
+    var kitId = 'kit_' + Date.now().toString(36);
+    k.submitting = true;
+    var btn = document.getElementById('ikConfirm'); if(btn) btn.disabled = true;
+    ensureUser(function(){
+      Promise.all(order.map(function(pid){
+        return applyMovement(findProduct(pid), 'venta', by[pid], client, note, {revenue: rev[pid], kit: INV_KIT.key, kitId: kitId}, true);
+      })).then(function(){
+        if(client) noteClientUsed(client);
+        noteCortesiaUsed(false);
+        showStatus('Kit vendido: ' + INV_KIT.label + ' (' + fmtMoney(INV_KIT.price) + ').');
+        closeInvKit();
+        render();
+      }).catch(function(){
+        if(state.invKit){ state.invKit.submitting = false; }
+        if(btn) btn.disabled = false;
+        showStatus('No se pudo registrar el kit completo. Revisa el Historial antes de volver a intentar.', true);
+      });
+    });
+  }
+  if(!window.__invKitBound){
+    window.__invKitBound = true;
+    document.addEventListener('click', function(ev){
+      var t = ev.target; if(!t || !t.closest) return;
+      if(t.closest('[data-open-inv-kit]')){ ev.preventDefault(); openInvKit(); return; }
+      if(!state.invKit) return;
+      var tile = t.closest('[data-ik-tile]');
+      if(tile){ invKitAdd(tile.getAttribute('data-ik-tile')); return; }
+      if(t.closest('#ikUndo')){ state.invKit.picks.pop(); state.invKit.err = ''; renderInvKit(); return; }
+      if(t.closest('#ikCancel')){ closeInvKit(); return; }
+      if(t.closest('#ikConfirm')){ invKitConfirm(); return; }
+    });
+    document.addEventListener('input', function(ev){
+      var t = ev.target; if(!t || !state.invKit) return;
+      if(t.id === 'ikClient') state.invKit.client = t.value;
+      else if(t.id === 'ikNote') state.invKit.notes = t.value;
+    });
+    document.addEventListener('keydown', function(ev){ if(ev.key === 'Escape' && state.invKit) closeInvKit(); });
   }
 
   function openKitPopup(fairId, kitKey){
