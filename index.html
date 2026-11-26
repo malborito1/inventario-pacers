@@ -3498,7 +3498,11 @@ if ("serviceWorker" in navigator) {
       var items = byGroup[grp];
       if(!items || !items.length) return;
       var presClass = grp === 'GRANDE' ? 'pres-30s' : (grp === 'SACHETS' ? 'pres-sachets' : 'pres-bulk');
-      html += '<div class="group-label ' + presClass + '"><span class="pres-chip">' + grp + '</span></div><div class="row-list">';
+      var gracePills = '';
+      if(grp === 'SACHETS'){
+        ['SACHETS_8', 'HCF_6'].forEach(function(kk){ var kd = INV_KITS[kk]; gracePills += '<button type="button" class="kit-pill" data-open-inv-kit="' + kd.key + '" data-ik-src="grace" title="Vender un ' + esc(kd.label) + ' de Grace">🎁 ' + esc(kd.label) + ' $' + kd.price + '</button>'; });
+      }
+      html += '<div class="group-label ' + presClass + '"><span class="pres-chip">' + grp + '</span>' + gracePills + '</div><div class="row-list">';
       var prevCat = null;
       items.forEach(function(g){
         var linked = g.linkedProductId ? findProduct(g.linkedProductId) : null;
@@ -4610,7 +4614,7 @@ if ("serviceWorker" in navigator) {
   // Igual que applyMovement: se envuelve en una transacción para que dos
   // ventas casi simultáneas del mismo ítem de Grace (o del producto vinculado)
   // no se pisen entre sí.
-  function applyGraceMovement(item, type, qty, client, note, cortesia){
+  function applyGraceMovement(item, type, qty, client, note, cortesia, extra, silent){
     if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
     var nowIso = new Date().toISOString();
     var linked = item.linkedProductId ? findProduct(item.linkedProductId) : null;
@@ -4619,7 +4623,7 @@ if ("serviceWorker" in navigator) {
     var productRef = (type === 'venta' && linked) ? state.db.doc('products/' + linked.id) : null;
     var actualGraceDelta = 0, productDelta = 0;
 
-    state.db.runTransaction(function(tx){
+    return state.db.runTransaction(function(tx){
       var reads = [tx.get(graceRef)];
       if(productRef) reads.push(tx.get(productRef));
       return Promise.all(reads).then(function(docs){
@@ -4653,12 +4657,14 @@ if ("serviceWorker" in navigator) {
         deltaGrace: actualGraceDelta,
         client: client || '',
         note: note || ''
-      }, cortesia ? {reason: 'cortesia'} : {}));
+      }, cortesia ? {reason: 'cortesia'} : {}, extra || {}));
     }).then(function(){
       var moved = Math.abs(actualGraceDelta);
+      if(silent) return moved;
       var extraNote = (type === 'venta' && moved < qty) ? (' (se ajustó a ' + moved + ' u. porque no había más stock)') : '';
       showStatus((type==='venta' ? (cortesia ? 'Cortesía de Grace registrada (sin venta): ' : 'Venta de Grace registrada: ') : 'Ingreso a Grace registrado: ') + moved + ' u. de ' + item.label + '.' + extraNote);
-    }).catch(function(){
+    }).catch(function(err){
+      if(silent) throw err;
       showStatus('No se pudo registrar el movimiento de Grace.', true);
     });
   }
@@ -11657,15 +11663,31 @@ if ("serviceWorker" in navigator) {
   // Descuenta del inventario general y guarda cada línea como venta normal; el monto de $30 se reparte
   // entre las líneas según su precio de lista, para que Ranking, Reportes y Clientes sumen $30 exactos.
   function invKitDef(){ return INV_KITS[state.invKit.kitKey]; }
-  function invKitList(cat){
-    return state.products.filter(function(p){ return p.category === cat && presKey(p.presentation) === 'sachets' && (p.stock||0) > 0; })
-      .sort(function(a, b){ return (parseFloat(a.order)||9000) - (parseFloat(b.order)||9000); });
+  // Entradas elegibles de un grupo del kit, ya sea del inventario general o del de Grace.
+  function invKitEntries(cat){
+    var grace = state.invKit.src === 'grace', out;
+    if(grace){
+      out = state.graceItems.filter(function(g){ return g.group === 'SACHETS' && g.linkedProductId; }).map(function(g){
+        var lp = findProduct(g.linkedProductId); if(!lp || lp.category !== cat) return null;
+        return {id: g.id, flavor: g.label, stock: g.qty || 0, category: cat, photoUrl: lp.photoUrl || g.photoUrl, pvp: parseFloat(lp.pvpPerUnit) || 0, order: parseFloat(g.order), item: g};
+      }).filter(Boolean);
+    } else {
+      out = state.products.filter(function(p){ return p.category === cat && presKey(p.presentation) === 'sachets'; }).map(function(p){
+        return {id: p.id, flavor: p.flavor, stock: p.stock || 0, category: cat, photoUrl: p.photoUrl, pvp: parseFloat(p.pvpPerUnit) || 0, order: parseFloat(p.order), product: p};
+      });
+    }
+    return out.sort(function(a, b){ return (isNaN(a.order) ? 9000 : a.order) - (isNaN(b.order) ? 9000 : b.order); });
+  }
+  function invKitEntry(id){
+    var kd = invKitDef(), found = null;
+    kd.groups.forEach(function(gr){ invKitEntries(gr.cat).forEach(function(e){ if(e.id === id) found = e; }); });
+    return found;
   }
   function invKitCount(pid){ var n = 0; state.invKit.picks.forEach(function(x){ if(x === pid) n++; }); return n; }
-  function invKitCatCount(cat){ var n = 0; state.invKit.picks.forEach(function(pid){ var p = findProduct(pid); if(p && p.category === cat) n++; }); return n; }
-  function openInvKit(kitKey){
+  function invKitCatCount(cat){ var n = 0; state.invKit.picks.forEach(function(pid){ var e = invKitEntry(pid); if(e && e.category === cat) n++; }); return n; }
+  function openInvKit(kitKey, src){
     if(!INV_KITS[kitKey]) return;
-    state.invKit = {kitKey: kitKey, picks: [], client: activeClientValue(), notes: '', err: '', submitting: false};
+    state.invKit = {kitKey: kitKey, src: src === 'grace' ? 'grace' : 'main', picks: [], client: activeClientValue(), notes: '', err: '', submitting: false};
     document.getElementById('kitPopupScrim').classList.add('open');
     renderInvKit();
   }
@@ -11673,21 +11695,21 @@ if ("serviceWorker" in navigator) {
     state.invKit = null;
     document.getElementById('kitPopupScrim').classList.remove('open');
   }
-  function invKitTileHtml(p){
-    var picked = invKitCount(p.id), remaining = (p.stock||0) - picked, dis = remaining <= 0;
-    var photoHtml = p.photoUrl ? ('<img src="' + p.photoUrl + '" alt="' + esc(p.flavor) + '">') : '<div class="p-photo-placeholder"></div>';
-    return '<div class="kit-tile' + (dis ? ' disabled' : '') + '" data-ik-tile="' + esc(p.id) + '">' + photoHtml
+  function invKitTileHtml(e){
+    var picked = invKitCount(e.id), remaining = e.stock - picked, dis = remaining <= 0;
+    var photoHtml = e.photoUrl ? ('<img src="' + e.photoUrl + '" alt="' + esc(e.flavor) + '">') : '<div class="p-photo-placeholder"></div>';
+    return '<div class="kit-tile' + (dis ? ' disabled' : '') + '" data-ik-tile="' + esc(e.id) + '">' + photoHtml
       + (picked > 0 ? ('<span class="kt-count">' + picked + '</span>') : '')
-      + '<div class="kt-flavor">' + esc(p.flavor) + '</div><div class="kt-remaining">quedan ' + fmtInt(Math.max(0, remaining)) + '</div></div>';
+      + '<div class="kt-flavor">' + esc(e.flavor) + '</div><div class="kt-remaining">quedan ' + fmtInt(Math.max(0, remaining)) + '</div></div>';
   }
   function renderInvKit(){
     var k = state.invKit; if(!k) return;
-    var kd = invKitDef(), total = k.picks.length;
-    var html = '<div class="kit-popup-head"><h3>' + esc(kd.label) + ' — $' + kd.price.toFixed(2) + '</h3><span class="kit-progress">' + total + '/' + kd.max + '</span></div>';
-    html += '<p class="hint">Toca cada sabor por cada unidad del kit: ' + esc(kd.rule) + '. Descuenta del inventario general.</p>';
+    var kd = invKitDef(), total = k.picks.length, grace = k.src === 'grace';
+    var html = '<div class="kit-popup-head"><h3>' + esc(kd.label) + (grace ? ' · Grace' : '') + ' — $' + kd.price.toFixed(2) + '</h3><span class="kit-progress">' + total + '/' + kd.max + '</span></div>';
+    html += '<p class="hint">Toca cada sabor por cada unidad del kit: ' + esc(kd.rule) + '. ' + (grace ? 'Descuenta del inventario de Grace y del general.' : 'Descuenta del inventario general.') + '</p>';
     if(k.err) html += '<div class="kit-err">' + esc(k.err) + '</div>';
     kd.groups.forEach(function(gr){
-      var list = invKitList(gr.cat);
+      var list = invKitEntries(gr.cat).filter(function(e){ return e.stock > 0 || invKitCount(e.id) > 0; });
       if(!list.length && gr.max) return;
       var n = invKitCatCount(gr.cat);
       html += '<div class="ik-sub">' + esc(gr.title) + ' <span>' + (gr.max ? (n + ' de ' + gr.max + ' máximo') : (n + ' elegidos')) + '</span></div><div class="kit-grid">' + list.map(invKitTileHtml).join('') + '</div>';
@@ -11702,10 +11724,10 @@ if ("serviceWorker" in navigator) {
   }
   function invKitAdd(pid){
     var k = state.invKit; if(!k) return;
-    var kd = invKitDef(), p = findProduct(pid); if(!p) return;
-    if((p.stock||0) - invKitCount(pid) <= 0){ k.err = 'No queda más stock de "' + p.flavor + '".'; renderInvKit(); return; }
+    var kd = invKitDef(), e = invKitEntry(pid); if(!e) return;
+    if(e.stock - invKitCount(pid) <= 0){ k.err = 'No queda más stock de "' + e.flavor + '".'; renderInvKit(); return; }
     if(k.picks.length >= kd.max){ k.err = 'El kit ya tiene ' + kd.max + ' sachets. Usa "Deshacer último" si quieres cambiar uno.'; renderInvKit(); return; }
-    var gr = kd.groups.filter(function(x){ return x.cat === p.category; })[0];
+    var gr = kd.groups.filter(function(x){ return x.cat === e.category; })[0];
     if(!gr){ k.err = 'Ese sabor no es parte de este kit.'; renderInvKit(); return; }
     if(gr.max && invKitCatCount(gr.cat) >= gr.max){ k.err = 'El kit lleva máximo ' + gr.max + ' ' + gr.title + '.'; renderInvKit(); return; }
     k.err = ''; k.picks.push(pid); renderInvKit();
@@ -11720,15 +11742,16 @@ if ("serviceWorker" in navigator) {
     if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
     var by = {}, order = [];
     k.picks.forEach(function(pid){ if(!(pid in by)){ by[pid] = 0; order.push(pid); } by[pid]++; });
+    var ent = {};
     for(var i = 0; i < order.length; i++){
-      var pc = findProduct(order[i]);
-      if(!pc || (pc.stock||0) < by[order[i]]){ showAttention('Sin stock suficiente', 'No alcanza el stock de ' + (pc ? pc.flavor : 'un sabor') + '.', 'Cambia ese sabor y vuelve a confirmar.'); return; }
+      var pc = invKitEntry(order[i]); ent[order[i]] = pc;
+      if(!pc || pc.stock < by[order[i]]){ showAttention('Sin stock suficiente', 'No alcanza el stock de ' + (pc ? pc.flavor : 'un sabor') + '.', 'Cambia ese sabor y vuelve a confirmar.'); return; }
     }
     var S = 0;
-    order.forEach(function(pid){ S += (parseFloat(findProduct(pid).pvpPerUnit) || 0) * by[pid]; });
+    order.forEach(function(pid){ S += ent[pid].pvp * by[pid]; });
     var rev = {}, acc = 0;
     order.forEach(function(pid, idx){
-      var share = S > 0 ? ((parseFloat(findProduct(pid).pvpPerUnit) || 0) * by[pid]) / S : by[pid] / tot;
+      var share = S > 0 ? (ent[pid].pvp * by[pid]) / S : by[pid] / tot;
       rev[pid] = (idx === order.length - 1) ? cents2(kd.price - acc) : cents2(kd.price * share);
       acc += rev[pid];
     });
@@ -11739,7 +11762,9 @@ if ("serviceWorker" in navigator) {
     var btn = document.getElementById('ikConfirm'); if(btn) btn.disabled = true;
     ensureUser(function(){
       Promise.all(order.map(function(pid){
-        return applyMovement(findProduct(pid), 'venta', by[pid], client, note, {revenue: rev[pid], kit: kd.key, kitId: kitId}, true);
+        var kx = {revenue: rev[pid], kit: kd.key, kitId: kitId};
+        return ent[pid].item ? applyGraceMovement(ent[pid].item, 'venta', by[pid], client, note, false, kx, true)
+                             : applyMovement(ent[pid].product, 'venta', by[pid], client, note, kx, true);
       })).then(function(){
         if(client) noteClientUsed(client);
         noteCortesiaUsed(false);
@@ -11758,7 +11783,7 @@ if ("serviceWorker" in navigator) {
     document.addEventListener('click', function(ev){
       var t = ev.target; if(!t || !t.closest) return;
       var op = t.closest('[data-open-inv-kit]');
-      if(op){ ev.preventDefault(); openInvKit(op.getAttribute('data-open-inv-kit')); return; }
+      if(op){ ev.preventDefault(); openInvKit(op.getAttribute('data-open-inv-kit'), op.getAttribute('data-ik-src')); return; }
       if(!state.invKit) return;
       var tile = t.closest('[data-ik-tile]');
       if(tile){ invKitAdd(tile.getAttribute('data-ik-tile')); return; }
