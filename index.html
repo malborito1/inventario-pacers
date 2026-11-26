@@ -8591,9 +8591,11 @@ if ("serviceWorker" in navigator) {
         oiClose();
         showStatus('Pedido #' + o.numero + ' descargado del inventario: ' + done + ' productos para ' + displayName + '.');
         render();
-      }).catch(function(){
+      }).catch(function(err){
+        try{ console.error('Descarga de pedido fallo', err); }catch(e){}
         o.busy = false;
-        o.err = 'Se registraron ' + done + ' de ' + L.rows.length + ' productos y falló uno. Revisa el Historial antes de reintentar (no repitas los ya registrados).';
+        var why = (err && (err.code || err.message)) ? String(err.code || '') + (err.code && err.message ? ': ' : '') + String(err.message || '') : 'sin detalle';
+        o.err = 'Se registraron ' + done + ' de ' + L.rows.length + ' productos y falló uno. Revisa el Historial antes de reintentar (no repitas los ya registrados). Detalle: ' + why.slice(0, 220);
         oiRender();
       });
     });
