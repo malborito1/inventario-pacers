@@ -662,6 +662,10 @@ if ("serviceWorker" in navigator) {
   .move-item .top .amt.pos{color:var(--success);}
   .move-item .top .amt.neg{color:var(--sale);}
   .move-item .meta{font-size:12px; color:var(--text-muted);}
+  /* Movimientos de una misma operación (un kit, o una venta y su corrección) comparten una barrita de color */
+  .move-item.move-op{position:relative;}
+  .move-item.move-op::before{content:''; position:absolute; left:-9px; top:9px; bottom:9px; width:3px; border-radius:3px; background:var(--op);}
+  .move-item .op-chip{display:inline-block; margin-left:4px; padding:0 7px; border-radius:999px; font-size:11px; font-weight:600; color:var(--op); background:color-mix(in srgb, var(--op) 14%, transparent);}
   .move-actions{margin-top:5px;}
   .undo-link{
     background:none; border:none; color:var(--sale); font-size:12px; font-weight:600;
@@ -4246,6 +4250,33 @@ if ("serviceWorker" in navigator) {
   // Salidas de stock que NO son venta (no suman dinero al Ranking ni a Reportes).
   var SALIDA_REASONS = {cortesia:'Cortesía', regalo:'Regalo', auspicio:'Auspicio', muestra:'Muestra', reposicion:'Reposición Supermaxi', otro:'Otro'};
 
+  // Une visualmente los movimientos de una misma operación: las líneas de un kit, las correcciones
+  // que las deshacen, y cualquier venta deshecha con su corrección. Todos comparten un color (barrita a la izquierda).
+  var HIST_OP_COLORS = ['#3b82f6', '#e0832e', '#9b59d0', '#14a88a', '#d6457c', '#a3a01f'];
+  var __histIdx = {sig: '', map: {}};
+  var __histSeq = {n: 0, map: {}};   // color por operación, en orden de aparición (dos operaciones vecinas nunca repiten color)
+  function histIndex(){
+    var ext = state.extMovements || [], cur = state.movements || [];
+    var sig = ext.length + '|' + cur.length + '|' + (cur[0] ? cur[0].id : '') + '|' + (ext[0] ? ext[0].id : '');
+    if(__histIdx.sig !== sig){
+      var map = {};
+      ext.forEach(function(x){ map[x.id] = x; });
+      cur.forEach(function(x){ map[x.id] = x; });
+      __histIdx = {sig: sig, map: map};
+    }
+    return __histIdx.map;
+  }
+  function histOp(m){
+    var orig = m.reversalOf ? histIndex()[m.reversalOf] : null;
+    var key = m.kitId || (orig && orig.kitId) || (orig ? ('rv_' + orig.id) : (m.reversed ? ('rv_' + m.id) : null));
+    if(!key) return null;
+    if(!(key in __histSeq.map)) __histSeq.map[key] = __histSeq.n++;
+    var kk = m.kit || (orig && orig.kit), kd = kk ? INV_KITS[kk] : null;
+    var chip = '';
+    if(m.type === 'correccion' && orig) chip = '↩ Deshace ' + (kd ? kd.label : 'la venta');
+    else if(m.kitId && kd && String(m.note || '') !== kd.label) chip = '🎁 ' + kd.label;
+    return {color: HIST_OP_COLORS[__histSeq.map[key] % HIST_OP_COLORS.length], chip: chip};
+  }
   function historyItemHtml(m, confirmId){
     if(confirmId === undefined) confirmId = state.confirmUndoId;
     var pos = (m.deltaStock||0) > 0;
@@ -4267,9 +4298,10 @@ if ("serviceWorker" in navigator) {
       }
     }
     var sourceTag = m.source === 'grace' ? '<span class="tag-grace">Grace</span>' : (m.fairId ? '<span class="tag-grace" style="background:var(--fair-tint); color:var(--fair-color);">Feria</span>' : '');
-    return '<div class="move-item">' +
+    var op = histOp(m);
+    return '<div class="move-item' + (op ? ' move-op" style="--op:' + op.color : '') + '">' +
       '<div class="top"><span>' + esc(m.productLabel||m.productId) + sourceTag + '</span><span class="amt ' + (pos?'pos':'neg') + ' num">' + sign + fmtInt(m.deltaStock) + '</span></div>' +
-      '<div class="meta">' + typeLabel + ' · ' + esc(m.user||'Sin nombre') + ' · ' + relTime(m.at) + (m.note ? (' · ' + esc(m.note)) : '') + (m.client ? (' · Cliente: <span class="move-client">' + esc(m.client) + '</span>') : '') + '</div>' +
+      '<div class="meta">' + typeLabel + ' · ' + esc(m.user||'Sin nombre') + ' · ' + relTime(m.at) + (m.note ? (' · ' + esc(m.note)) : '') + (m.client ? (' · Cliente: <span class="move-client">' + esc(m.client) + '</span>') : '') + ((op && op.chip) ? (' <span class="op-chip">' + esc(op.chip) + '</span>') : '') + '</div>' +
       (actionsHtml ? ('<div class="move-actions">' + actionsHtml + '</div>') : '') +
       '</div>';
   }
@@ -4405,6 +4437,7 @@ if ("serviceWorker" in navigator) {
 
   // Lista de movimientos según día del calendario y texto de búsqueda.
   function historyListHtml(){
+    __histSeq = {n: 0, map: {}};
     var selected = state.historyCalendarSelectedDate;
     var q = historyNorm((state.historySearch||'').trim());
     var searching = q.length > 0;
