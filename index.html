@@ -2871,9 +2871,31 @@ if ("serviceWorker" in navigator) {
   // meses (p.ej. importado de una factura histórica), no solo a los clientes de
   // los últimos movimientos. Antes de que extMovements termine de cargar (los
   // primeros segundos tras abrir la app) cae de vuelta a state.movements.
+  // Un mismo cliente escrito con/sin tilde o con otras mayúsculas ("Sebastian Galan" / "Sebastián Galán")
+  // se trata como UNA sola persona. Se muestra la variante con tilde (o, si no, la más usada).
+  function clientNorm(s){ return historyNorm(String(s == null ? '' : s).trim().replace(/\s+/g, ' ')); }
+  function makeClientCanon(){
+    var cnt = {}, best = {};
+    allMovements().forEach(function(m){
+      if(!m.client) return;
+      var v = String(m.client).trim().replace(/\s+/g, ' '); if(!v) return;
+      var k = clientNorm(v); var o = cnt[k] = cnt[k] || {}; o[v] = (o[v] || 0) + 1;
+    });
+    function score(v, c){ return (/[^\u0000-\u007f]/.test(v) ? 1000000 : 0) + (v.charAt(0) !== v.charAt(0).toLowerCase() ? 100000 : 0) + c; }
+    Object.keys(cnt).forEach(function(k){
+      var bv = null, bs = -1;
+      Object.keys(cnt[k]).forEach(function(v){ var sc = score(v, cnt[k][v]); if(sc > bs){ bs = sc; bv = v; } });
+      best[k] = bv;
+    });
+    return function(name){
+      var v = String(name == null ? '' : name).trim().replace(/\s+/g, ' ');
+      if(!v) return '';
+      return best[clientNorm(v)] || v;
+    };
+  }
   function renderClientDatalist(){
-    var seen = {};
-    allMovements().forEach(function(m){ if(m.client && m.client.trim()) seen[m.client.trim()] = true; });
+    var seen = {}, canon = makeClientCanon();
+    allMovements().forEach(function(m){ if(m.client && m.client.trim()) seen[canon(m.client)] = true; });
     var dl = document.getElementById('clientNamesList');
     if(!dl) return;
     dl.innerHTML = Object.keys(seen).sort().map(function(n){ return '<option value="' + esc(n) + '">'; }).join('');
@@ -4120,9 +4142,10 @@ if ("serviceWorker" in navigator) {
     var GROUP_WINDOW_MS = 10 * 60 * 1000;
     // Con nota (factura/pedido) la tarjeta reúne toda la factura aunque se haya registrado en varios momentos (hasta 3 días).
     var NOTE_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+    var canonC = makeClientCanon();
     var byClient = {};
     entries.forEach(function(m){
-      var key = m.client.trim() + '\u0001' + (m.note||'').trim();
+      var key = canonC(m.client) + '\u0001' + (m.note||'').trim();
       (byClient[key] = byClient[key] || []).push(m);
     });
     var groups = [];
@@ -4145,17 +4168,17 @@ if ("serviceWorker" in navigator) {
     groups.forEach(function(g){ g.gifts = []; });
     function dayKey(iso){ var d = new Date(iso); return d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); }
     gifts.slice().sort(function(a,b){ return new Date(a.at) - new Date(b.at); }).forEach(function(gm){
-      var cn = gm.client.trim().toLowerCase(), gt = new Date(gm.at).getTime(), best = null, bestD = Infinity;
+      var cn = clientNorm(gm.client), gt = new Date(gm.at).getTime(), best = null, bestD = Infinity;
       groups.forEach(function(g){
-        if(g.client.trim().toLowerCase() !== cn || !g.items.length) return;
+        if(clientNorm(g.client) !== cn || !g.items.length) return;
         if(!g.items.some(function(m){ return dayKey(m.at) === dayKey(gm.at); })) return;
         var d = Math.abs(new Date(g.items[0].at).getTime() - gt);
         if(d < bestD){ bestD = d; best = g; }
       });
       if(best){ best.gifts.push(gm); return; }
-      var alone = groups.filter(function(g){ return !g.items.length && g.client.trim().toLowerCase() === cn && dayKey(g.gifts[0].at) === dayKey(gm.at); })[0];
+      var alone = groups.filter(function(g){ return !g.items.length && clientNorm(g.client) === cn && dayKey(g.gifts[0].at) === dayKey(gm.at); })[0];
       if(alone) alone.gifts.push(gm);
-      else groups.push({client: gm.client.trim(), note: '', items: [], gifts: [gm], lastAt: gt});
+      else groups.push({client: canonC(gm.client), note: '', items: [], gifts: [gm], lastAt: gt});
     });
     function gAt(g){ return (g.items[0] || g.gifts[0]).at; }
     groups.sort(function(a,b){ return new Date(gAt(b)) - new Date(gAt(a)); });
@@ -6016,12 +6039,12 @@ if ("serviceWorker" in navigator) {
       var r = m.reason || 'otro';
       return cs.reason === 'all' ? r !== 'reposicion' : r === cs.reason;
     });
-    var rows = [], byClient = {}, byProd = {}, T = {u: 0, cost: 0, pvp: 0};
+    var rows = [], byClient = {}, byProd = {}, T = {u: 0, cost: 0, pvp: 0}, canonR = makeClientCanon();
     moves.forEach(function(m){
       var u = movementUnits(m), p = m.productId ? findProduct(m.productId) : null;
       var uio = p ? ((costMap[p.id] && costMap[p.id].uio) || parseFloat(p.costPerUnit) || 0) : 0;
       var pvp = p ? ((p.pvpSinIva != null ? parseFloat(p.pvpSinIva) : (parseFloat(p.pvpPerUnit) || 0) / RT_IVA) || 0) : 0;
-      var client = (m.client && String(m.client).trim()) || 'Sin nombre';
+      var client = (m.client && canonR(m.client)) || 'Sin nombre';
       var label = p ? (p.presentation + ' · ' + p.flavor) : (stripGraceTag(m.productLabel) || 'Producto');
       var cost = u * uio, val = u * pvp;
       rows.push({at: m.at, client: client, label: label, u: u, reason: m.reason || 'otro', cost: cost, pvp: val});
@@ -9292,10 +9315,10 @@ if ("serviceWorker" in navigator) {
     if(state.includeSupermaxiSales){
       moves = moves.concat(filterMovementsByPeriod(state.supermaxiMovements, period).filter(function(m){ return m.type === 'venta'; }));
     }
-    var byClient = {};
+    var byClient = {}, canonK = makeClientCanon();
     var count = 0;
     moves.forEach(function(m){
-      var key = (m.client || '').trim();
+      var key = canonK(m.client);
       if(!key){ count += 1; return; }
       (byClient[key] = byClient[key] || []).push(m);
     });
@@ -9334,9 +9357,9 @@ if ("serviceWorker" in navigator) {
     // Primero se agrupan los movimientos por cliente (para poder contar
     // ventas/facturas reales con countSaleGroups, no líneas de producto);
     // unidades e ingresos se siguen sumando por línea, sin cambios.
-    var byClientMoves = {};
+    var byClientMoves = {}, canonK2 = makeClientCanon();
     moves.forEach(function(m){
-      var key = m.client.trim();
+      var key = canonK2(m.client);
       (byClientMoves[key] = byClientMoves[key] || []).push(m);
     });
     var byClient = {};
