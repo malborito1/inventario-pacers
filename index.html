@@ -2648,7 +2648,12 @@ if ("serviceWorker" in navigator) {
     HCF_6: { key:'HCF_6', label:'Kit High Carb', max:6, price:30, cats:['HCF'] }
   };
 
-  var INV_KIT = {key:'SACHETS_8', label:'Kit Sachets', max:8, price:30, maxRecovery:1};
+  var INV_KITS = {
+    SACHETS_8: {key:'SACHETS_8', label:'Kit Sachets', max:8, price:30, rule:'8 Endurance, o 7 Endurance + 1 Recovery',
+      groups:[{cat:'ENDURANCE', title:'Endurance'}, {cat:'RECOVERY', title:'Recovery', max:1}]},
+    HCF_6: {key:'HCF_6', label:'Kit High Carb', max:6, price:30, rule:'6 sachets de High Carb Fuel',
+      groups:[{cat:'HCF', title:'High Carb Fuel'}]}
+  };
 
   var state = {
     products: [],
@@ -3363,7 +3368,7 @@ if ("serviceWorker" in navigator) {
           + '<span class="pres-chip">' + esc(pres) + '</span>'
           + '<span class="group-count">' + count + (collapsed ? ' · oculto, toca para mostrar' : '') + '</span>'
           + '</button>'
-          + ((cat === 'ENDURANCE' && presKey(pres) === 'sachets') ? '<button type="button" class="kit-pill" data-open-inv-kit="1" title="Vender un kit de 8 sachets">🎁 Kit $' + INV_KIT.price + '</button>' : '')
+          + ((presKey(pres) === 'sachets' && (cat === 'ENDURANCE' || cat === 'HCF')) ? (function(){ var kd = INV_KITS[cat === 'HCF' ? 'HCF_6' : 'SACHETS_8']; return '<button type="button" class="kit-pill" data-open-inv-kit="' + kd.key + '" title="Vender un kit de ' + kd.max + ' sachets">🎁 Kit $' + kd.price + '</button>'; })() : '')
           + '</div>';
         if(!collapsed){
           html += '<div class="row-list">';
@@ -11647,18 +11652,20 @@ if ("serviceWorker" in navigator) {
     return state.kitPopup.picks.filter(function(p){ return p.stockId===stockId; }).length;
   }
 
-  // ---------------- Kit de sachets desde el inventario general ----------------
-  // 8 sachets por $30: 8 Endurance, o 7 Endurance + 1 Recovery (máximo 1 Recovery).
+  // ---------------- Kits de sachets desde el inventario general ----------------
+  // Kit Sachets: 8 Endurance, o 7 Endurance + 1 Recovery ($30). Kit High Carb: 6 sachets HCF ($30).
   // Descuenta del inventario general y guarda cada línea como venta normal; el monto de $30 se reparte
   // entre las líneas según su precio de lista, para que Ranking, Reportes y Clientes sumen $30 exactos.
+  function invKitDef(){ return INV_KITS[state.invKit.kitKey]; }
   function invKitList(cat){
     return state.products.filter(function(p){ return p.category === cat && presKey(p.presentation) === 'sachets' && (p.stock||0) > 0; })
       .sort(function(a, b){ return (parseFloat(a.order)||9000) - (parseFloat(b.order)||9000); });
   }
   function invKitCount(pid){ var n = 0; state.invKit.picks.forEach(function(x){ if(x === pid) n++; }); return n; }
-  function invKitRecovery(){ var n = 0; state.invKit.picks.forEach(function(pid){ var p = findProduct(pid); if(p && p.category === 'RECOVERY') n++; }); return n; }
-  function openInvKit(){
-    state.invKit = {picks: [], client: activeClientValue(), notes: '', err: '', submitting: false};
+  function invKitCatCount(cat){ var n = 0; state.invKit.picks.forEach(function(pid){ var p = findProduct(pid); if(p && p.category === cat) n++; }); return n; }
+  function openInvKit(kitKey){
+    if(!INV_KITS[kitKey]) return;
+    state.invKit = {kitKey: kitKey, picks: [], client: activeClientValue(), notes: '', err: '', submitting: false};
     document.getElementById('kitPopupScrim').classList.add('open');
     renderInvKit();
   }
@@ -11675,34 +11682,39 @@ if ("serviceWorker" in navigator) {
   }
   function renderInvKit(){
     var k = state.invKit; if(!k) return;
-    var total = k.picks.length, rec = invKitRecovery(), end = total - rec;
-    var html = '<div class="kit-popup-head"><h3>' + INV_KIT.label + ' — $' + INV_KIT.price.toFixed(2) + '</h3><span class="kit-progress">' + total + '/' + INV_KIT.max + '</span></div>';
-    html += '<p class="hint">Toca cada sabor por cada unidad del kit: 8 Endurance, o 7 Endurance + 1 Recovery. Descuenta del inventario general.</p>';
+    var kd = invKitDef(), total = k.picks.length;
+    var html = '<div class="kit-popup-head"><h3>' + esc(kd.label) + ' — $' + kd.price.toFixed(2) + '</h3><span class="kit-progress">' + total + '/' + kd.max + '</span></div>';
+    html += '<p class="hint">Toca cada sabor por cada unidad del kit: ' + esc(kd.rule) + '. Descuenta del inventario general.</p>';
     if(k.err) html += '<div class="kit-err">' + esc(k.err) + '</div>';
-    html += '<div class="ik-sub">Endurance <span>' + end + ' elegidos</span></div><div class="kit-grid">' + invKitList('ENDURANCE').map(invKitTileHtml).join('') + '</div>';
-    var recList = invKitList('RECOVERY');
-    if(recList.length) html += '<div class="ik-sub">Recovery <span>' + rec + ' de ' + INV_KIT.maxRecovery + ' máximo</span></div><div class="kit-grid">' + recList.map(invKitTileHtml).join('') + '</div>';
+    kd.groups.forEach(function(gr){
+      var list = invKitList(gr.cat);
+      if(!list.length && gr.max) return;
+      var n = invKitCatCount(gr.cat);
+      html += '<div class="ik-sub">' + esc(gr.title) + ' <span>' + (gr.max ? (n + ' de ' + gr.max + ' máximo') : (n + ' elegidos')) + '</span></div><div class="kit-grid">' + list.map(invKitTileHtml).join('') + '</div>';
+    });
     html += '<div class="mini-field-row">'
       + '<div class="mini-field"><label>Cliente (opcional)</label><input type="text" id="ikClient" list="clientNamesList" value="' + esc(k.client || '') + '" maxlength="60"></div>'
       + '<div class="mini-field"><label>Notas (opcional)</label><input type="text" id="ikNote" value="' + esc(k.notes || '') + '" maxlength="120"></div></div>';
     html += '<div class="kit-footer"><button class="kit-undo-btn" id="ikUndo" type="button"' + (total === 0 ? ' disabled' : '') + '>Deshacer último</button>'
       + '<div class="modal-actions" style="margin:0;"><button class="cancel-btn" id="ikCancel" type="button">Cancelar</button>'
-      + '<button class="confirm-btn' + (total !== INV_KIT.max ? ' is-incomplete' : '') + '" id="ikConfirm" type="button">Confirmar venta ($' + INV_KIT.price.toFixed(2) + ')</button></div></div>';
+      + '<button class="confirm-btn' + (total !== kd.max ? ' is-incomplete' : '') + '" id="ikConfirm" type="button">Confirmar venta ($' + kd.price.toFixed(2) + ')</button></div></div>';
     document.getElementById('kitPopupBody').innerHTML = html;
   }
   function invKitAdd(pid){
     var k = state.invKit; if(!k) return;
-    var p = findProduct(pid); if(!p) return;
+    var kd = invKitDef(), p = findProduct(pid); if(!p) return;
     if((p.stock||0) - invKitCount(pid) <= 0){ k.err = 'No queda más stock de "' + p.flavor + '".'; renderInvKit(); return; }
-    if(k.picks.length >= INV_KIT.max){ k.err = 'El kit ya tiene ' + INV_KIT.max + ' sachets. Usa "Deshacer último" si quieres cambiar uno.'; renderInvKit(); return; }
-    if(p.category === 'RECOVERY' && invKitRecovery() >= INV_KIT.maxRecovery){ k.err = 'El kit lleva máximo ' + INV_KIT.maxRecovery + ' Recovery.'; renderInvKit(); return; }
+    if(k.picks.length >= kd.max){ k.err = 'El kit ya tiene ' + kd.max + ' sachets. Usa "Deshacer último" si quieres cambiar uno.'; renderInvKit(); return; }
+    var gr = kd.groups.filter(function(x){ return x.cat === p.category; })[0];
+    if(!gr){ k.err = 'Ese sabor no es parte de este kit.'; renderInvKit(); return; }
+    if(gr.max && invKitCatCount(gr.cat) >= gr.max){ k.err = 'El kit lleva máximo ' + gr.max + ' ' + gr.title + '.'; renderInvKit(); return; }
     k.err = ''; k.picks.push(pid); renderInvKit();
   }
   function invKitConfirm(){
     var k = state.invKit; if(!k || k.submitting) return;
-    var tot = k.picks.length;
-    if(tot !== INV_KIT.max){
-      showAttention('Falta completar el kit', 'Elegiste ' + tot + ' de ' + INV_KIT.max + ' sachets.', 'El kit lleva 8 sachets: 8 Endurance, o 7 Endurance + 1 Recovery. Toca los sabores que faltan y vuelve a confirmar.');
+    var kd = invKitDef(), tot = k.picks.length;
+    if(tot !== kd.max){
+      showAttention('Falta completar el kit', 'Elegiste ' + tot + ' de ' + kd.max + ' sachets.', 'El kit lleva ' + kd.max + ' sachets: ' + kd.rule + '. Toca los sabores que faltan y vuelve a confirmar.');
       return;
     }
     if(!state.db){ showStatus('Sin conexión a datos en vivo.', true); return; }
@@ -11717,21 +11729,21 @@ if ("serviceWorker" in navigator) {
     var rev = {}, acc = 0;
     order.forEach(function(pid, idx){
       var share = S > 0 ? ((parseFloat(findProduct(pid).pvpPerUnit) || 0) * by[pid]) / S : by[pid] / tot;
-      rev[pid] = (idx === order.length - 1) ? cents2(INV_KIT.price - acc) : cents2(INV_KIT.price * share);
+      rev[pid] = (idx === order.length - 1) ? cents2(kd.price - acc) : cents2(kd.price * share);
       acc += rev[pid];
     });
     var ci = document.getElementById('ikClient'), ni = document.getElementById('ikNote');
-    var client = ci ? ci.value.trim() : '', note = (ni ? ni.value.trim() : '') || INV_KIT.label;
+    var client = ci ? ci.value.trim() : '', note = (ni ? ni.value.trim() : '') || kd.label;
     var kitId = 'kit_' + Date.now().toString(36);
     k.submitting = true;
     var btn = document.getElementById('ikConfirm'); if(btn) btn.disabled = true;
     ensureUser(function(){
       Promise.all(order.map(function(pid){
-        return applyMovement(findProduct(pid), 'venta', by[pid], client, note, {revenue: rev[pid], kit: INV_KIT.key, kitId: kitId}, true);
+        return applyMovement(findProduct(pid), 'venta', by[pid], client, note, {revenue: rev[pid], kit: kd.key, kitId: kitId}, true);
       })).then(function(){
         if(client) noteClientUsed(client);
         noteCortesiaUsed(false);
-        showStatus('Kit vendido: ' + INV_KIT.label + ' (' + fmtMoney(INV_KIT.price) + ').');
+        showStatus('Kit vendido: ' + kd.label + ' (' + fmtMoney(kd.price) + ').');
         closeInvKit();
         render();
       }).catch(function(){
@@ -11745,7 +11757,8 @@ if ("serviceWorker" in navigator) {
     window.__invKitBound = true;
     document.addEventListener('click', function(ev){
       var t = ev.target; if(!t || !t.closest) return;
-      if(t.closest('[data-open-inv-kit]')){ ev.preventDefault(); openInvKit(); return; }
+      var op = t.closest('[data-open-inv-kit]');
+      if(op){ ev.preventDefault(); openInvKit(op.getAttribute('data-open-inv-kit')); return; }
       if(!state.invKit) return;
       var tile = t.closest('[data-ik-tile]');
       if(tile){ invKitAdd(tile.getAttribute('data-ik-tile')); return; }
